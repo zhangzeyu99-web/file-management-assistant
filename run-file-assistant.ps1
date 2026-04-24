@@ -51,6 +51,28 @@ try {
         Write-RunLog "feishu skipped by switch"
     }
 
+    $ObsidianManagerResult = $null
+    $ObsidianFeishuResult = $null
+    $ObsidianManagerScript = Join-Path $ScriptRoot "obsidian_manager.py"
+    if (Test-Path -LiteralPath $ObsidianManagerScript) {
+        $ObsidianOutput = python $ObsidianManagerScript --config $ConfigPath --mode $Mode
+        if ($LASTEXITCODE -ne 0) {
+            throw "Obsidian manager failed with exit code $LASTEXITCODE"
+        }
+        Write-RunLog "obsidian manager output: $ObsidianOutput"
+        $ObsidianManagerResult = $ObsidianOutput | Select-Object -Last 1 | ConvertFrom-Json
+
+        if (-not $SkipFeishu) {
+            $ObsidianNodeScript = Join-Path $ScriptRoot "send_obsidian_report_to_feishu.js"
+            $ObsidianFeishuOutput = node $ObsidianNodeScript --summary-json ([string]$ObsidianManagerResult.summary_json) --markdown-file ([string]$ObsidianManagerResult.markdown_report)
+            if ($LASTEXITCODE -ne 0) {
+                throw "Obsidian Feishu sender failed with exit code $LASTEXITCODE"
+            }
+            Write-RunLog "obsidian feishu output: $ObsidianFeishuOutput"
+            $ObsidianFeishuResult = $ObsidianFeishuOutput | Select-Object -Last 1 | ConvertFrom-Json
+        }
+    }
+
     $Result = [ordered]@{
         ok = $true
         mode = $Mode
@@ -61,6 +83,8 @@ try {
         total_files = [int]$ScannerResult.total_files
         counts = $ScannerResult.counts
         feishu = $FeishuResult
+        obsidian_manager = $ObsidianManagerResult
+        obsidian_feishu = $ObsidianFeishuResult
         log = $LogPath
     }
     $Result | ConvertTo-Json -Depth 8 -Compress

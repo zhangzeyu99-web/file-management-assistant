@@ -110,13 +110,15 @@ Run full chain with Feishu:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test
 ```
 
+The main chain runs both the file scanner and the read-only Obsidian internal audit. With Feishu enabled, it sends separate cards for file management and Obsidian management.
+
 Install daily scheduled task:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduled-task.ps1
 ```
 
-Default schedule: daily at `20:30`.
+Default schedule: daily at `20:30`. The scheduled task calls `run-file-assistant.ps1`, so it covers both local file management and Obsidian internal management.
 
 ## Configuration
 
