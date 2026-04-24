@@ -41,13 +41,22 @@ class ObsidianAssistantTests(unittest.TestCase):
         overview = self.vault / "02 项目" / "Codex" / "00 Codex 总览.md"
 
         self.assertTrue(guide.exists())
-        self.assertIn("Obsidian 新手使用指南", guide.read_text(encoding="utf-8"))
-        self.assertIn("[[11 Obsidian 新手使用指南]]", overview.read_text(encoding="utf-8"))
+        guide_text = guide.read_text(encoding="utf-8")
+        overview_text = overview.read_text(encoding="utf-8")
+        self.assertIn("Obsidian 新手使用指南", guide_text)
+        self.assertIn("[[12 Codex 线程行为画像与帮助策略]]", guide_text)
+        self.assertIn("[[11 Obsidian 新手使用指南]]", overview_text)
+        self.assertIn("[[12 Codex 线程行为画像与帮助策略]]", overview_text)
 
     def test_ask_returns_daily_answer(self) -> None:
         result = obsidian_assistant.command_ask(self.config, "我今天怎么记录工作？", False)
         self.assertTrue(result["ok"])
         self.assertIn("daily", result["answer"])
+
+    def test_ask_returns_behavior_profile_answer(self) -> None:
+        result = obsidian_assistant.command_ask(self.config, "根据我的习惯怎么帮我？", False)
+        self.assertTrue(result["ok"])
+        self.assertIn("行为画像", result["answer"])
 
     def test_capture_and_daily_write_notes(self) -> None:
         capture = obsidian_assistant.command_capture(self.config, "测试想法", "内容", ["idea"])

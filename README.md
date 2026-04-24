@@ -26,7 +26,8 @@ It scans selected folders, classifies files into review/archive/reminder buckets
 ├── scripts/
 │   └── install-scheduled-task.ps1
 └── tests/
-    └── test_file_assistant.py
+    ├── test_file_assistant.py
+    └── test_obsidian_assistant.py
 ```
 
 ## Requirements
@@ -71,6 +72,12 @@ Ask a common Obsidian workflow question:
 
 ```powershell
 python .\obsidian_assistant.py ask "我今天怎么记录工作？"
+```
+
+Ask how the helper should adapt to local working habits:
+
+```powershell
+python .\obsidian_assistant.py ask "根据我的习惯怎么帮我？"
 ```
 
 Capture a note into the Obsidian inbox:
@@ -118,6 +125,8 @@ The default config is intentionally conservative. It scans common landing zones 
 - Codex output documents
 - Obsidian inbox
 - Obsidian projects
+
+The helper can link to a local behavior-profile note if the vault keeps one. Personal profiles and private task notes should stay outside this public repository.
 
 ## Safety Policy
 
