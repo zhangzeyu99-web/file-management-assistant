@@ -51,6 +51,12 @@ Run scanner and report generation without Feishu:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu
 ```
 
+Run the full release harness:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1
+```
+
 Run full chain with Feishu:
 
 ```powershell
@@ -116,9 +122,10 @@ Recommended update loop:
 1. Change code or config.
 2. Run `python .\tests\test_file_assistant.py -v`.
 3. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu`.
-4. Run full Feishu test when delivery behavior changed.
-5. Commit with a short behavior-focused message.
+4. Commit with a short behavior-focused message.
+5. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1`.
 6. Push to GitHub.
+7. Run full Feishu test when delivery behavior changed.
 
 ## License
 

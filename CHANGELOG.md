@@ -9,3 +9,4 @@
 - Added OpenClaw Feishu bot card delivery.
 - Added Windows scheduled task installer.
 - Added unit tests and maintenance checklist.
+- Added release verification harness.
