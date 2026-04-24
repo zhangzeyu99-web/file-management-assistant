@@ -51,11 +51,8 @@ try {
     }
 
     Invoke-Checked "unit_tests" {
-        $previousPreference = $ErrorActionPreference
-        $ErrorActionPreference = "Continue"
-        $output = python .\tests\test_file_assistant.py -v 2>&1
+        $output = cmd.exe /d /c "python .\tests\test_file_assistant.py -v 2>&1"
         $exitCode = $LASTEXITCODE
-        $ErrorActionPreference = $previousPreference
         if ($exitCode -ne 0) { throw ($output -join "`n") }
         return ($output -join "`n")
     }
