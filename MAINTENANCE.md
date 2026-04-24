@@ -10,6 +10,7 @@ Run:
 
 ```powershell
 python .\tests\test_file_assistant.py -v
+python .\tests\test_obsidian_assistant.py -v
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1
 ```

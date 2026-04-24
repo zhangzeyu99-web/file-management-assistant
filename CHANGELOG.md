@@ -10,3 +10,4 @@
 - Added Windows scheduled task installer.
 - Added unit tests and maintenance checklist.
 - Added release verification harness.
+- Added Obsidian beginner guide, inbox capture, daily-note, and Q&A helper.
