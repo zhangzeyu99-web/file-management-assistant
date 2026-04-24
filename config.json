@@ -1,0 +1,80 @@
+{
+  "runtime_root": "D:\\codex\\file-assistant",
+  "obsidian_vault": "D:\\Obsidian-Work",
+  "obsidian_run_dir": "D:\\Obsidian-Work\\04 例行工作\\文件管理助手",
+  "watch_roots": [
+    {
+      "name": "Desktop",
+      "path": "C:\\Users\\Administrator\\Desktop",
+      "max_depth": 2,
+      "max_files": 2500
+    },
+    {
+      "name": "Downloads",
+      "path": "C:\\Users\\Administrator\\Downloads",
+      "max_depth": 2,
+      "max_files": 3500
+    },
+    {
+      "name": "Documents",
+      "path": "C:\\Users\\Administrator\\Documents",
+      "max_depth": 3,
+      "max_files": 3000
+    },
+    {
+      "name": "CodexOutput",
+      "path": "D:\\codex\\output\\doc",
+      "max_depth": 4,
+      "max_files": 5000
+    },
+    {
+      "name": "ObsidianInbox",
+      "path": "D:\\Obsidian-Work\\00 收件箱",
+      "max_depth": 3,
+      "max_files": 1000
+    },
+    {
+      "name": "ObsidianProjects",
+      "path": "D:\\Obsidian-Work\\02 项目",
+      "max_depth": 4,
+      "max_files": 3000
+    }
+  ],
+  "exclude_dir_names": [
+    ".git",
+    ".hg",
+    ".svn",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "node_modules",
+    "AppData",
+    "cache",
+    "logs",
+    "tmp",
+    "temp"
+  ],
+  "recent_days": 7,
+  "archive_after_days": 30,
+  "installer_after_days": 14,
+  "large_file_mb": 200,
+  "hash_duplicate_min_mb": 1,
+  "hash_duplicate_limit": 80,
+  "top_limit": 25,
+  "review_keywords": [
+    "待办",
+    "复盘",
+    "报告",
+    "总结",
+    "简历",
+    "面试",
+    "合同",
+    "发票",
+    "SOP",
+    "todo",
+    "review",
+    "report",
+    "resume",
+    "invoice"
+  ]
+}
