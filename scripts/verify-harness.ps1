@@ -51,7 +51,7 @@ try {
     }
 
     Invoke-Checked "unit_tests" {
-        $output = cmd.exe /d /c "python .\tests\test_file_assistant.py -v 2>&1 && python .\tests\test_obsidian_assistant.py -v 2>&1"
+        $output = cmd.exe /d /c "python .\tests\test_file_assistant.py -v 2>&1 && python .\tests\test_obsidian_assistant.py -v 2>&1 && python .\tests\test_obsidian_manager.py -v 2>&1"
         $exitCode = $LASTEXITCODE
         if ($exitCode -ne 0) { throw ($output -join "`n") }
         return ($output -join "`n")
@@ -84,6 +84,25 @@ try {
         return [ordered]@{
             total_files = $parsed.total_files
             html_report = $parsed.html_report
+            summary_json = $parsed.summary_json
+            obsidian_note = $parsed.obsidian_note
+        }
+    }
+
+    Invoke-Checked "obsidian_manager_dry_run" {
+        if ($SkipDryRun) { return "skipped" }
+        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test -SkipFeishu 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
+        $jsonLine = ($output | Where-Object { $_ -match '^\{"ok":' } | Select-Object -Last 1)
+        if (-not $jsonLine) { throw "obsidian manager did not return JSON result" }
+        $parsed = $jsonLine | ConvertFrom-Json
+        if (-not $parsed.ok) { throw "obsidian manager returned ok=false" }
+        if (-not (Test-Path -LiteralPath $parsed.markdown_report)) { throw "missing obsidian markdown report: $($parsed.markdown_report)" }
+        if (-not (Test-Path -LiteralPath $parsed.summary_json)) { throw "missing obsidian summary json: $($parsed.summary_json)" }
+        if (-not (Test-Path -LiteralPath $parsed.obsidian_note)) { throw "missing obsidian note: $($parsed.obsidian_note)" }
+        return [ordered]@{
+            total_notes = $parsed.total_notes
+            markdown_report = $parsed.markdown_report
             summary_json = $parsed.summary_json
             obsidian_note = $parsed.obsidian_note
         }

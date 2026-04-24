@@ -20,14 +20,18 @@ It scans selected folders, classifies files into review/archive/reminder buckets
 ├── config.json
 ├── file_assistant.py
 ├── obsidian_assistant.py
+├── obsidian_manager.py
 ├── run-file-assistant.ps1
+├── run-obsidian-manager.ps1
 ├── run-obsidian-assistant.ps1
 ├── send_report_to_feishu.js
+├── send_obsidian_report_to_feishu.js
 ├── scripts/
 │   └── install-scheduled-task.ps1
 └── tests/
     ├── test_file_assistant.py
-    └── test_obsidian_assistant.py
+    ├── test_obsidian_assistant.py
+    └── test_obsidian_manager.py
 ```
 
 ## Requirements
@@ -91,6 +95,14 @@ Append to today's daily note:
 ```powershell
 python .\obsidian_assistant.py daily --done "完成文件管理助手" --next "整理收件箱" --blocker "暂无"
 ```
+
+Run read-only Obsidian internal management audit:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test -SkipFeishu
+```
+
+The audit checks folder inventory, inbox triage, stub notes, low-link notes, duplicate titles, broken internal links, and Codex index coverage. It only writes reports and never deletes, moves, renames, or rewrites source notes.
 
 Run full chain with Feishu:
 
@@ -159,11 +171,13 @@ Recommended update loop:
 1. Change code or config.
 2. Run `python .\tests\test_file_assistant.py -v`.
 3. Run `python .\tests\test_obsidian_assistant.py -v`.
-4. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu`.
-5. Commit with a short behavior-focused message.
-6. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1`.
-7. Push to GitHub.
-8. Run full Feishu test when delivery behavior changed.
+4. Run `python .\tests\test_obsidian_manager.py -v`.
+5. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu`.
+6. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test -SkipFeishu`.
+7. Commit with a short behavior-focused message.
+8. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1`.
+9. Push to GitHub.
+10. Run full Feishu test when delivery behavior changed.
 
 ## License
 
