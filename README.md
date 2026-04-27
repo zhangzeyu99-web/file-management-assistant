@@ -7,11 +7,11 @@ Local-first Windows assistant for file archiving, Obsidian vault review, daily w
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Safety](https://img.shields.io/badge/Safety-report--only-orange)
 
-**Keywords:** Obsidian assistant, personal knowledge management, file management automation, Windows productivity, local-first AI workflow, Codex assistant, OpenClaw, Feishu/Lark notification, PKM, knowledge base audit.
+**Keywords:** Obsidian assistant, personal knowledge management, file management automation, Windows productivity, local-first AI workflow, Codex assistant, OpenClaw, PKM, knowledge base audit.
 
 ## Why This Project Exists
 
-This project turns scattered desktop files, downloads, Codex outputs, and Obsidian notes into a safe daily review workflow. It scans only configured folders, creates readable reports, writes selected Obsidian notes, and optionally sends Feishu/Lark cards through an existing OpenClaw bot setup.
+This project turns scattered desktop files, downloads, Codex outputs, and Obsidian notes into a safe daily review workflow. It scans only configured folders, creates readable reports, writes selected Obsidian notes, and keeps notification delivery as an optional local integration.
 
 It is intentionally conservative: by default it does **not** delete, move, rename, or rewrite source files.
 
@@ -27,7 +27,7 @@ It is intentionally conservative: by default it does **not** delete, move, renam
 - Read-only Obsidian vault audit: inbox triage, stub notes, low-link notes, duplicate titles, broken links, folder-style links, and Codex index coverage.
 - Local GUI control panel at `http://127.0.0.1:8765/`.
 - Obsidian helper commands for beginner guides, Q&A, inbox capture, and daily notes.
-- Optional Feishu/Lark card delivery through a local OpenClaw helper.
+- Optional notification hooks through a local helper.
 - Windows Scheduled Task installer for daily review automation.
 - Unit tests and a local release verification harness.
 
@@ -77,9 +77,10 @@ python .\tests\test_file_assistant.py -v
 python .\tests\test_obsidian_assistant.py -v
 python .\tests\test_obsidian_manager.py -v
 python .\tests\test_gui_server.py -v
+python .\tests\test_project_quality.py -v
 ```
 
-5. Run the assistant without Feishu/Lark delivery:
+5. Run the assistant without external notification delivery:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu
@@ -158,21 +159,14 @@ The local GUI can:
 - Generate a Codex handoff prompt for the current conversation.
 - Open Codex Desktop if the executable path is configured.
 
-## Feishu / Lark Delivery
+## Optional Notification Hooks
 
-Feishu/Lark delivery is optional. The repository does not store app secrets, tokens, webhooks, or open IDs.
+External notification delivery is optional. The repository does not store app secrets, tokens, webhooks, or open IDs.
 
-By default the sender looks for:
-
-```text
-%USERPROFILE%\.openclaw\scripts\lib\feishu_bot_card.js
-%USERPROFILE%\.openclaw\openclaw.json
-```
-
-You can override the helper path with:
+Provider-specific helper files stay outside the repository. The included sender scripts are adapters for a local helper path and can be skipped completely:
 
 ```powershell
-$env:FEISHU_BOT_CARD_HELPER="C:\path\to\feishu_bot_card.js"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu
 ```
 
 ## Safety Policy
@@ -216,6 +210,7 @@ The harness checks Git state, unit tests, secret-like patterns, dry-run executio
 - [Configuration](docs/CONFIGURATION.md)
 - [Obsidian Workflow Tutorial](docs/OBSIDIAN_WORKFLOW_TUTORIAL.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Project Principles](docs/PROJECT_PRINCIPLES.md)
 - [Maintenance](MAINTENANCE.md)
 - [Security](SECURITY.md)
 

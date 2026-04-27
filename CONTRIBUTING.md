@@ -12,6 +12,7 @@ python .\tests\test_file_assistant.py -v
 python .\tests\test_obsidian_assistant.py -v
 python .\tests\test_obsidian_manager.py -v
 python .\tests\test_gui_server.py -v
+python .\tests\test_project_quality.py -v
 ```
 
 Before release, run:

@@ -60,19 +60,12 @@ Path fields support Windows environment variables:
 }
 ```
 
-## Feishu / Lark
+## Optional Notification Hooks
 
-Feishu/Lark delivery is optional. The sender expects an external local helper and local OpenClaw config:
-
-```text
-%USERPROFILE%\.openclaw\scripts\lib\feishu_bot_card.js
-%USERPROFILE%\.openclaw\openclaw.json
-```
-
-Override the helper path:
+External notification delivery is optional. Provider-specific helpers and credentials should stay outside this repository. If you use the included sender adapters, set the helper path through an environment variable:
 
 ```powershell
-$env:FEISHU_BOT_CARD_HELPER="C:\path\to\feishu_bot_card.js"
+$env:FEISHU_BOT_CARD_HELPER="C:\path\to\provider_helper.js"
 ```
 
 Run without delivery:

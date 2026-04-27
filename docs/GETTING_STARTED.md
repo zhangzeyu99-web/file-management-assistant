@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide gets the assistant running on a Windows machine with an optional Obsidian vault and optional Feishu/Lark delivery.
+This guide gets the assistant running on a Windows machine with an optional Obsidian vault and optional notification delivery.
 
 ## 1. Prerequisites
 

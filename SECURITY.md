@@ -12,7 +12,7 @@ Open a private report through GitHub if available, or create an issue with repro
 
 Do not commit:
 
-- Feishu/Lark app secrets.
+- Notification provider app secrets.
 - Access tokens.
 - Webhooks.
 - Open IDs.

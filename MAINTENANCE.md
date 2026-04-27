@@ -19,7 +19,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1
 ```
 
-If Feishu delivery changed, also run:
+If optional notification delivery changed, also run:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test

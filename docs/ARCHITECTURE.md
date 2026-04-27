@@ -11,8 +11,8 @@ The assistant is a small local-first toolchain.
 | `obsidian_manager.py` | Performs read-only Obsidian vault audit and renders reports. |
 | `obsidian_assistant.py` | Provides guide, Q&A, inbox capture, and daily note helpers. |
 | `gui_server.py` | Serves a local control panel and safe action API. |
-| `send_report_to_feishu.js` | Sends file report cards through an external Feishu/Lark helper. |
-| `send_obsidian_report_to_feishu.js` | Sends Obsidian audit cards through an external Feishu/Lark helper. |
+| `send_report_to_feishu.js` | Optional local notification adapter for file reports. |
+| `send_obsidian_report_to_feishu.js` | Optional local notification adapter for Obsidian audit reports. |
 | `run-file-assistant.ps1` | Runs the main chain and optional delivery. |
 | `run-obsidian-manager.ps1` | Runs the Obsidian audit only. |
 
@@ -29,7 +29,7 @@ file_assistant.py -----> JSON / Markdown / HTML reports
 obsidian_manager.py ---> Obsidian audit report
         |
         v
-optional Feishu/Lark cards
+optional notification hooks
 ```
 
 The GUI uses the same underlying modules. It does not introduce separate behavior for scanning, auditing, or note writing.
