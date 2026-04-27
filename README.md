@@ -29,7 +29,7 @@ It is intentionally conservative: by default it does **not** delete, move, renam
 - Obsidian helper commands for beginner guides, Q&A, inbox capture, and daily notes.
 - Optional Feishu/Lark card delivery through a local OpenClaw helper.
 - Windows Scheduled Task installer for daily review automation.
-- Unit tests and a release verification harness.
+- Unit tests and a local release verification harness.
 
 ## Screenshots
 

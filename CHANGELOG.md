@@ -2,7 +2,7 @@
 
 ## 2026-04-27
 
-- Prepared the project for open-source GitHub publication with SEO-focused README, documentation, security notes, contribution guide, CI, and configurable local overrides.
+- Prepared the project for open-source GitHub publication with SEO-focused README, documentation, security notes, contribution guide, and configurable local overrides.
 - Added `config_loader.py` and public/private configuration split with `config.local.json`.
 - Added a local GUI control panel at `http://127.0.0.1:8765/`.
 - Added safe GUI actions for file scanning, Obsidian auditing, capture, daily notes, ask, guide, opening reports, and Codex handoff prompts.
