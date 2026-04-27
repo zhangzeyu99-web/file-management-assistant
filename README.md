@@ -1,5 +1,7 @@
 # Obsidian File Management Assistant
 
+> Local-first Windows file organizer and Obsidian workflow assistant for inbox review, knowledge base audit, and safe daily file management.
+
 Local-first Windows assistant for file archiving, Obsidian vault review, daily work capture, and Codex/OpenClaw handoff.
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
@@ -7,7 +9,14 @@ Local-first Windows assistant for file archiving, Obsidian vault review, daily w
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Safety](https://img.shields.io/badge/Safety-report--only-orange)
 
-**Keywords:** Obsidian assistant, personal knowledge management, file management automation, Windows productivity, local-first AI workflow, Codex assistant, OpenClaw, PKM, knowledge base audit.
+**Keywords:** Obsidian file management, Obsidian assistant, personal knowledge management, Windows file organizer, knowledge base audit, local-first productivity, Codex assistant, OpenClaw, PKM automation.
+
+## Who This Project Is For
+
+- Obsidian users whose Desktop and Downloads are drifting out of control
+- Windows users who want a **review-first** file workflow instead of risky auto-cleanup
+- People building a local knowledge base around Codex, OpenClaw, or personal PKM systems
+- Users who need daily reports, vault audits, and a small local GUI without cloud dependencies
 
 ## Why This Project Exists
 
