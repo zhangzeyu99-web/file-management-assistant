@@ -5,8 +5,15 @@ import dataclasses
 import datetime as dt
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from config_loader import load_config
 
 
 WIKI_LINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]")
@@ -32,11 +39,6 @@ def now_local() -> dt.datetime:
     return dt.datetime.now().astimezone()
 
 
-def load_config(config_path: Path) -> dict[str, Any]:
-    with config_path.open("r", encoding="utf-8-sig") as handle:
-        return json.load(handle)
-
-
 def vault_path(config: dict[str, Any]) -> Path:
     return Path(config.get("obsidian_vault") or "D:\\Obsidian-Work")
 
@@ -45,8 +47,12 @@ def runtime_root(config: dict[str, Any]) -> Path:
     return Path(config.get("runtime_root") or "D:\\codex\\file-assistant")
 
 
+def folder_name(config: dict[str, Any], key: str, default: str) -> str:
+    return str(config.get("obsidian_folders", {}).get(key, default))
+
+
 def obsidian_run_dir(config: dict[str, Any]) -> Path:
-    return Path(config.get("obsidian_run_dir") or vault_path(config) / "04 例行工作" / "文件管理助手")
+    return Path(config.get("obsidian_run_dir") or vault_path(config) / folder_name(config, "routine", "04 例行工作") / "文件管理助手")
 
 
 def read_note(path: Path) -> str:
@@ -212,23 +218,30 @@ def find_folder_links(vault: Path, notes: list[NoteRecord]) -> list[dict[str, An
     return folder_links
 
 
-def classify_notes(vault: Path, notes: list[NoteRecord]) -> dict[str, list[dict[str, Any]]]:
+def classify_notes(vault: Path, notes: list[NoteRecord], config: dict[str, Any] | None = None) -> dict[str, list[dict[str, Any]]]:
+    config = config or {}
+    inbox = folder_name(config, "inbox", "00 收件箱")
+    templates = folder_name(config, "templates", "90 模板")
+    archive = folder_name(config, "archive", "99 归档")
+    projects = folder_name(config, "projects", "02 项目")
+    codex_project = folder_name(config, "codex_project", "Codex")
+    codex_prefix = f"{projects}/{codex_project}/"
     backlinks = backlink_counts(notes)
     by_relative, by_title, title_groups = note_indexes(notes)
 
     empty_or_stub = [
         note for note in notes
-        if note.word_count <= 12 and note.folder not in {"90 模板"}
+        if note.word_count <= 12 and note.folder not in {templates}
     ]
     inbox_triage = [
         note for note in notes
-        if note.folder == "00 收件箱"
+        if note.folder == inbox
     ]
     low_link_notes = [
         note for note in notes
         if len(note.outgoing_links) == 0
         and backlinks.get(note.relative_path, 0) == 0
-        and note.folder not in {"90 模板", "99 归档"}
+        and note.folder not in {templates, archive}
     ]
     duplicate_titles = [
         {
@@ -243,7 +256,7 @@ def classify_notes(vault: Path, notes: list[NoteRecord]) -> dict[str, list[dict[
     folder_links = find_folder_links(vault, notes)
     unindexed_codex = [
         note for note in notes
-        if note.relative_path.startswith("02 项目/Codex/")
+        if note.relative_path.startswith(codex_prefix)
         and note.title[:2].isdigit()
         and backlinks.get(note.relative_path, 0) == 0
         and note.title != "00 Codex 总览"
@@ -272,7 +285,7 @@ def classify_notes(vault: Path, notes: list[NoteRecord]) -> dict[str, list[dict[
 
 
 def build_summary(config: dict[str, Any], notes: list[NoteRecord], generated_at: dt.datetime, run_dir: Path) -> dict[str, Any]:
-    classifications = classify_notes(vault_path(config), notes)
+    classifications = classify_notes(vault_path(config), notes, config)
     counts = {name: len(items) for name, items in classifications.items()}
     return {
         "ok": True,

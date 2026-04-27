@@ -4,13 +4,16 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const {
-  readJsonFile,
-  resolveFeishuBotTarget,
-  sendBotInteractiveCard,
-} = require('C:/Users/Administrator/.openclaw/scripts/lib/feishu_bot_card.js');
-
 const DEFAULT_CONFIG_PATH = path.join(process.env.USERPROFILE || os.homedir(), '.openclaw', 'openclaw.json');
+const DEFAULT_HELPER_PATH = path.join(process.env.USERPROFILE || os.homedir(), '.openclaw', 'scripts', 'lib', 'feishu_bot_card.js');
+
+function loadFeishuHelper(helperPath) {
+  const resolved = helperPath || process.env.FEISHU_BOT_CARD_HELPER || DEFAULT_HELPER_PATH;
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`Feishu helper not found: ${resolved}`);
+  }
+  return require(resolved);
+}
 
 function parseArgs(argv) {
   const args = {
@@ -19,6 +22,7 @@ function parseArgs(argv) {
     markdownFile: '',
     accountId: 'bot-xiaoxia',
     openId: '',
+    helperPath: '',
     dryRun: false,
   };
 
@@ -29,6 +33,7 @@ function parseArgs(argv) {
     if (arg === '--markdown-file') args.markdownFile = argv[index + 1] || '';
     if (arg === '--account-id') args.accountId = argv[index + 1] || args.accountId;
     if (arg === '--open-id') args.openId = argv[index + 1] || '';
+    if (arg === '--helper') args.helperPath = argv[index + 1] || '';
     if (arg === '--dry-run') args.dryRun = true;
   }
 
@@ -134,6 +139,11 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.summaryJson) throw new Error('Missing --summary-json');
   if (!fs.existsSync(args.summaryJson)) throw new Error(`summary_json not found: ${args.summaryJson}`);
+  const {
+    readJsonFile,
+    resolveFeishuBotTarget,
+    sendBotInteractiveCard,
+  } = loadFeishuHelper(args.helperPath);
 
   const config = readJsonFile(args.configPath);
   const summary = readJsonFile(args.summaryJson);

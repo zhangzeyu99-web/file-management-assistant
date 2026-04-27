@@ -8,7 +8,11 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RuntimeRoot = "D:\codex\file-assistant"
+$ConfigPath = Join-Path $ScriptRoot "config.json"
+$RuntimeRoot = python -c "import pathlib, sys; sys.path.insert(0, r'$ScriptRoot'); from config_loader import load_config; print(load_config(pathlib.Path(r'$ConfigPath')).get('runtime_root') or '')"
+if (-not $RuntimeRoot) {
+    $RuntimeRoot = Join-Path $ScriptRoot ".runtime"
+}
 $LogDir = Join-Path $RuntimeRoot "logs"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
@@ -26,7 +30,6 @@ try {
     Write-RunLog "obsidian manager start mode=$Mode skipFeishu=$SkipFeishu"
 
     $PythonScript = Join-Path $ScriptRoot "obsidian_manager.py"
-    $ConfigPath = Join-Path $ScriptRoot "config.json"
     $ManagerOutput = python $PythonScript --config $ConfigPath --mode $Mode
     if ($LASTEXITCODE -ne 0) {
         throw "Obsidian manager failed with exit code $LASTEXITCODE"

@@ -1,180 +1,183 @@
-# File Management Assistant
+# Obsidian File Management Assistant
 
-Low-risk Windows file management assistant for Codex/OpenClaw workflows.
+Local-first Windows assistant for file archiving, Obsidian vault review, daily work capture, and Codex/OpenClaw handoff.
 
-It scans selected folders, classifies files into review/archive/reminder buckets, writes JSON/Markdown/HTML reports, updates an Obsidian note, and can send a Feishu interactive card through an existing OpenClaw Feishu bot configuration.
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
+![PowerShell](https://img.shields.io/badge/PowerShell-5%2B-5391FE)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Safety](https://img.shields.io/badge/Safety-report--only-orange)
 
-## What It Does
+**Keywords:** Obsidian assistant, personal knowledge management, file management automation, Windows productivity, local-first AI workflow, Codex assistant, OpenClaw, Feishu/Lark notification, PKM, knowledge base audit.
 
-- Scans bounded watch roots instead of crawling the whole disk.
-- Produces archive candidates, recent review items, installer cleanup reminders, large-file reminders, screenshot reminders, and exact duplicate groups.
-- Writes reports to `D:\codex\file-assistant\runs\<date>\<time>`.
-- Writes an Obsidian daily review note.
-- Sends a Feishu card through `C:\Users\Administrator\.openclaw\openclaw.json` and `bot-xiaoxia`.
-- Never deletes, moves, renames, or modifies source files.
+## Why This Project Exists
 
-## Repository Layout
+This project turns scattered desktop files, downloads, Codex outputs, and Obsidian notes into a safe daily review workflow. It scans only configured folders, creates readable reports, writes selected Obsidian notes, and optionally sends Feishu/Lark cards through an existing OpenClaw bot setup.
 
-```text
-.
-├── config.json
-├── file_assistant.py
-├── obsidian_assistant.py
-├── obsidian_manager.py
-├── gui_server.py
-├── run-file-assistant.ps1
-├── run-obsidian-manager.ps1
-├── run-obsidian-assistant.ps1
-├── start-assistant-gui.ps1
-├── send_report_to_feishu.js
-├── send_obsidian_report_to_feishu.js
-├── scripts/
-│   └── install-scheduled-task.ps1
-└── tests/
-    ├── test_file_assistant.py
-    ├── test_obsidian_assistant.py
-    └── test_obsidian_manager.py
-```
+It is intentionally conservative: by default it does **not** delete, move, rename, or rewrite source files.
 
-## Requirements
+## 中文简介
 
-- Windows PowerShell 5+.
-- Python 3.11+.
-- Node.js 18+.
-- Optional: OpenClaw Feishu bot config at `C:\Users\Administrator\.openclaw\openclaw.json`.
-- Optional: Obsidian vault path configured in `config.json`.
+这是一个本地优先的文件与 Obsidian 管理助手。它适合用来做每日文件复盘、收件箱整理、Obsidian 内部结构审计、工作日志记录，以及把任务复制回 Codex 会话继续处理。默认只生成报告和写入明确指定的笔记，不会自动删除、移动或改名源文件。
 
-The scanner itself uses only Python standard library modules.
+## Features
 
-## Quick Start
+- Bounded file scanning for Desktop, Downloads, Documents, Obsidian, and custom folders.
+- Archive candidates, recent review items, installer cleanup reminders, large-file reminders, and duplicate groups.
+- JSON, Markdown, and HTML reports under a configurable runtime directory.
+- Read-only Obsidian vault audit: inbox triage, stub notes, low-link notes, duplicate titles, broken links, folder-style links, and Codex index coverage.
+- Local GUI control panel at `http://127.0.0.1:8765/`.
+- Obsidian helper commands for beginner guides, Q&A, inbox capture, and daily notes.
+- Optional Feishu/Lark card delivery through a local OpenClaw helper.
+- Windows Scheduled Task installer for daily review automation.
+- Unit tests and a release verification harness.
 
-Run tests:
+## Screenshots
 
-```powershell
-python .\tests\test_file_assistant.py -v
-```
-
-Run scanner and report generation without Feishu:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu
-```
-
-Run the full release harness:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1
-```
-
-## Local GUI
-
-Start the local control panel:
+The GUI is generated locally and does not require a hosted backend. Start it with:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
 ```
 
-Default URL:
+Then open:
 
 ```text
 http://127.0.0.1:8765/
 ```
 
-The GUI exposes the existing safe capabilities:
+## Quick Start
 
-- Run the full local check.
+1. Install prerequisites:
+
+```powershell
+python --version
+node --version
+powershell -NoProfile -Command "$PSVersionTable.PSVersion"
+```
+
+2. Clone the repository:
+
+```powershell
+git clone https://github.com/zhangzeyu99-web/file-management-assistant.git
+cd file-management-assistant
+```
+
+3. Create your local configuration:
+
+```powershell
+Copy-Item .\config.example.json .\config.local.json
+notepad .\config.local.json
+```
+
+4. Run tests:
+
+```powershell
+python .\tests\test_config_loader.py -v
+python .\tests\test_file_assistant.py -v
+python .\tests\test_obsidian_assistant.py -v
+python .\tests\test_obsidian_manager.py -v
+python .\tests\test_gui_server.py -v
+```
+
+5. Run the assistant without Feishu/Lark delivery:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu
+```
+
+6. Start the GUI:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
+```
+
+## Repository Layout
+
+```text
+.
+|-- config.json
+|-- config.example.json
+|-- config_loader.py
+|-- file_assistant.py
+|-- obsidian_assistant.py
+|-- obsidian_manager.py
+|-- gui_server.py
+|-- run-file-assistant.ps1
+|-- run-obsidian-manager.ps1
+|-- run-obsidian-assistant.ps1
+|-- start-assistant-gui.ps1
+|-- send_report_to_feishu.js
+|-- send_obsidian_report_to_feishu.js
+|-- docs/
+|-- scripts/
+|   |-- install-scheduled-task.ps1
+|   `-- verify-harness.ps1
+`-- tests/
+```
+
+## Configuration Model
+
+`config.json` is the public safe default. `config.local.json` is ignored by Git and should contain your private local paths.
+
+The loader merges them in this order:
+
+```text
+config.json -> config.local.json
+```
+
+Supported path values can use Windows environment variables such as `%USERPROFILE%` and `%LOCALAPPDATA%`.
+
+Read the full configuration guide:
+
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+
+## Obsidian Tutorial
+
+If you are new to Obsidian, start here:
+
+[docs/OBSIDIAN_WORKFLOW_TUTORIAL.md](docs/OBSIDIAN_WORKFLOW_TUTORIAL.md)
+
+The shortest workflow is:
+
+```text
+00 收件箱 -> 01 今日日志 -> 02 项目 / 04 例行工作 -> 99 归档
+```
+
+## GUI Capabilities
+
+The local GUI can:
+
+- Run the full file and Obsidian check.
 - Run only the file scanner.
-- Run only the read-only Obsidian internal audit.
+- Run only the Obsidian audit.
 - Open the latest HTML report.
 - Open the Obsidian vault.
 - Ask the Obsidian helper.
-- Capture a note into `00 收件箱`.
-- Append to today's daily note.
-- Generate a prompt to copy back into the current Codex conversation.
+- Capture text into the Obsidian inbox.
+- Append work notes to today's daily note.
+- Generate a Codex handoff prompt for the current conversation.
+- Open Codex Desktop if the executable path is configured.
 
-The GUI does not add delete, move, rename, or source-file rewrite operations.
+## Feishu / Lark Delivery
 
-## Obsidian Helper
+Feishu/Lark delivery is optional. The repository does not store app secrets, tokens, webhooks, or open IDs.
 
-Generate the beginner guide:
+By default the sender looks for:
 
-```powershell
-python .\obsidian_assistant.py guide
+```text
+%USERPROFILE%\.openclaw\scripts\lib\feishu_bot_card.js
+%USERPROFILE%\.openclaw\openclaw.json
 ```
 
-Ask a common Obsidian workflow question:
+You can override the helper path with:
 
 ```powershell
-python .\obsidian_assistant.py ask "我今天怎么记录工作？"
+$env:FEISHU_BOT_CARD_HELPER="C:\path\to\feishu_bot_card.js"
 ```
-
-Ask how the helper should adapt to local working habits:
-
-```powershell
-python .\obsidian_assistant.py ask "根据我的习惯怎么帮我？"
-```
-
-Capture a note into the Obsidian inbox:
-
-```powershell
-python .\obsidian_assistant.py capture --title "一个想法" --body "先放收件箱，之后整理。" --tags idea
-```
-
-Append to today's daily note:
-
-```powershell
-python .\obsidian_assistant.py daily --done "完成文件管理助手" --next "整理收件箱" --blocker "暂无"
-```
-
-Run read-only Obsidian internal management audit:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test -SkipFeishu
-```
-
-The audit checks folder inventory, inbox triage, stub notes, low-link notes, duplicate titles, broken internal links, and Codex index coverage. It only writes reports and never deletes, moves, renames, or rewrites source notes.
-
-Run full chain with Feishu:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test
-```
-
-The main chain runs both the file scanner and the read-only Obsidian internal audit. With Feishu enabled, it sends separate cards for file management and Obsidian management.
-
-Install daily scheduled task:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduled-task.ps1
-```
-
-Default schedule: daily at `20:30`. The scheduled task calls `run-file-assistant.ps1`, so it covers both local file management and Obsidian internal management.
-
-## Configuration
-
-Edit `config.json` to control:
-
-- Runtime output root.
-- Obsidian vault and run-note path.
-- Watch roots.
-- Max depth and max file count per root.
-- Classification thresholds.
-- Duplicate hashing limits.
-
-The default config is intentionally conservative. It scans common landing zones only:
-
-- Desktop
-- Downloads
-- Documents
-- Codex output documents
-- Obsidian inbox
-- Obsidian projects
-
-The helper can link to a local behavior-profile note if the vault keeps one. Personal profiles and private task notes should stay outside this public repository.
 
 ## Safety Policy
 
-This project is designed as a review and reminder assistant first.
+This project is designed as a review, reminder, and capture assistant.
 
 It does not:
 
@@ -182,35 +185,39 @@ It does not:
 - Move files.
 - Rename files.
 - Rewrite source documents.
-- Scan OpenClaw/Codex secret or session folders by default.
+- Scan secret/session folders by default.
+- Commit credentials.
 
-Physical file moving should only be added later behind explicit allow-list rules and a dry-run manifest.
+Any future destructive action should require an allow-list, a dry-run manifest, and a rollback plan.
 
-## Feishu Delivery
+## Scheduled Task
 
-`send_report_to_feishu.js` reuses the existing OpenClaw Feishu helper:
+Install the default daily Windows Scheduled Task:
 
-```text
-C:\Users\Administrator\.openclaw\scripts\lib\feishu_bot_card.js
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduled-task.ps1
 ```
 
-No app secret, token, webhook, or open ID is stored in this repository. Runtime credentials remain in the local OpenClaw config.
+Default schedule: daily at `20:30`.
 
-## Maintenance
+## Validation
 
-Recommended update loop:
+Run the release harness:
 
-1. Change code or config.
-2. Run `python .\tests\test_file_assistant.py -v`.
-3. Run `python .\tests\test_obsidian_assistant.py -v`.
-4. Run `python .\tests\test_obsidian_manager.py -v`.
-5. Run `python .\tests\test_gui_server.py -v`.
-6. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu`.
-7. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test -SkipFeishu`.
-8. Commit with a short behavior-focused message.
-9. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1`.
-10. Push to GitHub.
-11. Run full Feishu test when delivery behavior changed.
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1
+```
+
+The harness checks Git state, unit tests, secret-like patterns, dry-run execution, and remote sync state.
+
+## Documentation
+
+- [Getting Started](docs/GETTING_STARTED.md)
+- [Configuration](docs/CONFIGURATION.md)
+- [Obsidian Workflow Tutorial](docs/OBSIDIAN_WORKFLOW_TUTORIAL.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Maintenance](MAINTENANCE.md)
+- [Security](SECURITY.md)
 
 ## License
 

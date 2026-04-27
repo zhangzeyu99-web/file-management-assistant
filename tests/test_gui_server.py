@@ -93,10 +93,11 @@ class GuiServerTests(unittest.TestCase):
         self.assertIn("完成 GUI 测试", Path(daily["daily"]).read_text(encoding="utf-8"))
 
     def test_codex_prompt_preserves_user_request_and_local_context(self) -> None:
-        prompt = gui_server.build_codex_prompt("帮我整理今天的收件箱")
+        config = gui_server.load_config(self.config_path)
+        prompt = gui_server.build_codex_prompt("帮我整理今天的收件箱", config)
 
         self.assertIn("帮我整理今天的收件箱", prompt)
-        self.assertIn("D:\\Obsidian-Work", prompt)
+        self.assertIn(str(self.vault), prompt)
         self.assertIn("不要删除", prompt)
 
 

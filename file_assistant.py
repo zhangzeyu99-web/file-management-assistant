@@ -7,8 +7,15 @@ import hashlib
 import html
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from config_loader import load_config
 
 
 DOCUMENT_EXTENSIONS = {
@@ -46,11 +53,6 @@ class FileRecord:
 
 def now_local() -> dt.datetime:
     return dt.datetime.now().astimezone()
-
-
-def load_config(config_path: Path) -> dict[str, Any]:
-    with config_path.open("r", encoding="utf-8-sig") as handle:
-        return json.load(handle)
 
 
 def normalize_extension(path: Path) -> str:

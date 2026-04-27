@@ -4,16 +4,18 @@ import argparse
 import datetime as dt
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from config_loader import load_config
+
 
 ILLEGAL_FILENAME_CHARS = r'<>:"/\|?*'
-
-
-def load_config(config_path: Path) -> dict[str, Any]:
-    with config_path.open("r", encoding="utf-8-sig") as handle:
-        return json.load(handle)
 
 
 def now_local() -> dt.datetime:
@@ -45,24 +47,28 @@ def vault_path(config: dict[str, Any]) -> Path:
     return Path(config.get("obsidian_vault") or "D:\\Obsidian-Work")
 
 
+def folder_name(config: dict[str, Any], key: str, default: str) -> str:
+    return str(config.get("obsidian_folders", {}).get(key, default))
+
+
 def guide_path(config: dict[str, Any]) -> Path:
-    return vault_path(config) / "02 项目" / "Codex" / "11 Obsidian 新手使用指南.md"
+    return vault_path(config) / folder_name(config, "projects", "02 项目") / folder_name(config, "codex_project", "Codex") / "11 Obsidian 新手使用指南.md"
 
 
 def behavior_profile_path(config: dict[str, Any]) -> Path:
-    return vault_path(config) / "02 项目" / "Codex" / "12 Codex 线程行为画像与帮助策略.md"
+    return vault_path(config) / folder_name(config, "projects", "02 项目") / folder_name(config, "codex_project", "Codex") / "12 Codex 线程行为画像与帮助策略.md"
 
 
 def inbox_dir(config: dict[str, Any]) -> Path:
-    return vault_path(config) / "00 收件箱"
+    return vault_path(config) / folder_name(config, "inbox", "00 收件箱")
 
 
 def daily_dir(config: dict[str, Any]) -> Path:
-    return vault_path(config) / "01 今日日志"
+    return vault_path(config) / folder_name(config, "daily", "01 今日日志")
 
 
 def codex_overview_path(config: dict[str, Any]) -> Path:
-    return vault_path(config) / "02 项目" / "Codex" / "00 Codex 总览.md"
+    return vault_path(config) / folder_name(config, "projects", "02 项目") / folder_name(config, "codex_project", "Codex") / "00 Codex 总览.md"
 
 
 def build_guide(config: dict[str, Any]) -> str:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import traceback
@@ -21,7 +22,6 @@ import obsidian_manager
 
 
 DEFAULT_CONFIG = ROOT / "config.json"
-CODEX_EXE = Path(r"C:\Users\Administrator\AppData\Local\Programs\OpenAI\CodexDesktop\Codex.exe")
 
 
 def load_config(config_path: Path) -> dict[str, Any]:
@@ -36,11 +36,18 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def runtime_root(config: dict[str, Any]) -> Path:
-    return Path(config.get("runtime_root") or r"D:\codex\file-assistant")
+    return Path(config.get("runtime_root") or ROOT / ".runtime")
 
 
 def obsidian_vault(config: dict[str, Any]) -> Path:
-    return Path(config.get("obsidian_vault") or r"D:\Obsidian-Work")
+    return Path(config.get("obsidian_vault") or Path.home() / "Documents" / "Obsidian")
+
+
+def codex_executable(config: dict[str, Any]) -> Path:
+    raw = config.get("codex_executable") or os.environ.get("CODEX_DESKTOP_EXE")
+    if raw:
+        return Path(str(raw))
+    return Path.home() / "AppData" / "Local" / "Programs" / "OpenAI" / "CodexDesktop" / "Codex.exe"
 
 
 def latest_file_report(config: dict[str, Any]) -> dict[str, Any] | None:
@@ -100,8 +107,11 @@ def text_list(value: Any) -> list[str]:
     return [text] if text else []
 
 
-def build_codex_prompt(request: str) -> str:
+def build_codex_prompt(request: str, config: dict[str, Any] | None = None) -> str:
+    config = config or load_config(DEFAULT_CONFIG)
     request = request.strip() or "帮我继续处理 Obsidian / 文件管理助手相关任务。"
+    vault = obsidian_vault(config)
+    runtime = runtime_root(config) / "runs"
     return "\n".join(
         [
             "请回到当前 Codex 会话，按我的真实本机环境处理这个任务：",
@@ -109,9 +119,9 @@ def build_codex_prompt(request: str) -> str:
             request,
             "",
             "上下文：",
-            "- Obsidian vault：D:\\Obsidian-Work",
-            "- 文件管理助手仓库：D:\\codex\\file-management-assistant",
-            "- 运行产物：D:\\codex\\file-assistant\\runs",
+            f"- Obsidian vault：{vault}",
+            f"- 文件管理助手仓库：{ROOT}",
+            f"- 运行产物：{runtime}",
             "- 安全边界：不要删除、移动、重命名源文件；涉及外发、删除、权限变更先确认。",
             "",
             "请先查真实文件和最新报告，再执行或给结论。",
@@ -125,8 +135,8 @@ def allowed_open_path(path: Path, config: dict[str, Any]) -> bool:
         ROOT.resolve(),
         runtime_root(config).resolve(),
         obsidian_vault(config).resolve(),
-        Path(r"D:\codex\output").resolve(),
     ]
+    roots.extend(Path(item).resolve() for item in config.get("allowed_open_roots", []))
     return any(resolved == root or root in resolved.parents for root in roots)
 
 
@@ -151,11 +161,12 @@ def open_obsidian(config: dict[str, Any], file_path: str | None = None) -> dict[
     return {"ok": True, "opened": uri}
 
 
-def open_codex() -> dict[str, Any]:
-    if CODEX_EXE.exists():
-        subprocess.Popen([str(CODEX_EXE)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"ok": True, "opened": str(CODEX_EXE)}
-    return {"ok": False, "error": f"Codex executable not found: {CODEX_EXE}"}
+def open_codex(config: dict[str, Any]) -> dict[str, Any]:
+    executable = codex_executable(config)
+    if executable.exists():
+        subprocess.Popen([str(executable)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"ok": True, "opened": str(executable)}
+    return {"ok": False, "error": f"Codex executable not found: {executable}"}
 
 
 def run_gui_action(action: str, payload: dict[str, Any], config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
@@ -191,13 +202,13 @@ def run_gui_action(action: str, payload: dict[str, Any], config_path: Path = DEF
             blockers=text_list(payload.get("blocker") or payload.get("blockers")),
         )
     if action == "codex-prompt":
-        return {"ok": True, "prompt": build_codex_prompt(str(payload.get("text") or ""))}
+        return {"ok": True, "prompt": build_codex_prompt(str(payload.get("text") or ""), config)}
     if action == "open-path":
         return open_local_path(str(payload.get("path") or ""), config)
     if action == "open-obsidian":
         return open_obsidian(config, str(payload.get("file") or "") or None)
     if action == "open-codex":
-        return open_codex()
+        return open_codex(config)
 
     return {"ok": False, "error": f"unsupported action: {action}"}
 
