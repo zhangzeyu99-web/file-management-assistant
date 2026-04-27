@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-27
+
+- Added a local GUI control panel at `http://127.0.0.1:8765/`.
+- Added safe GUI actions for file scanning, Obsidian auditing, capture, daily notes, ask, guide, opening reports, and Codex handoff prompts.
+- Added GUI regression tests.
+
 ## 2026-04-24
 
 - Initial standalone release.

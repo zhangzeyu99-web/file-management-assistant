@@ -21,9 +21,11 @@ It scans selected folders, classifies files into review/archive/reminder buckets
 ├── file_assistant.py
 ├── obsidian_assistant.py
 ├── obsidian_manager.py
+├── gui_server.py
 ├── run-file-assistant.ps1
 ├── run-obsidian-manager.ps1
 ├── run-obsidian-assistant.ps1
+├── start-assistant-gui.ps1
 ├── send_report_to_feishu.js
 ├── send_obsidian_report_to_feishu.js
 ├── scripts/
@@ -63,6 +65,34 @@ Run the full release harness:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1
 ```
+
+## Local GUI
+
+Start the local control panel:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
+```
+
+Default URL:
+
+```text
+http://127.0.0.1:8765/
+```
+
+The GUI exposes the existing safe capabilities:
+
+- Run the full local check.
+- Run only the file scanner.
+- Run only the read-only Obsidian internal audit.
+- Open the latest HTML report.
+- Open the Obsidian vault.
+- Ask the Obsidian helper.
+- Capture a note into `00 收件箱`.
+- Append to today's daily note.
+- Generate a prompt to copy back into the current Codex conversation.
+
+The GUI does not add delete, move, rename, or source-file rewrite operations.
 
 ## Obsidian Helper
 
@@ -174,12 +204,13 @@ Recommended update loop:
 2. Run `python .\tests\test_file_assistant.py -v`.
 3. Run `python .\tests\test_obsidian_assistant.py -v`.
 4. Run `python .\tests\test_obsidian_manager.py -v`.
-5. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu`.
-6. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test -SkipFeishu`.
-7. Commit with a short behavior-focused message.
-8. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1`.
-9. Push to GitHub.
-10. Run full Feishu test when delivery behavior changed.
+5. Run `python .\tests\test_gui_server.py -v`.
+6. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu`.
+7. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test -SkipFeishu`.
+8. Commit with a short behavior-focused message.
+9. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1`.
+10. Push to GitHub.
+11. Run full Feishu test when delivery behavior changed.
 
 ## License
 
