@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Obsidian File Management Assistant cover</title>
+  <desc id="desc">Local-first Windows file and Obsidian review workflow.</desc>
+  <rect width="1200" height="630" fill="#102027"/>
+  <rect x="64" y="58" width="1072" height="514" rx="18" fill="#f8fafc"/>
+  <text x="100" y="124" font-family="Segoe UI, Arial, sans-serif" font-size="40" font-weight="800" fill="#0f172a">Obsidian File Management Assistant</text>
+  <text x="100" y="164" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#475569">Review-first file organization for Windows, Obsidian, Codex, and OpenClaw workflows</text>
+  <rect x="100" y="216" width="300" height="292" rx="14" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="130" y="262" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#0f172a">Scan</text>
+  <text x="130" y="304" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">Desktop</text>
+  <text x="130" y="342" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">Downloads</text>
+  <text x="130" y="380" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">Obsidian Vault</text>
+  <text x="130" y="418" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">Custom folders</text>
+  <rect x="452" y="216" width="300" height="292" rx="14" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="482" y="262" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#0f172a">Report</text>
+  <rect x="482" y="304" width="188" height="22" rx="6" fill="#bae6fd"/>
+  <rect x="482" y="350" width="224" height="22" rx="6" fill="#bbf7d0"/>
+  <rect x="482" y="396" width="156" height="22" rx="6" fill="#fed7aa"/>
+  <rect x="804" y="216" width="300" height="292" rx="14" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="834" y="262" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#0f172a">Capture</text>
+  <text x="834" y="310" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">Inbox notes</text>
+  <text x="834" y="350" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">Daily logs</text>
+  <text x="834" y="390" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">Codex handoff</text>
+  <rect x="834" y="430" width="170" height="36" rx="8" fill="#16a34a"/>
+  <text x="858" y="453" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff">report-only</text>
+  <text x="100" y="548" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#0f172a">Safe by default: no delete, no move, no rename, no rewrite.</text>
+</svg>

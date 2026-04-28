@@ -2,6 +2,8 @@
 
 > Local-first Windows file organizer and Obsidian workflow assistant for inbox review, knowledge base audit, and safe daily file management.
 
+![Obsidian File Management Assistant cover](docs/assets/file-management-assistant-cover.svg)
+
 Local-first Windows assistant for file archiving, Obsidian vault review, daily work capture, and Codex/OpenClaw handoff.
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
@@ -23,6 +25,17 @@ Local-first Windows assistant for file archiving, Obsidian vault review, daily w
 This project turns scattered desktop files, downloads, Codex outputs, and Obsidian notes into a safe daily review workflow. It scans only configured folders, creates readable reports, writes selected Obsidian notes, and keeps notification delivery as an optional local integration.
 
 It is intentionally conservative: by default it does **not** delete, move, rename, or rewrite source files.
+
+## 30-Second Example
+
+```powershell
+git clone https://github.com/zhangzeyu99-web/file-management-assistant.git
+cd file-management-assistant
+Copy-Item .\config.example.json .\config.local.json
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu
+```
+
+The command generates local review reports without external notification delivery.
 
 ## 中文简介
 
