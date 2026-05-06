@@ -16,6 +16,8 @@ REQUIRED_DOCS = [
     "docs/GETTING_STARTED.md",
     "docs/CONFIGURATION.md",
     "docs/OBSIDIAN_WORKFLOW_TUTORIAL.md",
+    "docs/USER_SCENARIOS.md",
+    "docs/CLOSED_LOOP_USAGE.md",
     "docs/ARCHITECTURE.md",
     "docs/PROJECT_PRINCIPLES.md",
 ]
@@ -25,6 +27,8 @@ PRINCIPLES = {
     "report-only safety": ["report-only", "report only", "does not delete"],
     "private local configuration": ["config.local.json", "private local configuration"],
     "obsidian workflow": ["00 收件箱", "01 今日日志", "obsidian workflow"],
+    "scenario-based workflow": ["scenario-based workflow", "scenario-first", "user scenarios"],
+    "closed loop": ["closed loop", "acceptance checks", "scenario demo"],
     "thin gui": ["thin gui", "same underlying modules"],
     "validation harness": ["validation harness", "verify-harness"],
     "optional integrations": ["optional integrations", "notification hooks"],
@@ -161,6 +165,7 @@ def check_thin_gui_and_non_destructive_code(root: Path) -> dict[str, Any]:
 def check_validation_harness(root: Path) -> dict[str, Any]:
     harness = read_text(root, "scripts/verify-harness.ps1")
     required = [
+        "test_scenario_playbook.py",
         "test_project_quality.py",
         "secret_scan",
         "dry_run",
@@ -172,6 +177,25 @@ def check_validation_harness(root: Path) -> dict[str, Any]:
     return ok_check("validation_harness", required)
 
 
+def check_scenario_workflow(root: Path) -> dict[str, Any]:
+    playbook = read_text(root, "scenario_playbook.py")
+    gui = read_text(root, "gui_server.py")
+    docs = read_text(root, "docs/USER_SCENARIOS.md") + "\n" + read_text(root, "docs/CLOSED_LOOP_USAGE.md")
+    required = [
+        "daily_review",
+        "inbox_triage",
+        "obsidian_health",
+        "codex_handoff",
+        "scenario-demo",
+        "acceptance_checks",
+    ]
+    haystack = "\n".join([playbook, gui, docs])
+    missing = [item for item in required if item not in haystack]
+    if missing:
+        return fail_check("scenario_workflow", {"missing": missing})
+    return ok_check("scenario_workflow", required)
+
+
 def run_checks(root: Path) -> dict[str, Any]:
     checks = [
         check_required_docs(root),
@@ -181,6 +205,7 @@ def run_checks(root: Path) -> dict[str, Any]:
         check_project_principles(root),
         check_optional_notification_positioning(root),
         check_thin_gui_and_non_destructive_code(root),
+        check_scenario_workflow(root),
         check_validation_harness(root),
     ]
     return {

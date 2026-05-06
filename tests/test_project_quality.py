@@ -39,6 +39,8 @@ class ProjectQualityTests(unittest.TestCase):
             "report-only safety",
             "private local configuration",
             "obsidian workflow",
+            "scenario-based workflow",
+            "closed loop",
             "thin gui",
             "validation harness",
             "optional integrations",

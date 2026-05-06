@@ -101,5 +101,21 @@ class GuiServerTests(unittest.TestCase):
         self.assertIn("不要删除", prompt)
 
 
+    def test_scenario_actions_return_catalog_and_write_demo(self) -> None:
+        catalog = gui_server.run_gui_action("scenarios", {}, self.config_path)
+        ids = {item["id"] for item in catalog["scenarios"]}
+
+        self.assertTrue(catalog["ok"], catalog)
+        self.assertIn("daily_review", ids)
+        self.assertIn("codex_handoff", ids)
+
+        demo = gui_server.run_gui_action("scenario-demo", {}, self.config_path)
+
+        self.assertTrue(demo["ok"], demo)
+        self.assertTrue(Path(demo["markdown_report"]).exists())
+        self.assertTrue(Path(demo["obsidian_note"]).exists())
+        self.assertEqual(4, len(demo["scenarios"]))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

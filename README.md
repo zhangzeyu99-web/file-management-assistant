@@ -37,6 +37,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mo
 
 The command generates local review reports without external notification delivery.
 
+## Scenario Demo
+
+If you want to evaluate the assistant as a complete workflow instead of isolated commands, run the scenario demo:
+
+```powershell
+python .\scenario_playbook.py demo --config .\config.json
+```
+
+The demo covers four real user flows:
+
+- Daily review: decide what to look at first today.
+- Inbox triage: decide where temporary notes and tasks should go.
+- Obsidian health: identify the highest-impact knowledge base cleanup items.
+- Codex handoff: generate a prompt that sends the next task back to Codex with local context and safety boundaries.
+
+It writes Markdown and JSON evidence under the runtime `runs` directory and copies the Markdown report into the configured Obsidian assistant folder.
+
 ## 中文简介
 
 这是一个本地优先的文件与 Obsidian 管理助手。它适合用来做每日文件复盘、收件箱整理、Obsidian 内部结构审计、工作日志记录，以及把任务复制回 Codex 会话继续处理。默认只生成报告和写入明确指定的笔记，不会自动删除、移动或改名源文件。
@@ -48,6 +65,7 @@ The command generates local review reports without external notification deliver
 - JSON, Markdown, and HTML reports under a configurable runtime directory.
 - Read-only Obsidian vault audit: inbox triage, stub notes, low-link notes, duplicate titles, broken links, folder-style links, and Codex index coverage.
 - Local GUI control panel at `http://127.0.0.1:8765/`.
+- Scenario-first playbook with daily review, inbox triage, Obsidian health check, and Codex handoff examples.
 - Obsidian helper commands for beginner guides, Q&A, inbox capture, and daily notes.
 - Optional notification hooks through a local helper.
 - Windows Scheduled Task installer for daily review automation.
@@ -98,6 +116,7 @@ python .\tests\test_config_loader.py -v
 python .\tests\test_file_assistant.py -v
 python .\tests\test_obsidian_assistant.py -v
 python .\tests\test_obsidian_manager.py -v
+python .\tests\test_scenario_playbook.py -v
 python .\tests\test_gui_server.py -v
 python .\tests\test_project_quality.py -v
 ```
@@ -124,6 +143,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
 |-- file_assistant.py
 |-- obsidian_assistant.py
 |-- obsidian_manager.py
+|-- scenario_playbook.py
 |-- gui_server.py
 |-- run-file-assistant.ps1
 |-- run-obsidian-manager.ps1
@@ -179,6 +199,8 @@ The local GUI can:
 - Capture text into the Obsidian inbox.
 - Append work notes to today's daily note.
 - Generate a Codex handoff prompt for the current conversation.
+- Show scenario-first usage cards.
+- Run the scenario demo and write output to runtime reports and Obsidian.
 - Open Codex Desktop if the executable path is configured.
 
 ## Optional Notification Hooks
@@ -231,6 +253,8 @@ The harness checks Git state, unit tests, secret-like patterns, dry-run executio
 - [Getting Started](docs/GETTING_STARTED.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Obsidian Workflow Tutorial](docs/OBSIDIAN_WORKFLOW_TUTORIAL.md)
+- [User Scenarios](docs/USER_SCENARIOS.md)
+- [Closed Loop Usage](docs/CLOSED_LOOP_USAGE.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Project Principles](docs/PROJECT_PRINCIPLES.md)
 - [Maintenance](MAINTENANCE.md)

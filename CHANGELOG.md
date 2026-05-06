@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-05-06
+
+- Added `scenario_playbook.py` for scenario-first workflows: daily review, inbox triage, Obsidian health check, and Codex handoff.
+- Added scenario demo output that writes Markdown/JSON evidence under `runs` and copies the Markdown report into Obsidian.
+- Added GUI actions for viewing scenario cards and running the scenario demo.
+- Added `docs/USER_SCENARIOS.md` and `docs/CLOSED_LOOP_USAGE.md`.
+- Extended project quality gates and the release harness to verify scenario-based workflow and closed-loop behavior.
+
 ## 2026-04-27
 
 - Prepared the project for open-source GitHub publication with SEO-focused README, documentation, security notes, contribution guide, and configurable local overrides.

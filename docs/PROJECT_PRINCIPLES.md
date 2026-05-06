@@ -24,6 +24,27 @@ The recommended Obsidian workflow is intentionally small:
 
 Obsidian should stay practical: capture first, organize later, and keep source paths traceable.
 
+## Scenario-Based Workflow
+
+The assistant should be scenario-first, not command-first. User scenarios are part of the product surface:
+
+- Daily review: what should I look at first today?
+- Inbox triage: where should this note or task go?
+- Obsidian health: is the knowledge base getting messy?
+- Codex handoff: continue this task with the right context.
+
+These user scenarios are documented in `docs/USER_SCENARIOS.md` and implemented in `scenario_playbook.py`.
+
+## Closed Loop
+
+Every mature workflow should produce a closed loop:
+
+```text
+User scenario -> assistant action -> local report -> Obsidian note -> next action -> verification
+```
+
+The scenario demo must create durable artifacts and include acceptance checks. It should not stop at advice or require the user to manually stitch together paths, reports, and next steps.
+
 ## Thin GUI
 
 The GUI is a thin control layer over the same modules used by command-line runs:
@@ -31,6 +52,7 @@ The GUI is a thin control layer over the same modules used by command-line runs:
 - `file_assistant.py`
 - `obsidian_manager.py`
 - `obsidian_assistant.py`
+- `scenario_playbook.py`
 
 It should not introduce separate hidden behavior.
 

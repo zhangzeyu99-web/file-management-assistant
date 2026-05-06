@@ -50,6 +50,7 @@ python .\tests\test_config_loader.py -v
 python .\tests\test_file_assistant.py -v
 python .\tests\test_obsidian_assistant.py -v
 python .\tests\test_obsidian_manager.py -v
+python .\tests\test_scenario_playbook.py -v
 python .\tests\test_gui_server.py -v
 ```
 
@@ -73,7 +74,17 @@ Open:
 http://127.0.0.1:8765/
 ```
 
-## 7. Optional Scheduled Task
+## 7. Run The Scenario Demo
+
+Use this when you want to test a complete workflow instead of a single command:
+
+```powershell
+python .\scenario_playbook.py demo --config .\config.json
+```
+
+The demo writes a scenario report under the runtime directory and copies the same report into the configured Obsidian assistant folder.
+
+## 8. Optional Scheduled Task
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduled-task.ps1

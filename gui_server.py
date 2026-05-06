@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 import file_assistant
 import obsidian_assistant
 import obsidian_manager
+import scenario_playbook
 
 
 DEFAULT_CONFIG = ROOT / "config.json"
@@ -32,6 +33,8 @@ def read_json(path: Path) -> dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8-sig"))
     except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError:
         return {}
 
 
@@ -94,6 +97,7 @@ def build_status(config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
         "obsidian_vault": str(obsidian_vault(config)),
         "file_report": latest_file_report(config),
         "obsidian_report": latest_obsidian_report(config),
+        "scenarios": scenario_playbook.build_scenario_catalog(config),
         "safety": "只生成报告和写入明确指定的 Obsidian 笔记；不删除、不移动、不重命名源文件。",
     }
 
@@ -186,6 +190,10 @@ def run_gui_action(action: str, payload: dict[str, Any], config_path: Path = DEF
         return {"ok": True, "action": action, "file": file_result, "obsidian": obsidian_result}
     if action == "guide":
         return obsidian_assistant.command_guide(config)
+    if action == "scenarios":
+        return {"ok": True, "action": action, "scenarios": scenario_playbook.build_scenario_catalog(config)}
+    if action == "scenario-demo":
+        return {"action": action, **scenario_playbook.run_demo(config_path)}
     if action == "ask":
         question = str(payload.get("question") or payload.get("text") or "").strip()
         return obsidian_assistant.command_ask(config, question, bool(payload.get("write_note")))
@@ -338,6 +346,32 @@ HTML = r"""<!doctype html>
       line-height: 1.65;
       color: #3a3026;
     }
+    .subtle {
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .scenario-list {
+      display: grid;
+      gap: 12px;
+    }
+    .scenario-card {
+      border: 1px solid rgba(219, 201, 165, .9);
+      background: rgba(255, 255, 255, .58);
+      border-radius: 18px;
+      padding: 14px;
+      line-height: 1.6;
+    }
+    .scenario-card strong {
+      display: block;
+      color: var(--blue);
+      margin-bottom: 4px;
+    }
+    .scenario-card code {
+      color: var(--green);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 12px;
+    }
     @media (max-width: 980px) {
       .grid, .cards, .actions { grid-template-columns: 1fr; }
       header { flex-direction: column; }
@@ -367,6 +401,8 @@ HTML = r"""<!doctype html>
           <button onclick="runAction('file-scan')">只跑文件扫描</button>
           <button onclick="runAction('obsidian-audit')">只跑 Obsidian 审计</button>
           <button onclick="runAction('guide')" class="warn">生成 Obsidian 指南</button>
+          <button onclick="loadScenarios()" class="secondary">查看使用场景</button>
+          <button onclick="runScenarioDemo()" class="warn">跑使用场景示例</button>
           <button onclick="openLatestReport()" class="ghost">打开最新 HTML 报告</button>
           <button onclick="openObsidian()" class="ghost">打开 Obsidian</button>
         </div>
@@ -406,6 +442,12 @@ HTML = r"""<!doctype html>
         <label>收件箱内容</label>
         <textarea id="captureBody"></textarea>
         <button onclick="captureForm()">写入收件箱</button>
+      </section>
+
+      <section class="panel stack">
+        <h2>场景化入口</h2>
+        <div class="subtle">成熟用法不是先记命令，而是先选场景：今天先看什么、收件箱整理、知识库健康检查、交给 Codex 继续做。每个场景都带安全边界、下一步和验收标准。</div>
+        <div class="scenario-list" id="scenarioCards"></div>
       </section>
 
       <section class="panel stack">
@@ -455,9 +497,43 @@ HTML = r"""<!doctype html>
       $('safety').textContent = lastStatus.safety;
       $('latestFileReport').textContent = 'HTML 报告：' + (lastStatus.file_report?.html_report || '暂无');
       $('latestObsidianReport').textContent = 'Obsidian 审计：' + (lastStatus.obsidian_report?.markdown_report || '暂无');
+      renderScenarios(lastStatus.scenarios || []);
     }
 
     async function runAction(action) { await post(action); }
+
+    function renderScenarios(scenarios) {
+      const box = $('scenarioCards');
+      if (!box) return;
+      if (!scenarios.length) {
+        box.innerHTML = '<div class="scenario-card">暂无场景数据。点击“查看使用场景”刷新。</div>';
+        return;
+      }
+      box.innerHTML = scenarios.map(item => `
+        <div class="scenario-card">
+          <strong>${item.title} <code>${item.id}</code></strong>
+          <div>${item.user_need}</div>
+          <div class="subtle">下一步：${item.next_action}</div>
+        </div>
+      `).join('');
+    }
+
+    async function loadScenarios() {
+      const data = await post('scenarios');
+      if (data.ok) renderScenarios(data.scenarios || []);
+    }
+
+    async function runScenarioDemo() {
+      const data = await post('scenario-demo');
+      if (data.ok) {
+        $('result').textContent =
+          '使用场景示例已跑完：\n' +
+          'Markdown：' + data.markdown_report + '\n' +
+          'JSON：' + data.json_report + '\n' +
+          'Obsidian：' + data.obsidian_note + '\n\n' +
+          JSON.stringify(data.scenarios.map(item => ({id: item.id, title: item.title, next: item.next_action})), null, 2);
+      }
+    }
 
     async function openLatestReport() {
       const path = lastStatus?.file_report?.html_report;

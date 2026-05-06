@@ -10,6 +10,7 @@ The assistant is a small local-first toolchain.
 | `file_assistant.py` | Scans configured folders and renders file review reports. |
 | `obsidian_manager.py` | Performs read-only Obsidian vault audit and renders reports. |
 | `obsidian_assistant.py` | Provides guide, Q&A, inbox capture, and daily note helpers. |
+| `scenario_playbook.py` | Turns common user scenarios into steps, safe actions, outputs, and acceptance checks. |
 | `gui_server.py` | Serves a local control panel and safe action API. |
 | `send_report_to_feishu.js` | Optional local notification adapter for file reports. |
 | `send_obsidian_report_to_feishu.js` | Optional local notification adapter for Obsidian audit reports. |
@@ -29,10 +30,13 @@ file_assistant.py -----> JSON / Markdown / HTML reports
 obsidian_manager.py ---> Obsidian audit report
         |
         v
+scenario_playbook.py --> scenario demo Markdown / JSON / Obsidian note
+        |
+        v
 optional notification hooks
 ```
 
-The GUI uses the same underlying modules. It does not introduce separate behavior for scanning, auditing, or note writing.
+The GUI uses the same underlying modules. It does not introduce separate behavior for scanning, auditing, scenario demos, or note writing.
 
 ## Safety Boundary
 
