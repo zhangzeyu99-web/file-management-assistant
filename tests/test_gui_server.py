@@ -196,21 +196,25 @@ class GuiServerTests(unittest.TestCase):
             "查看交互说明图",
             "查看交互说明",
             "新手 10 分钟上手",
-            "本地状态概览",
-            "执行结果",
-            "本地执行",
-            "交给 Codex 接管",
+            "本地上下文概览",
+            "上下文来源",
+            "Codex 接手包",
+            "生成 Codex 接手包",
             "查看高级 JSON",
-            "结果卡片",
+            "接手包预览",
         ]:
             self.assertIn(label, html)
         for required in [
             "Obsidian AI 整理工作台",
-            "今日操作台",
-            "本地状态概览",
+            "可视化上下文入口",
+            "本地文件",
+            "Obsidian",
+            "历史报告",
+            "本地上下文概览",
             "默认只读",
             "这不是 Codex 本体",
-            "本地 Python 服务",
+            "不是替代 Codex",
+            "让 Codex 接手时少读上下文",
             "本地文件扫描使用配置目录",
             "默认不展示黑色 JSON",
             "hero-illustration.png",
@@ -225,6 +229,9 @@ class GuiServerTests(unittest.TestCase):
         self.assertNotIn("Codex 文件管理小助手", html)
         self.assertNotIn("生成 Codex 交接", html)
         self.assertNotIn("AI 交接", html)
+        self.assertNotIn("今日操作台", html)
+        self.assertNotIn("执行结果", html)
+        self.assertNotIn("伪控制台", html)
         self.assertNotRegex(html, r"鏂|绠|鍏|浠婃|瀛︿|宸ヤ")
 
     def test_interaction_guide_action_exposes_generated_assets(self) -> None:

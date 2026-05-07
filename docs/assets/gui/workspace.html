@@ -315,7 +315,7 @@
     }
     .quick-actions {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 16px;
       margin-top: 18px;
     }
@@ -680,7 +680,7 @@
       font-size: 14px;
       line-height: 1.5;
     }
-    .console-output {
+    .advanced-output {
       display: none;
       margin-top: 16px;
       max-height: 210px;
@@ -695,7 +695,7 @@
       font-size: 11px;
       line-height: 1.55;
     }
-    .console-output.visible { display: block; }
+    .advanced-output.visible { display: block; }
     @media (max-width: 1500px) {
       .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -726,12 +726,12 @@
     <section class="main">
       <header class="panel hero">
         <div>
-          <div class="hero-kicker">本地服务状态页 / 这不是 Codex 本体</div>
+          <div class="hero-kicker">可视化上下文入口 / 这不是 Codex 本体</div>
           <h1>Obsidian AI 整理工作台</h1>
-          <p class="hero-subtitle">按钮连接的是本地 Python 服务：读取配置目录、Obsidian vault 和最新报告；需要 AI 判断时，生成上下文交给 Codex 接管。</p>
+          <p class="hero-subtitle">GUI 不是替代 Codex，而是把本地文件、Obsidian 和历史报告整理成接手上下文，让 Codex 接手时少读上下文。</p>
           <div class="boundary-grid">
-            <div class="boundary-card"><strong>本地执行</strong><span>由 gui_server.py 调用本地脚本，产出报告或 Obsidian 笔记。</span></div>
-            <div class="boundary-card"><strong>交给 Codex 接管</strong><span>只生成整理过的上下文 prompt，不假装在网页里替代 Codex。</span></div>
+            <div class="boundary-card"><strong>上下文入口</strong><span>集中展示来源、路径、报告和 Obsidian 状态，减少来回找文件。</span></div>
+            <div class="boundary-card"><strong>Codex 接手包</strong><span>从已整理内容提取来源摘要，复制给 Codex 继续处理。</span></div>
           </div>
           <div class="safe-pill"><span class="shield-dot">✓</span>只读建议，不删除、不移动、不重命名、不重写源文件</div>
         </div>
@@ -741,56 +741,57 @@
       <section class="feature-grid">
         <article class="panel feature-card">
           <span class="sprite feature-icon folder"></span>
-          <div><h2>整理本地文件</h2><p>本地文件扫描使用配置目录，先给报告和建议，不直接移动文件。</p></div>
+          <div><h2>本地文件</h2><p>本地文件扫描使用配置目录，形成文件雷达和可追溯报告。</p></div>
         </article>
         <article class="panel feature-card">
           <span class="sprite feature-icon chat"></span>
-          <div><h2>归档 AI 对话</h2><p>保存来源、背景、关键结论、产出路径和未完成事项。</p></div>
+          <div><h2>Obsidian 笔记</h2><p>查看 vault、收件箱、知识卡和项目记录的当前结构。</p></div>
         </article>
         <article class="panel feature-card">
           <span class="sprite feature-icon doc"></span>
-          <div><h2>提取 AI 上下文</h2><p>从已整理内容中提取来源和摘要，复制给新的 Codex 对话。</p></div>
+          <div><h2>历史报告</h2><p>聚合文件雷达、知识库体检和历史运行结果，作为接手证据。</p></div>
         </article>
         <article class="panel feature-card">
           <span class="sprite feature-icon card-icon"></span>
-          <div><h2>沉淀知识卡 / 今日行动</h2><p>把经验写成知识卡，把今天只收敛成 1-3 个重点。</p></div>
+          <div><h2>AI 对话归档</h2><p>把已有对话保存成记录，再按任务生成可复用上下文。</p></div>
         </article>
       </section>
 
       <section class="work-row">
         <div class="panel work-card">
-          <h2 class="section-title"><span class="title-mark">✦</span>今日操作台</h2>
-          <p class="work-intro">这里用于输入一段文字、任务或 AI 对话摘要。它不是文件选择框；文件雷达会按 config.json 里的扫描目录执行。</p>
+          <h2 class="section-title"><span class="title-mark">✦</span>Codex 接手包</h2>
+          <p class="work-intro">这里不是聊天窗口，也不是替代 Codex。写下你准备交给 Codex 的任务，页面会从本地文件、Obsidian 和历史报告中提取可复制的上下文。</p>
           <div class="input-grid">
-            <textarea id="freeText" placeholder="贴入一段内容，或写：我今天要整理 NotebookLM / Obsidian 资料"></textarea>
+            <textarea id="freeText" placeholder="写要交给 Codex 的任务，例如：继续优化 Obsidian 知识库结构"></textarea>
             <div class="path-box">
-              <strong>扫描范围</strong>
-              <p>本地文件扫描使用配置目录，不靠粘贴文件内容。当前版本只做报告和建议；下一步再补文件/目录选择器。</p>
+              <strong>上下文来源 / 配置扫描范围</strong>
+              <p>本地路径来自 config.json 的配置目录；接手包会引用本地文件报告、Obsidian 笔记和历史报告路径，不靠粘贴一大段原文。</p>
             </div>
           </div>
           <div class="mode-strip">
-            <div class="mode-pill"><strong>本地执行</strong>点击后会请求 /api/action，由本地 Python 服务跑脚本。</div>
-            <div class="mode-pill"><strong>交给 Codex 接管</strong>点击后生成上下文 prompt，你再交给 Codex 继续处理。</div>
+            <div class="mode-pill"><strong>可视化入口</strong>先看已有报告、笔记数量、来源路径和最近上下文素材。</div>
+            <div class="mode-pill"><strong>接手给 Codex</strong>生成压缩 prompt，告诉 Codex 该读什么、为什么相关、下一步做什么。</div>
           </div>
           <div class="quick-actions">
-            <button class="quick-button primary" onclick="ask()">？ 问怎么用</button>
+            <button class="quick-button primary" onclick="runAction('build-ai-context')">生成 Codex 接手包</button>
+            <button class="quick-button" onclick="ask()">？ 问怎么用</button>
             <button class="quick-button" onclick="runAction('inbox-route')"><span class="sprite icon-sm folder"></span>判断放哪</button>
             <button class="quick-button" onclick="copyAiContextPrompt()">▣ 复制上下文</button>
           </div>
           <section id="workbenchResult" class="workbench-result waiting">
-            <div class="workbench-eyebrow">结果卡片</div>
-            <h3>等待操作</h3>
-            <p>点击一个按钮后，这里会显示它实际调用了什么、生成了什么、下一步去哪里看。默认不展示黑色 JSON。</p>
+            <div class="workbench-eyebrow">接手包预览</div>
+            <h3>等待生成</h3>
+            <p>点击“生成 Codex 接手包”后，这里会显示匹配来源、压缩摘要、建议给 Codex 的下一步。默认不展示黑色 JSON。</p>
           </section>
-          <pre id="out" class="console-output">等待操作。</pre>
+          <pre id="out" class="advanced-output">等待操作。</pre>
         </div>
         <div class="panel tutorial-card">
-          <h2 class="section-title"><span class="title-mark">▭</span>点击后发生什么</h2>
+          <h2 class="section-title"><span class="title-mark">▭</span>Codex 接手流程</h2>
           <div class="steps">
-            <div class="step"><span class="step-num">1</span>页面发送请求到本地 Python 服务</div>
-            <div class="step"><span class="step-num">2</span>服务读取配置目录、报告或 Obsidian vault</div>
-            <div class="step"><span class="step-num">3</span>结果写成报告、笔记或上下文 prompt</div>
-            <div class="step"><span class="step-num">4</span>你在结果卡片里看路径、摘要和下一步</div>
+            <div class="step"><span class="step-num">1</span>先看本地文件、Obsidian、历史报告三类来源</div>
+            <div class="step"><span class="step-num">2</span>写下要交给 Codex 的当前任务</div>
+            <div class="step"><span class="step-num">3</span>生成包含路径、摘要、边界的接手包</div>
+            <div class="step"><span class="step-num">4</span>复制给 Codex，让它基于真实上下文继续</div>
           </div>
           <button class="guide-button" onclick="runAction('today')"><span class="sprite icon-sm card-icon"></span>新手 10 分钟上手：今天先干什么</button>
           <button class="guide-button" onclick="openInteractionGuide()"><span class="sprite icon-sm doc"></span>查看交互说明图</button>
@@ -840,7 +841,7 @@
     <aside class="side">
       <section class="panel status-panel">
         <div class="side-head">
-          <h2>本地状态概览</h2>
+          <h2>本地上下文概览</h2>
           <button class="refresh" onclick="refreshStatus()" title="刷新状态">↻</button>
         </div>
         <div class="metrics">
@@ -866,11 +867,11 @@
           </div>
         </div>
         <div class="divider"></div>
-        <div class="result-head"><h2>执行结果</h2><button onclick="toggleOutput()">查看高级 JSON</button></div>
+        <div class="result-head"><h2>最近上下文素材</h2><button onclick="toggleOutput()">查看高级 JSON</button></div>
         <div class="result-list" id="resultList">
           <div class="result-item">
             <div class="result-icon folder"></div>
-            <div><div class="result-title">本地文件扫描完成</div><div class="result-sub">等待首次状态加载</div></div>
+            <div><div class="result-title">本地上下文入口待加载</div><div class="result-sub">等待首次状态加载</div></div>
             <div class="result-status">成功<span>--:--</span></div>
           </div>
         </div>
@@ -938,7 +939,7 @@
       const fileSummary = status.file_report?.summary || {};
       const obsidianSummary = status.obsidian_report?.summary || {};
       setResultList([
-        {title: "本地服务状态", sub: "gui_server.py 已响应 /api/status", icon: "card-icon"},
+        {title: "上下文入口状态", sub: "gui_server.py 已响应 /api/status", icon: "card-icon"},
         {title: "最新文件雷达", sub: `报告路径：${status.file_report?.html_report ? compact(status.file_report.html_report, 44) : "暂无"}`, icon: "folder"},
         {title: "扫描文件数", sub: `共 ${formatNumber(fileSummary.total_files)} 个，候选 ${formatNumber(fileSummary.counts?.archive_candidates)} 个`, icon: "doc"},
         {title: "Obsidian 体检", sub: `当前 ${formatNumber(obsidianSummary.total_notes)} 篇笔记`, icon: "chat"},
@@ -1028,9 +1029,9 @@
           meta: [`归档路径：${data.note || "暂无"}`]
         },
         "build-ai-context": {
-          title: "AI 上下文已提取",
+          title: "Codex 接手包已生成",
           body: `匹配 ${sourceCount} 个来源，已生成可复制给 Codex 的上下文 prompt。`,
-          meta: ["执行方式：读取已整理知识库", data.next_request || "下一步：复制 prompt 给 Codex"]
+          meta: ["来源：本地文件 / Obsidian / 历史报告", data.next_request || "下一步：复制 prompt 给 Codex"]
         },
         "onboarding": {
           title: "初始化检查已生成",
@@ -1070,7 +1071,7 @@
       const promptButton = lastPrompt ? `<button class="result-button primary" onclick="copyPromptFromLast()">复制 prompt</button>` : "";
       $("workbenchResult").classList.remove("waiting");
       $("workbenchResult").innerHTML = `
-        <div class="workbench-eyebrow">结果卡片 · ${escapeHtml(actionLabel(action))}</div>
+        <div class="workbench-eyebrow">接手包预览 · ${escapeHtml(actionLabel(action))}</div>
         <h3>${escapeHtml(view.title)}</h3>
         <p>${escapeHtml(compact(view.body, 220))}</p>
         <div class="result-meta">
@@ -1132,7 +1133,7 @@
         "file-radar": "查看文件雷达",
         "inbox-route": "这段内容放哪",
         "obsidian-health": "检查知识库",
-        "build-ai-context": "提取 AI 上下文",
+        "build-ai-context": "生成 Codex 接手包",
         "archive-ai-chat": "归档 AI 对话",
         "action-note": "记录一个任务",
         "card-note": "沉淀知识卡",
