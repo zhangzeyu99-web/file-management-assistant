@@ -88,6 +88,27 @@ Acceptance checks:
 - AI 上下文完成后：显示「复制 Prompt」「查看来源」「归档这次对话」。
 - 记录类完成后：显示「打开笔记」「继续补充」「复制笔记路径」。
 
+### UX-2026-05-07-05: 默认输出暴露过多本地路径细节
+
+Priority: P1
+
+Current behavior:
+- Live smoke testing showed that read-only actions can still expose many raw local paths in the debug output.
+- This is useful for development, but too noisy and too private for the default user-facing result.
+
+User impact:
+- New users cannot tell which path matters.
+- Product screenshots and demos may accidentally expose private local structure.
+
+Expected behavior:
+- Normal mode should summarize paths by category, count, and top relevance.
+- Full path lists should move behind an explicit advanced-details control.
+
+Acceptance checks:
+- Default result cards show no more than a small, relevant path preview.
+- Full path lists remain available through “查看高级详情”.
+- `run-gui-e2e.ps1 -BaseUrl http://127.0.0.1:8765/ -ReadOnly` still passes after hiding raw path noise.
+
 ## Product direction notes
 
 - 当前 GUI 的视觉已经比早期版本更像产品，但交互模型仍偏“开发调试台”。

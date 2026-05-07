@@ -213,6 +213,7 @@ The harness checks unit tests, secret-like patterns, dry-run execution, Obsidian
 - [GUI Interaction Guide](docs/GUI_INTERACTION_GUIDE.md)
 - [GUI E2E Testing](docs/GUI_E2E_TESTING.md)
 - [UX Feedback Log](docs/UX_FEEDBACK.md)
+- [Productization Test Retro](docs/PRODUCTIZATION_TEST_RETRO.md)
 - [Closed Loop Usage](docs/CLOSED_LOOP_USAGE.md)
 - [Maintenance](MAINTENANCE.md)
 - [Security](SECURITY.md)

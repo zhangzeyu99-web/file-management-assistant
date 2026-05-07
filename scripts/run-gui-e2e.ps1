@@ -3,12 +3,13 @@ param(
     [int]$Port = 8767,
     [switch]$Headed,
     [switch]$StrictUx,
+    [switch]$ReadOnly,
     [switch]$IncludeOpeners
 )
 
 $ErrorActionPreference = "Stop"
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$Stamp = "$(Get-Date -Format "yyyyMMdd-HHmmss-fff")-$([guid]::NewGuid().ToString("N").Substring(0,8))"
 $RunDir = Join-Path $Repo "output\gui-e2e\$Stamp"
 $ConfigPath = Join-Path $RunDir "config.gui-e2e.json"
 $ServerProcess = $null
@@ -156,6 +157,10 @@ try {
         $separator = if ($TestUrl.Contains("?")) { "&" } else { "?" }
         $TestUrl = "$TestUrl${separator}includeOpeners=1"
     }
+    if ($ReadOnly) {
+        $separator = if ($TestUrl.Contains("?")) { "&" } else { "?" }
+        $TestUrl = "$TestUrl${separator}readOnly=1"
+    }
 
     $openArgs = @("--package", "@playwright/cli", "playwright-cli", "-s=$Session", "open", $TestUrl)
     if ($Headed) { $openArgs += "--headed" }
@@ -213,6 +218,7 @@ try {
         "- Base URL: $BaseUrl",
         "- Test URL: $TestUrl",
         "- Include external openers: $($result.include_openers)",
+        "- Read-only smoke mode: $($result.read_only)",
         "- OK: $($result.ok)",
         "- Actions: $($result.actions.Count)",
         "- Mechanics failures: $($result.mechanics_failures.Count)",

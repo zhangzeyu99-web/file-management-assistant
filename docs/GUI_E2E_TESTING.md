@@ -12,6 +12,8 @@ The default mode is isolated and safe:
 - checks returned local paths exist
 - writes a JSON report, Markdown summary, and screenshot
 
+Every run uses a unique millisecond timestamp plus a short GUID suffix. This prevents Playwright session collisions when several E2E runs start close together.
+
 Run:
 
 ```powershell
@@ -34,6 +36,12 @@ Attach to an existing local GUI:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -BaseUrl http://127.0.0.1:8765/
+```
+
+Read-only smoke test for an existing local GUI:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -BaseUrl http://127.0.0.1:8765/ -ReadOnly
 ```
 
 Strict UX mode fails when known UX issues still exist:

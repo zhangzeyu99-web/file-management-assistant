@@ -18,6 +18,7 @@ REQUIRED_DOCS = [
     "docs/OBSIDIAN_WORKFLOW_TUTORIAL.md",
     "docs/GUI_INTERACTION_GUIDE.md",
     "docs/GUI_E2E_TESTING.md",
+    "docs/PRODUCTIZATION_TEST_RETRO.md",
     "docs/USER_SCENARIOS.md",
     "docs/CLOSED_LOOP_USAGE.md",
     "docs/ARCHITECTURE.md",
@@ -65,7 +66,7 @@ DESTRUCTIVE_CODE_PATTERNS = [
 MOJIBAKE_PATTERNS = ["鏂", "绠", "鍏", "浠婃", "瀛︿", "宸ヤ", "閺", "鐎", "瀹搞"]
 TEXT_SUFFIXES = {".md", ".py", ".json", ".ps1", ".js", ".yml", ".yaml", ".txt"}
 MOJIBAKE_PATTERNS.extend(["\u9435", "\u6d60\u5a09", "\u701b\ufe3f", "\u5b80\u30e4", "\u923f", "\u9354\u256a", "\u93c0\u6735", "\u8930\u6385", "\u6d93\u20ac", "\ufffd"])
-SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", "node_modules", "tests"}
+SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", ".playwright-cli", "node_modules", "output", "tests"}
 SKIP_FILES = {"config.local.json", "gui-server.err.log", "gui-server.out.log", "project_quality.py"}
 
 

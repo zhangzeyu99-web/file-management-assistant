@@ -11,7 +11,9 @@ async page => {
     actions: [],
   };
   const includeOpeners = /[?&]includeOpeners=1(?:&|$)/.test(page.url());
+  const readOnly = /[?&]readOnly=1(?:&|$)/.test(page.url());
   report.include_openers = includeOpeners;
+  report.read_only = readOnly;
 
   const textInput = page.locator("#freeText");
   const output = page.locator("#out");
@@ -160,36 +162,45 @@ async page => {
     expectedAction: "inbox-route",
     input: "NotebookLM 和 Obsidian 教程资料，后续要复用。",
   });
-  await clickAndCapture({
-    label: "查看文件雷达",
-    expectedAction: "file-radar",
-    input: "",
-  });
-  await clickAndCapture({
-    label: "检查知识库",
-    expectedAction: "obsidian-health",
-    input: "",
-  });
-  await clickAndCapture({
-    label: "记录一个任务",
-    expectedAction: "action-note",
-    input: "E2E 测试：记录一个真实任务，并确认生成 Action 笔记。",
-  });
-  await clickAndCapture({
-    label: "沉淀知识卡",
-    expectedAction: "card-note",
-    input: "E2E 发现：GUI 结果不能默认展示 JSON，要展示人能读懂的结果卡。",
-  });
-  await clickAndCapture({
-    label: "复盘今天",
-    expectedAction: "time-review",
-    input: "完成 GUI E2E 真实点击测试，下一步修复输入与结果闭环。",
-  });
-  await clickAndCapture({
-    label: "归档 AI 对话",
-    expectedAction: "archive-ai-chat",
-    input: "用户反馈：操作台只显示黑框，文件扫描没有文件输入框。",
-  });
+  if (readOnly) {
+    report.skipped.push({ label: "查看文件雷达", action: "file-radar", reason: "read-only smoke mode" });
+    report.skipped.push({ label: "检查知识库", action: "obsidian-health", reason: "read-only smoke mode" });
+    report.skipped.push({ label: "记录一个任务", action: "action-note", reason: "read-only smoke mode" });
+    report.skipped.push({ label: "沉淀知识卡", action: "card-note", reason: "read-only smoke mode" });
+    report.skipped.push({ label: "复盘今天", action: "time-review", reason: "read-only smoke mode" });
+    report.skipped.push({ label: "归档 AI 对话", action: "archive-ai-chat", reason: "read-only smoke mode" });
+  } else {
+    await clickAndCapture({
+      label: "查看文件雷达",
+      expectedAction: "file-radar",
+      input: "",
+    });
+    await clickAndCapture({
+      label: "检查知识库",
+      expectedAction: "obsidian-health",
+      input: "",
+    });
+    await clickAndCapture({
+      label: "记录一个任务",
+      expectedAction: "action-note",
+      input: "E2E 测试：记录一个真实任务，并确认生成 Action 笔记。",
+    });
+    await clickAndCapture({
+      label: "沉淀知识卡",
+      expectedAction: "card-note",
+      input: "E2E 发现：GUI 结果不能默认展示 JSON，要展示人能读懂的结果卡。",
+    });
+    await clickAndCapture({
+      label: "复盘今天",
+      expectedAction: "time-review",
+      input: "完成 GUI E2E 真实点击测试，下一步修复输入与结果闭环。",
+    });
+    await clickAndCapture({
+      label: "归档 AI 对话",
+      expectedAction: "archive-ai-chat",
+      input: "用户反馈：操作台只显示黑框，文件扫描没有文件输入框。",
+    });
+  }
   await clickAndCapture({
     label: "提取 AI 上下文",
     expectedAction: "build-ai-context",
