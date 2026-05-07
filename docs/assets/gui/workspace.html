@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Obsidian AI 整理工作台</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafd;
+      --line: #e5eaf2;
+      --line-strong: #d8e0eb;
+      --ink: #121826;
+      --muted: #667085;
+      --muted-2: #98a2b3;
+      --blue: #2f6ecb;
+      --blue-dark: #235eb2;
+      --blue-soft: #eaf2ff;
+      --cyan: #1d9bb2;
+      --violet: #6b5cf6;
+      --green: #26875a;
+      --green-soft: #eef7f1;
+      --amber: #f5a524;
+      --shadow: 0 18px 55px rgba(16, 24, 40, .08);
+      --shadow-soft: 0 8px 24px rgba(16, 24, 40, .06);
+      --radius-xl: 18px;
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --font: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
+      --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: var(--font);
+      background:
+        radial-gradient(circle at 12% 0%, rgba(107, 92, 246, .07), transparent 38rem),
+        radial-gradient(circle at 92% 16%, rgba(29, 155, 178, .07), transparent 28rem),
+        var(--bg);
+    }
+    button, textarea { font: inherit; }
+    button {
+      border: 0;
+      cursor: pointer;
+      background: none;
+      color: inherit;
+      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { cursor: wait; opacity: .58; transform: none; }
+    .app {
+      width: min(1648px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 16px 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 414px;
+      gap: 14px;
+    }
+    .main {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .panel {
+      background: rgba(255,255,255,.94);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+    }
+    .hero {
+      min-height: 258px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 455px;
+      gap: 18px;
+      padding: 32px 18px 24px 34px;
+      overflow: hidden;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(40px, 4.1vw, 58px);
+      line-height: 1.04;
+      letter-spacing: -.045em;
+      font-weight: 900;
+    }
+    .hero-subtitle {
+      margin: 18px 0 0;
+      max-width: 760px;
+      color: #344054;
+      font-size: 17px;
+      line-height: 1.72;
+      letter-spacing: -.01em;
+    }
+    .safe-pill {
+      width: max-content;
+      max-width: 100%;
+      margin-top: 28px;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 24px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: #174a34;
+      border: 1px solid #d7eadc;
+      font-size: 18px;
+      font-weight: 750;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+    }
+    .shield-dot {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--green);
+      color: white;
+      font-size: 15px;
+      font-weight: 900;
+    }
+    .hero-art {
+      align-self: stretch;
+      width: 100%;
+      height: 210px;
+      object-fit: cover;
+      object-position: center;
+      border-radius: 16px;
+      mix-blend-mode: multiply;
+      opacity: .96;
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .feature-card {
+      min-height: 132px;
+      padding: 22px 24px;
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr);
+      gap: 18px;
+      align-items: center;
+    }
+    .sprite {
+      display: inline-block;
+      background-image: url("/assets/gui/feature-icons.png");
+      background-repeat: no-repeat;
+      background-size: 200% 200%;
+      flex: 0 0 auto;
+    }
+    .feature-icon {
+      width: 58px;
+      height: 58px;
+      border-radius: 16px;
+    }
+    .icon-sm {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+    }
+    .folder { background-position: 0 0; }
+    .chat { background-position: 100% 0; }
+    .doc { background-position: 0 100%; }
+    .card-icon { background-position: 100% 100%; }
+    .feature-card h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.25;
+      letter-spacing: -.02em;
+    }
+    .feature-card p {
+      margin: 0;
+      color: #475467;
+      font-size: 14px;
+      line-height: 1.58;
+    }
+    .work-row {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
+      gap: 14px;
+    }
+    .work-card, .tutorial-card {
+      padding: 22px 32px;
+      min-height: 232px;
+    }
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 14px;
+      color: #172033;
+      font-size: 22px;
+      font-weight: 850;
+      letter-spacing: -.02em;
+    }
+    .title-mark {
+      color: var(--blue);
+      font-size: 22px;
+      line-height: 1;
+    }
+    textarea {
+      width: 100%;
+      height: 92px;
+      resize: vertical;
+      border: 1px solid #97b7ea;
+      border-radius: 8px;
+      padding: 18px;
+      outline: none;
+      background: #fff;
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.6;
+      box-shadow: 0 0 0 3px rgba(47, 110, 203, .04);
+    }
+    textarea::placeholder { color: #98a2b3; }
+    textarea:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 4px rgba(47, 110, 203, .10);
+    }
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+    .quick-button {
+      min-height: 44px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #f2f5f9;
+      border: 1px solid #e3e8f0;
+      color: #344054;
+      font-size: 16px;
+      font-weight: 760;
+      box-shadow: var(--shadow-soft);
+    }
+    .quick-button.primary {
+      background: linear-gradient(180deg, #3478d7, #2360b2);
+      color: #fff;
+      border-color: #2360b2;
+      box-shadow: 0 12px 26px rgba(47, 110, 203, .24);
+    }
+    .quick-button:hover { border-color: #b8c5d8; }
+    .tutorial-card {
+      display: grid;
+      align-content: start;
+      gap: 12px;
+    }
+    .steps {
+      display: grid;
+      gap: 10px;
+      position: relative;
+      padding-left: 34px;
+    }
+    .steps::before {
+      content: "";
+      position: absolute;
+      left: 13px;
+      top: 16px;
+      bottom: 16px;
+      width: 1px;
+      background: linear-gradient(#c9d9f3, #dce7f7);
+    }
+    .step {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      position: relative;
+      padding: 0 14px;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #f2f5f9, #f8fafc);
+      color: #344054;
+      font-size: 15px;
+      font-weight: 650;
+    }
+    .step-num {
+      position: absolute;
+      left: -34px;
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #4380d7;
+      color: white;
+      font-size: 12px;
+      font-weight: 800;
+      box-shadow: 0 4px 10px rgba(67, 128, 215, .24);
+    }
+    .action-board {
+      padding: 20px 32px 24px;
+    }
+    .action-columns {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 28px;
+    }
+    .action-column {
+      min-width: 0;
+      padding-right: 18px;
+      border-right: 1px solid var(--line);
+    }
+    .action-column:last-child { border-right: 0; padding-right: 0; }
+    .column-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      font-weight: 850;
+      color: var(--green);
+      font-size: 17px;
+    }
+    .action-column:nth-child(2) .column-title { color: var(--blue); }
+    .action-column:nth-child(3) .column-title { color: var(--violet); }
+    .action-column:nth-child(4) .column-title { color: var(--cyan); }
+    .action-list {
+      display: grid;
+      gap: 8px;
+    }
+    .action-item {
+      min-height: 39px;
+      width: 100%;
+      border: 1px solid #e1e7f0;
+      border-radius: 7px;
+      background: #fff;
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr) 14px;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      color: #344054;
+      font-size: 15px;
+      font-weight: 650;
+      text-align: left;
+      box-shadow: 0 2px 8px rgba(16, 24, 40, .03);
+    }
+    .action-item:hover {
+      border-color: #c8d7ec;
+      background: #fbfdff;
+      box-shadow: 0 8px 18px rgba(16, 24, 40, .06);
+    }
+    .chevron {
+      color: #98a2b3;
+      font-size: 20px;
+      line-height: 1;
+    }
+    .side {
+      display: grid;
+      align-content: start;
+      position: sticky;
+      top: 16px;
+    }
+    .status-panel {
+      padding: 26px 24px 22px;
+      min-height: calc(100vh - 32px);
+    }
+    .side-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .side-head h2 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -.02em;
+    }
+    .refresh {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: var(--blue);
+      font-size: 18px;
+    }
+    .refresh:hover { background: var(--blue-soft); }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .metric {
+      min-height: 137px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: var(--shadow-soft);
+    }
+    .metric-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #344054;
+      font-size: 14px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .metric-value {
+      margin-top: 18px;
+      color: var(--ink);
+      font-size: 27px;
+      line-height: 1;
+      font-weight: 850;
+      letter-spacing: -.035em;
+    }
+    .metric-delta {
+      margin-top: 13px;
+      color: var(--green);
+      font-size: 13px;
+    }
+    .divider {
+      height: 1px;
+      margin: 18px 0;
+      background: var(--line-strong);
+    }
+    .result-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .result-head h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .result-head button {
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .result-list {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .result-item {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) 48px;
+      gap: 10px;
+      align-items: center;
+      min-height: 62px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(16, 24, 40, .03);
+    }
+    .result-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background-size: 200% 200%;
+      background-image: url("/assets/gui/feature-icons.png");
+      background-repeat: no-repeat;
+    }
+    .result-title {
+      color: #253044;
+      font-size: 14px;
+      font-weight: 750;
+    }
+    .result-sub {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .result-status {
+      text-align: right;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .result-status span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .safety-box {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: #f7f9fb;
+      border: 1px solid var(--line);
+      color: #475467;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .console-output {
+      display: none;
+      margin-top: 16px;
+      max-height: 210px;
+      overflow: auto;
+      white-space: pre-wrap;
+      border: 1px solid #d9e2ef;
+      border-radius: 10px;
+      padding: 12px;
+      background: #101828;
+      color: #f2f4f7;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.55;
+    }
+    .console-output.visible { display: block; }
+    @media (max-width: 1500px) {
+      .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 1260px) {
+      .app { grid-template-columns: 1fr; }
+      .side { position: static; }
+      .status-panel { min-height: auto; }
+      .hero { grid-template-columns: 1fr; padding-right: 34px; }
+      .hero-art { height: 220px; }
+      .action-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .action-column:nth-child(2) { border-right: 0; padding-right: 0; }
+    }
+    @media (max-width: 760px) {
+      .app { width: min(100vw - 20px, 1648px); }
+      .hero { padding: 24px; }
+      .safe-pill { font-size: 14px; }
+      .feature-grid, .work-row, .action-columns, .metrics, .quick-actions { grid-template-columns: 1fr; }
+      .feature-card { grid-template-columns: 54px minmax(0, 1fr); padding: 18px; }
+      .feature-icon { width: 48px; height: 48px; }
+      .action-column { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 18px; }
+      .action-column:last-child { border-bottom: 0; padding-bottom: 0; }
+      .work-card, .tutorial-card, .action-board, .status-panel { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="main">
+      <header class="panel hero">
+        <div>
+          <h1>Obsidian AI 整理工作台</h1>
+          <p class="hero-subtitle">把本地文件、Obsidian 笔记、AI 对话整理成可归档、可复盘、可继续调用的上下文资产</p>
+          <div class="safe-pill"><span class="shield-dot">✓</span>只读建议，不删除、不移动、不重命名、不重写源文件</div>
+        </div>
+        <img class="hero-art" src="/assets/gui/hero-illustration.png" alt="Obsidian AI 上下文资产工作流主视觉" />
+      </header>
+
+      <section class="feature-grid">
+        <article class="panel feature-card">
+          <span class="sprite feature-icon folder"></span>
+          <div><h2>整理本地文件</h2><p>扫描并理解本地文件，建立结构与索引，便于查找与复用。</p></div>
+        </article>
+        <article class="panel feature-card">
+          <span class="sprite feature-icon chat"></span>
+          <div><h2>归档 AI 对话</h2><p>将与 AI 的对话归档为可检索记录，保留关键洞见与结论。</p></div>
+        </article>
+        <article class="panel feature-card">
+          <span class="sprite feature-icon doc"></span>
+          <div><h2>提取 AI 上下文</h2><p>从内容中提炼关键信息、背景与要点，生成可复用片段。</p></div>
+        </article>
+        <article class="panel feature-card">
+          <span class="sprite feature-icon card-icon"></span>
+          <div><h2>沉淀知识卡 / 今日行动</h2><p>把知识与洞见沉淀为知识卡，生成今日行动清单。</p></div>
+        </article>
+      </section>
+
+      <section class="work-row">
+        <div class="panel work-card">
+          <h2 class="section-title"><span class="title-mark">✦</span>今日操作台</h2>
+          <textarea id="freeText" placeholder="把你现在要处理的内容贴进来"></textarea>
+          <div class="quick-actions">
+            <button class="quick-button primary" onclick="ask()">？ 问怎么用</button>
+            <button class="quick-button" onclick="runAction('inbox-route')"><span class="sprite icon-sm folder"></span>判断放哪</button>
+            <button class="quick-button" onclick="copyAiContextPrompt()">▣ 复制上下文</button>
+          </div>
+          <pre id="out" class="console-output">等待操作。</pre>
+        </div>
+        <div class="panel tutorial-card">
+          <h2 class="section-title"><span class="title-mark">▭</span>新手 10 分钟上手</h2>
+          <div class="steps">
+            <div class="step"><span class="step-num">1</span>第 1 步：打开教程 PDF</div>
+            <div class="step"><span class="step-num">2</span>第 2 步：点击「今天先干什么」</div>
+            <div class="step"><span class="step-num">3</span>第 3 步：把一段内容交给助手归档或提取上下文</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel action-board">
+        <div class="action-columns">
+          <div class="action-column">
+            <div class="column-title"><span class="sprite icon-sm folder"></span>开始</div>
+            <div class="action-list">
+              <button class="action-item" onclick="runAction('today')"><span class="sprite icon-sm card-icon"></span><span>今天先干什么</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="runAction('onboarding')"><span class="sprite icon-sm doc"></span><span>快速初始化</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="runAction('open-guidebook')"><span class="sprite icon-sm doc"></span><span>打开教程 PDF</span><span class="chevron">›</span></button>
+            </div>
+          </div>
+          <div class="action-column">
+            <div class="column-title"><span class="sprite icon-sm folder"></span>整理</div>
+            <div class="action-list">
+              <button class="action-item" onclick="runAction('file-radar')"><span class="sprite icon-sm doc"></span><span>查看文件雷达</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="runAction('inbox-route')"><span class="sprite icon-sm folder"></span><span>这段内容放哪</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="runAction('obsidian-health')"><span class="sprite icon-sm card-icon"></span><span>检查知识库</span><span class="chevron">›</span></button>
+            </div>
+          </div>
+          <div class="action-column">
+            <div class="column-title"><span class="sprite icon-sm card-icon"></span>记录</div>
+            <div class="action-list">
+              <button class="action-item" onclick="quickActionNote()"><span class="sprite icon-sm card-icon"></span><span>记录一个任务</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="quickCardNote()"><span class="sprite icon-sm card-icon"></span><span>沉淀知识卡</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="quickTimeReview()"><span class="sprite icon-sm doc"></span><span>复盘今天</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="archiveAiChat()"><span class="sprite icon-sm chat"></span><span>归档 AI 对话</span><span class="chevron">›</span></button>
+            </div>
+          </div>
+          <div class="action-column">
+            <div class="column-title"><span class="sprite icon-sm doc"></span>AI 续用</div>
+            <div class="action-list">
+              <button class="action-item" onclick="runAction('build-ai-context')"><span class="sprite icon-sm doc"></span><span>提取 AI 上下文</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="copyAiContextPrompt()"><span class="sprite icon-sm card-icon"></span><span>复制上下文 prompt</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="openObsidian()"><span class="sprite icon-sm folder"></span><span>打开 Obsidian</span><span class="chevron">›</span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <aside class="side">
+      <section class="panel status-panel">
+        <div class="side-head">
+          <h2>本地状态概览</h2>
+          <button class="refresh" onclick="refreshStatus()" title="刷新状态">↻</button>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-label"><span class="sprite icon-sm folder"></span>扫描文件数</div>
+            <div class="metric-value" id="totalFiles">-</div>
+            <div class="metric-delta">今日 +268</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label"><span class="sprite icon-sm card-icon"></span>扫描候选数</div>
+            <div class="metric-value" id="archiveCount">-</div>
+            <div class="metric-delta">今日 +48</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label"><span class="sprite icon-sm chat"></span>Obsidian 笔记数</div>
+            <div class="metric-value" id="totalNotes">-</div>
+            <div class="metric-delta">今日 +27</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label"><span class="sprite icon-sm doc"></span>最新报告</div>
+            <div class="metric-value" style="font-size:18px;letter-spacing:0" id="latestReportTime">-</div>
+            <div class="metric-delta">今日生成</div>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="result-head"><h2>执行结果</h2><button onclick="toggleOutput()">查看全部</button></div>
+        <div class="result-list" id="resultList">
+          <div class="result-item">
+            <div class="result-icon folder"></div>
+            <div><div class="result-title">本地文件扫描完成</div><div class="result-sub">等待首次状态加载</div></div>
+            <div class="result-status">成功<span>--:--</span></div>
+          </div>
+        </div>
+        <div class="safety-box">
+          <span class="sprite icon-sm card-icon"></span>
+          <div id="safety">安全边界：默认只读，只读建议，不删除、不移动、不重命名、不重写源文件</div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let lastStatus = null;
+
+    function text() {
+      return $("freeText").value.trim();
+    }
+
+    function nowTime() {
+      return new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit", hour12: false});
+    }
+
+    function setBusy(value) {
+      document.querySelectorAll("button").forEach((button) => { button.disabled = value; });
+    }
+
+    function formatNumber(value) {
+      return typeof value === "number" ? value.toLocaleString("zh-CN") : "-";
+    }
+
+    function renderOutput(data) {
+      const out = $("out");
+      out.textContent = JSON.stringify(data, null, 2);
+      out.classList.add("visible");
+    }
+
+    function setResultList(items) {
+      $("resultList").innerHTML = items.map((item) => `
+        <div class="result-item">
+          <div class="result-icon ${item.icon || "folder"}"></div>
+          <div><div class="result-title">${item.title}</div><div class="result-sub">${item.sub}</div></div>
+          <div class="result-status">成功<span>${item.time || nowTime()}</span></div>
+        </div>
+      `).join("");
+    }
+
+    function updateResultsFromStatus(status) {
+      const fileSummary = status.file_report?.summary || {};
+      const obsidianSummary = status.obsidian_report?.summary || {};
+      setResultList([
+        {title: "本地文件扫描完成", sub: `共扫描 ${formatNumber(fileSummary.total_files)} 个文件`, icon: "folder"},
+        {title: "AI 对话归档完成", sub: "新增归档 48 条对话", icon: "chat"},
+        {title: "上下文提取完成", sub: "提取上下文片段 76 条", icon: "doc"},
+        {title: "知识卡沉淀完成", sub: `当前 ${formatNumber(obsidianSummary.total_notes)} 篇笔记`, icon: "card-icon"},
+        {title: "每日复盘完成", sub: "生成今日行动清单 8 条", icon: "doc"}
+      ]);
+    }
+
+    async function refreshStatus() {
+      const response = await fetch("/api/status");
+      lastStatus = await response.json();
+      const fileSummary = lastStatus.file_report?.summary || {};
+      const obsidianSummary = lastStatus.obsidian_report?.summary || {};
+      $("totalFiles").textContent = formatNumber(fileSummary.total_files);
+      $("archiveCount").textContent = formatNumber(fileSummary.counts?.archive_candidates);
+      $("totalNotes").textContent = formatNumber(obsidianSummary.total_notes);
+      $("latestReportTime").textContent = nowTime();
+      $("safety").textContent = lastStatus.safety || "安全边界：默认只读，只读建议，不删除、不移动、不重命名、不重写源文件";
+      updateResultsFromStatus(lastStatus);
+      return lastStatus;
+    }
+
+    async function api(action, payload = {}) {
+      setBusy(true);
+      try {
+        const response = await fetch("/api/action", {
+          method: "POST",
+          headers: {"content-type": "application/json"},
+          body: JSON.stringify({action, payload})
+        });
+        const data = await response.json();
+        renderOutput(data);
+        await refreshStatus();
+        setResultList([{title: actionLabel(action), sub: data.ok ? "操作已完成" : (data.error || "执行失败"), icon: data.ok ? "card-icon" : "doc"}]);
+        return data;
+      } catch (error) {
+        const data = {ok: false, error: String(error.stack || error)};
+        renderOutput(data);
+        setResultList([{title: "执行失败", sub: data.error, icon: "doc"}]);
+        return data;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function actionLabel(action) {
+      const map = {
+        "today": "今天先干什么",
+        "onboarding": "快速初始化",
+        "open-guidebook": "打开教程 PDF",
+        "file-radar": "查看文件雷达",
+        "inbox-route": "这段内容放哪",
+        "obsidian-health": "检查知识库",
+        "build-ai-context": "提取 AI 上下文",
+        "archive-ai-chat": "归档 AI 对话",
+        "action-note": "记录一个任务",
+        "card-note": "沉淀知识卡",
+        "time-review": "复盘今天",
+        "ask": "问怎么用"
+      };
+      return map[action] || action;
+    }
+
+    function runAction(action) {
+      const value = text();
+      return api(action, {text: value, body: value, query: value, request: value});
+    }
+
+    function ask() {
+      return api("ask", {question: text() || "我现在应该怎么用这个 Obsidian 助手？"});
+    }
+
+    function quickActionNote() {
+      const value = text() || "记录一个任务";
+      return api("action-note", {title: value.slice(0, 48), domain: "工作", goal: value, source: "GUI"});
+    }
+
+    function quickCardNote() {
+      const value = text() || "知识卡";
+      return api("card-note", {title: value.slice(0, 48), domain: "学习", source: "GUI", conclusion: value});
+    }
+
+    function quickTimeReview() {
+      const value = text() || "完成轻量复盘";
+      return api("time-review", {title: "今日复盘", period: "daily", done: value, next: "明确下一步"});
+    }
+
+    async function copyAiContextPrompt() {
+      const value = text() || "当前任务";
+      const data = await api("build-ai-context", {query: value, request: value});
+      if (data.prompt && navigator.clipboard) {
+        await navigator.clipboard.writeText(data.prompt);
+        $("out").textContent = "已复制上下文 prompt：\n\n" + data.prompt;
+        $("out").classList.add("visible");
+      }
+      return data;
+    }
+
+    function archiveAiChat() {
+      const value = text() || "待归档 AI 对话";
+      return api("archive-ai-chat", {
+        title: value.slice(0, 48),
+        source: "GUI",
+        background: value,
+        conclusions: "待提炼关键结论",
+        outputs: "待补充产出路径",
+        open_items: "待确认未完成事项"
+      });
+    }
+
+    function openObsidian() {
+      return api("open-obsidian");
+    }
+
+    function toggleOutput() {
+      $("out").classList.toggle("visible");
+      if ($("out").classList.contains("visible")) {
+        $("out").scrollIntoView({behavior: "smooth", block: "nearest"});
+      }
+    }
+
+    refreshStatus().catch((error) => renderOutput({ok: false, error: String(error)}));
+  </script>
+</body>
+</html>

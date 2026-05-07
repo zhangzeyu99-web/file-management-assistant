@@ -192,19 +192,23 @@ class GuiServerTests(unittest.TestCase):
             "查看文件雷达",
             "打开 Obsidian",
             "快速初始化",
-            "深度思考引导",
-            "调用知识索引",
             "打开教程 PDF",
+            "新手 10 分钟上手",
+            "本地状态概览",
+            "执行结果",
         ]:
             self.assertIn(label, html)
         for required in [
             "Obsidian AI 整理工作台",
             "今日操作台",
-            "本地状态",
+            "本地状态概览",
             "默认只读",
-            "文件 / 笔记 / AI 对话 / 可复用上下文",
+            "hero-illustration.png",
+            "feature-icons.png",
         ]:
             self.assertIn(required, html)
+        self.assertNotIn("<symbol", html)
+        self.assertNotIn("<svg", html)
         self.assertNotIn("Codex 文件管理小助手", html)
         self.assertNotIn("生成 Codex 交接", html)
         self.assertNotIn("AI 交接", html)
