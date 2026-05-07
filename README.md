@@ -1,23 +1,34 @@
-# Obsidian + AI Knowledge Action Assistant
+# Obsidian AI 整理工作台
 
-> Local-first Obsidian and AI assistant for daily knowledge action, safe file radar, vault health checks, ACT notes, and Codex/OpenClaw handoff.
+> 给 Obsidian 新手和 AI 工作流用户用的本地整理工作台：把本地文件、Obsidian 笔记和 AI 对话变成可归档、可复用、可继续被 AI 调用的上下文资产。
 
 ![Obsidian Knowledge Action Assistant cover](docs/assets/knowledge-action-assistant-cover.png)
 
-This project upgrades the original file-management assistant into a **Knowledge Action Assistant**. File scanning remains available, but the main workflow is now: turn local files, Obsidian notes, Codex/OpenClaw conversations, and manual input into actionable, reviewable, traceable personal knowledge work.
+## 一句话定位
+
+这是一个本地优先的 Obsidian + AI 整理工作台。它帮你整理本地文件、归档 AI 对话、提取 AI 上下文取用材料，并把零散内容沉淀成知识卡和今日行动。
+
+你可以用它做四件事：
+
+- **整理本地文件**：用文件雷达查看近期文件、大文件、重复文件和归档候选。
+- **AI 对话归档**：把已有 AI 对话整理成来源、背景、关键结论、产出路径和未完成事项。
+- **AI 上下文取用**：从已整理的 Obsidian 笔记、知识卡、项目记录和历史报告中提取上下文，补充给新的 AI 对话。
+- **知识卡 / 今日行动**：把资料、经验和任务变成可复用知识卡、今日行动和轻量复盘。
+
+默认安全边界：它不会删除、不会移动、不会重命名、不会重写你的源文件；只生成报告、建议、manifest 和明确的新笔记。
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![PowerShell](https://img.shields.io/badge/PowerShell-5%2B-5391FE)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Safety](https://img.shields.io/badge/Safety-report--only-orange)
 
-**Keywords:** Obsidian AI assistant, Obsidian knowledge management, personal knowledge management, local-first productivity, Windows file organizer, file radar, vault audit, Codex assistant, OpenClaw handoff, ACT notes, PKM automation.
+**Keywords:** Obsidian AI assistant, Obsidian knowledge management, personal knowledge management, local-first productivity, Windows file organizer, file radar, vault audit, AI chat archive, AI context retrieval, ACT notes, PKM automation.
 
 ## Who It Is For
 
-- Obsidian users who want a practical workflow instead of a complex PKM theory system.
+- Obsidian beginners who need a practical workflow instead of a complex PKM theory system.
 - Windows users who need safe review-first file organization, not risky auto-cleanup.
-- Codex/OpenClaw users who want conversations and decisions archived into Obsidian.
+- Codex/OpenClaw/AI workflow users who want conversations archived into Obsidian and reusable as future AI context.
 - People who want daily guidance such as “今天先干什么” without processing every historical backlog item.
 
 ## Core Workflow
@@ -25,8 +36,8 @@ This project upgrades the original file-management assistant into a **Knowledge 
 ```text
 输入层：本地文件 / Obsidian 笔记 / Codex 会话 / OpenClaw 记录 / 手动输入
 判断层：生活 / 学习 / 工作 + Action / Card / Time / X-AI
-执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / Codex 交接
-输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / Codex prompt / 可选通知
+执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / AI 对话归档 / AI 上下文取用
+输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / AI 上下文 prompt / 可选通知
 ```
 
 ## Scenario Entrypoints
@@ -38,7 +49,8 @@ The GUI and playbook are scenario-first:
 - `这段内容放哪`: route content by 生活 / 学习 / 工作, then inbox/daily/project/routine/archive.
 - `复盘今天`: create a lightweight Time review without turning daily work into backlog cleanup.
 - `检查知识库`: audit inbox, stubs, low-link notes, broken links, duplicate titles, and Codex index gaps.
-- `生成 Codex 交接`: generate a prompt with paths, boundaries, goals, and acceptance checks.
+- `归档 AI 对话`: archive an existing AI conversation with source, background, key conclusions, outputs, and open items.
+- `提取 AI 上下文`: retrieve relevant notes, cards, project records, and reports for a new AI conversation.
 - `查看文件雷达`: view recent files, archive candidates, large files, and duplicate groups.
 - `打开 Obsidian`: open the configured vault.
 

@@ -1,13 +1,6 @@
 # Closed Loop Usage
 
-Closed loop means every user-facing scenario has:
-
-- User phrase.
-- Actual action.
-- Safety boundary.
-- Output path or generated content.
-- Next action.
-- Acceptance checks.
+Closed loop means every user-facing scenario has a user phrase, actual action, safety boundary, output path or generated content, next action, and acceptance checks.
 
 ## Loop 1: Today
 
@@ -41,9 +34,16 @@ Closed loop means every user-facing scenario has:
 4. Monthly review considers structure changes.
 5. Acceptance: daily review does not become a burden.
 
-## Loop 5: Codex Handoff
+## Loop 5: AI Conversation Archive
 
-1. User says: `交给 Codex 继续`.
-2. Assistant generates an X-AI prompt with vault path, runtime path, reports, goal, safety boundary, and acceptance checks.
-3. Codex must read real files before executing.
-4. Acceptance: result is written back to local report or Obsidian note.
+1. User says: `归档这段 AI 对话`.
+2. Assistant writes a new archive note with source, task background, key conclusions, output paths, and open items.
+3. The note records what already happened; it does not pretend to prepare a new AI conversation.
+4. Acceptance: the archive note is traceable and does not rewrite the original conversation or source files.
+
+## Loop 6: AI Context Retrieval
+
+1. User says: `给 AI 补上下文`.
+2. Assistant scans already-organized Obsidian notes, knowledge cards, project records, and reports.
+3. Assistant returns source paths, why they match, compressed context, a next request, and a copyable prompt.
+4. Acceptance: the new prompt can be pasted into an AI conversation and cites local source paths.

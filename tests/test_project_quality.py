@@ -68,6 +68,44 @@ class ProjectQualityTests(unittest.TestCase):
         self.assertEqual(7, guidebook["evidence"]["slide_count"])
         self.assertGreater(guidebook["evidence"]["pdf_size"], 100_000)
 
+    def test_readme_first_screen_explains_product_positioning(self) -> None:
+        readme = (self.repo / "README.md").read_text(encoding="utf-8-sig")
+        first_screen = "\n".join(readme.splitlines()[:45])
+
+        for phrase in [
+            "Obsidian",
+            "本地文件",
+            "AI 对话归档",
+            "AI 上下文取用",
+            "知识卡",
+            "今日行动",
+            "不会删除",
+            "不会移动",
+            "不会重命名",
+        ]:
+            self.assertIn(phrase, first_screen)
+        self.assertNotIn("交接记录", first_screen)
+
+    def test_public_docs_separate_ai_archive_from_context_retrieval(self) -> None:
+        public_files = [
+            "README.md",
+            "docs/ARCHITECTURE.md",
+            "docs/USER_SCENARIOS.md",
+            "docs/CLOSED_LOOP_USAGE.md",
+            "docs/GETTING_STARTED.md",
+            "docs/PROJECT_PRINCIPLES.md",
+            "docs/SELF_EVOLUTION.md",
+            "gui_server.py",
+            "scenario_playbook.py",
+        ]
+        public_text = "\n".join((self.repo / path).read_text(encoding="utf-8-sig") for path in public_files)
+
+        self.assertIn("AI 对话归档", public_text)
+        self.assertIn("AI 上下文取用", public_text)
+        self.assertNotIn("生成 Codex 交接", public_text)
+        self.assertNotIn("Codex 交接", public_text)
+        self.assertNotIn("AI 交接", public_text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

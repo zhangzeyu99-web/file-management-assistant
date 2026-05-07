@@ -64,16 +64,25 @@ def split_lines(value: Any) -> list[str]:
 def build_codex_prompt(user_request: str, config: dict[str, Any]) -> str:
     file_report = latest_file_report(config) or {}
     obsidian_report = latest_obsidian_report(config) or {}
+    ai_context = assistant_evolution.build_ai_context(config, user_request, user_request)
     return f"""请基于真实本地文件继续执行知识行动助手任务。
 
 用户请求：
 {user_request}
+
+能力说明：
+- 这是 AI 上下文取用，不是一次性移交单。
+- 先从已整理的 Obsidian 笔记、知识卡、项目记录和历史报告中取用上下文，再继续对话。
+- AI 对话归档用于保存已有对话；AI 上下文取用用于给新的 AI 对话补充上下文。
 
 本地上下文：
 - Obsidian vault：{scenario_playbook.obsidian_vault(config)}
 - 运行目录：{scenario_playbook.runtime_root(config)}
 - 最新文件雷达报告：{file_report.get("html_report") or "暂无"}
 - 最新 Obsidian 体检报告：{obsidian_report.get("markdown_report") or "暂无"}
+
+已整理上下文：
+{ai_context["compressed_context"]}
 
 判断规则：
 - 先按生活 / 学习 / 工作分流。
@@ -148,6 +157,14 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
             "call_plan": assistant_evolution.build_knowledge_call_plan(config, query) if query else None,
         }
 
+    if action == "archive-ai-chat":
+        return assistant_evolution.build_ai_chat_archive(config, payload)
+
+    if action == "build-ai-context":
+        query = str(payload.get("query") or payload.get("text") or payload.get("request") or "")
+        request = str(payload.get("request") or payload.get("text") or query)
+        return assistant_evolution.build_ai_context(config, query, request)
+
     if action == "self-evolution":
         return assistant_evolution.run_self_evolution(config_path)
 
@@ -208,7 +225,10 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
         }
 
     if action == "codex-prompt":
-        return {"ok": True, "prompt": build_codex_prompt(str(payload.get("request") or ""), config)}
+        request = str(payload.get("request") or payload.get("text") or "")
+        result = assistant_evolution.build_ai_context(config, request, request)
+        result["legacy_action"] = "codex-prompt"
+        return result
 
     if action == "open-obsidian":
         vault = scenario_playbook.obsidian_vault(config)
@@ -307,31 +327,54 @@ HTML = r"""<!doctype html>
       min-height: 220px;
     }
     .pill { display: inline-block; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; margin-right: 8px; }
+    .group-title { margin: 22px 0 10px; font-size: 18px; color: var(--accent-2); }
+    .value-card strong { display: block; margin-bottom: 6px; font-size: 20px; color: var(--ink); }
   </style>
 </head>
 <body>
   <main>
     <header>
       <span class="pill">Obsidian + AI</span>
-      <span class="pill">生活 / 学习 / 工作</span>
-      <span class="pill">Action / Card / Time / X-AI</span>
-      <h1>知识行动助手</h1>
-      <p>先从场景入口开始，不再让你一上来面对一堆扫描指标。默认只读，写入时只写新笔记或明确追加位置。</p>
+      <span class="pill">本地优先</span>
+      <span class="pill">文件 / 笔记 / AI 对话</span>
+      <h1>Obsidian AI 整理工作台</h1>
+      <p>把文件、笔记和 AI 对话整理进 Obsidian；需要继续问 AI 时，自动提取已整理上下文。默认不会删除、移动、重命名或重写你的源文件。</p>
     </header>
 
     <section class="grid">
+      <div class="card value-card"><strong>整理本地文件</strong><p>用文件雷达看近期、大文件、重复文件和归档候选，先给建议，不直接搬动源文件。</p></div>
+      <div class="card value-card"><strong>归档 AI 对话</strong><p>把已有 AI 对话整理成可追溯记录：来源、背景、结论、产出路径和未完成事项。</p></div>
+      <div class="card value-card"><strong>提取 AI 上下文</strong><p>从已整理知识库中提取相关笔记和报告，生成可复制给新 AI 对话的上下文 prompt。</p></div>
+      <div class="card value-card"><strong>沉淀知识卡/今日行动</strong><p>把零散内容转成知识卡、今日行动和轻量复盘，减少 Obsidian 新手的结构负担。</p></div>
+    </section>
+
+    <h2 class="group-title">开始</h2>
+    <section class="grid">
       <div class="card"><button onclick="runAction('today')">今天先干什么</button><p>只给 1-3 个今日重点。</p></div>
-      <div class="card"><button onclick="quickActionNote()">记录一个任务</button><p>生成 Action 任务笔记。</p></div>
-      <div class="card"><button onclick="runAction('inbox-route')">这段内容放哪</button><p>先分生活/学习/工作，再建议位置。</p></div>
-      <div class="card"><button onclick="quickTimeReview()">复盘今天</button><p>生成轻量 Time 复盘。</p></div>
-      <div class="card"><button onclick="runAction('obsidian-health')">检查知识库</button><p>查看收件箱、断链、空壳笔记。</p></div>
-      <div class="card"><button onclick="copyCodexPrompt()">生成 Codex 交接</button><p>生成带路径、边界、验收标准的 prompt。</p></div>
-      <div class="card"><button onclick="runAction('file-radar')">查看文件雷达</button><p>查看近期、大文件、重复文件。</p></div>
-      <div class="card"><button onclick="openObsidian()">打开 Obsidian</button><p>打开配置里的 vault。</p></div>
       <div class="card"><button onclick="runAction('onboarding')">快速初始化</button><p>检查配置、教程、启动命令。</p></div>
-      <div class="card"><button onclick="runAction('deep-thinking')">深度思考引导</button><p>按 ACT 给出关键追问。</p></div>
-      <div class="card"><button onclick="runAction('knowledge-index')">调用知识索引</button><p>查可复用笔记与下一步。</p></div>
       <div class="card"><button onclick="runAction('open-guidebook')">打开教程 PDF</button><p>查看 7 页使用教程。</p></div>
+    </section>
+
+    <h2 class="group-title">整理</h2>
+    <section class="grid">
+      <div class="card"><button onclick="runAction('file-radar')">查看文件雷达</button><p>查看近期、大文件、重复文件。</p></div>
+      <div class="card"><button onclick="runAction('inbox-route')">这段内容放哪</button><p>先分生活/学习/工作，再建议位置。</p></div>
+      <div class="card"><button onclick="runAction('obsidian-health')">检查知识库</button><p>查看收件箱、断链、空壳笔记。</p></div>
+    </section>
+
+    <h2 class="group-title">记录</h2>
+    <section class="grid">
+      <div class="card"><button onclick="quickActionNote()">记录一个任务</button><p>生成 Action 任务笔记。</p></div>
+      <div class="card"><button onclick="runAction('knowledge-index')">调用知识索引</button><p>查可复用笔记与下一步。</p></div>
+      <div class="card"><button onclick="quickTimeReview()">复盘今天</button><p>生成轻量 Time 复盘。</p></div>
+      <div class="card"><button onclick="archiveAiChat()">归档 AI 对话</button><p>整理已有 AI 对话，不负责给新对话补上下文。</p></div>
+    </section>
+
+    <h2 class="group-title">AI 续用</h2>
+    <section class="grid">
+      <div class="card"><button onclick="runAction('build-ai-context')">提取 AI 上下文</button><p>从已整理知识库提取来源和摘要。</p></div>
+      <div class="card"><button onclick="copyAiContextPrompt()">复制上下文 prompt</button><p>复制可直接给 AI 使用的上下文。</p></div>
+      <div class="card"><button onclick="openObsidian()">打开 Obsidian</button><p>打开配置里的 vault。</p></div>
     </section>
 
     <section class="card" style="margin-top:16px">
@@ -340,6 +383,7 @@ HTML = r"""<!doctype html>
       <div class="grid">
         <button class="secondary" onclick="ask()">问答助手</button>
         <button class="secondary" onclick="quickCardNote()">沉淀知识卡</button>
+        <button class="secondary" onclick="runAction('deep-thinking')">深度思考引导</button>
         <button class="secondary" onclick="runAction('scenario-demo')">跑场景演示</button>
         <button class="secondary" onclick="runAction('self-evolution')">生成进化报告</button>
         <button class="secondary" onclick="runAction('full-scan')">高级：完整扫描</button>
@@ -380,6 +424,21 @@ HTML = r"""<!doctype html>
     async function copyCodexPrompt() {
       const data = await api('codex-prompt', {request: text() || '继续优化知识行动助手'});
       if (data.prompt && navigator.clipboard) await navigator.clipboard.writeText(data.prompt);
+    }
+    async function copyAiContextPrompt() {
+      const data = await api('build-ai-context', {query: text() || '当前任务', request: text() || '继续当前任务'});
+      if (data.prompt && navigator.clipboard) await navigator.clipboard.writeText(data.prompt);
+    }
+    function archiveAiChat() {
+      const value = text() || '待归档 AI 对话';
+      return api('archive-ai-chat', {
+        title: value,
+        source: 'GUI',
+        background: value,
+        conclusions: '待提炼关键结论',
+        outputs: '待补充产出路径',
+        open_items: '待确认未完成事项'
+      });
     }
     function openObsidian() { return api('open-obsidian'); }
   </script>

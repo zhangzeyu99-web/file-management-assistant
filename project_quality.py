@@ -39,6 +39,8 @@ PRINCIPLES = {
     "thin gui": ["thin gui", "same underlying modules", "薄 GUI"],
     "validation harness": ["validation harness", "verify-harness"],
     "optional integrations": ["optional integrations", "notification hooks", "可选通知"],
+    "ai chat archive": ["AI 对话归档", "archive-ai-chat"],
+    "ai context retrieval": ["AI 上下文取用", "build-ai-context"],
 }
 
 FORBIDDEN_PUBLIC_PATHS = [
@@ -217,7 +219,10 @@ def check_scenario_workflow(root: Path) -> dict[str, Any]:
         "card_capture",
         "time_review",
         "obsidian_health",
-        "x_ai_handoff",
+        "ai_chat_archive",
+        "ai_context_retrieval",
+        "archive-ai-chat",
+        "build-ai-context",
         "assistant_qa",
         "build_act_templates",
         "今日轻量规则",

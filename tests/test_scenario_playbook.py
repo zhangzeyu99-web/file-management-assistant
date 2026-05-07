@@ -111,7 +111,8 @@ class ScenarioPlaybookTests(unittest.TestCase):
                 "card_capture",
                 "time_review",
                 "obsidian_health",
-                "x_ai_handoff",
+                "ai_chat_archive",
+                "ai_context_retrieval",
                 "assistant_qa",
             },
             ids,
@@ -175,7 +176,8 @@ class ScenarioPlaybookTests(unittest.TestCase):
         self.assertIn("今日轻量规则", markdown)
         self.assertIn("生活 / 学习 / 工作", markdown)
         self.assertIn("Action / Card / Time / X-AI", markdown)
-        self.assertIn("x_ai_handoff", note)
+        self.assertIn("ai_chat_archive", note)
+        self.assertIn("ai_context_retrieval", note)
         self.assertNotRegex(markdown, r"鏂|绠|鍏|浠婃|瀛︿|宸ヤ")
 
 

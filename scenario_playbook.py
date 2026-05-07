@@ -18,7 +18,7 @@ from config_loader import load_config
 DEFAULT_CONFIG = ROOT / "config.json"
 PRODUCT = {
     "name": "知识行动助手",
-    "tagline": "把本地文件、Obsidian、Codex/OpenClaw 会话和手动输入转成可行动、可复盘、可追溯的个人知识工作流。",
+    "tagline": "把本地文件、Obsidian 笔记和 AI 对话整理成可归档、可复用、可继续被 AI 取用的上下文资产。",
 }
 SAFETY_TEXT = "默认不删除、不移动、不重命名、不重写源文件；只读取报告、生成建议、写入明确的 Obsidian 新笔记或追加到明确位置。"
 
@@ -249,7 +249,7 @@ def build_act_templates() -> list[dict[str, Any]]:
         },
         {
             "name": "X-AI",
-            "description": "AI 记忆与交接，让 Codex/OpenClaw 继续执行时有边界和上下文。",
+            "description": "AI 上下文取用，让新的 AI 对话能读取已整理的边界、来源和上下文。",
             "fields": ["用户偏好", "工作流", "工具边界", "最近上下文", "来源", "下一步", "验收标准"],
         },
     ]
@@ -420,14 +420,25 @@ def build_scenario_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
             acceptance_checks=["只读审计。", "建议能在 30 分钟内启动。"],
         ),
         scenario(
-            sid="x_ai_handoff",
-            title="生成 Codex 交接",
-            user_phrase="交给 Codex 继续",
-            does="生成带路径、边界、目标、验收标准的 prompt。",
-            steps=["收集 vault、runtime、最新报告路径。", "写清安全边界。", "要求先读真实文件再执行。"],
-            next_action="复制 prompt 到 Codex 当前会话，让 Codex 先读真实文件再执行。",
-            prompt="生成一个 Codex 交接 prompt，包含路径、目标、边界、生活/学习/工作分流和验收标准。",
-            outputs=["Codex handoff prompt"],
+            sid="ai_chat_archive",
+            title="归档 AI 对话",
+            user_phrase="整理这段 AI 对话",
+            does="把已有 AI 对话保存成可追溯 Obsidian 记录：来源、任务背景、关键结论、产出路径和未完成事项。",
+            steps=["保留原始来源和时间。", "提炼背景、结论、产出和未完成事项。", "写入新的归档笔记，不覆盖原文。"],
+            next_action="把有价值的 AI 对话先归档；如果要继续问 AI，再使用 AI 上下文取用。",
+            prompt="归档这段 AI 对话：保存来源、任务背景、关键结论、产出路径、未完成事项；只做归档，不负责给新对话补上下文。",
+            outputs=["AI 对话归档笔记"],
+            acceptance_checks=["只写新归档笔记。", "不声称会补充新对话上下文。", "包含来源、背景、结论、产出和未完成事项。"],
+        ),
+        scenario(
+            sid="ai_context_retrieval",
+            title="提取 AI 上下文",
+            user_phrase="给 AI 补上下文",
+            does="从已整理知识库中提取相关笔记、知识卡、项目记录和历史报告，生成可复制给新 AI 对话的上下文 prompt。",
+            steps=["收集 vault、runtime、最新报告路径。", "匹配已整理的笔记和知识卡。", "写清来源、边界、下一步请求和验收标准。"],
+            next_action="复制上下文 prompt 到新的 AI 对话，让 AI 先引用来源路径再继续处理。",
+            prompt="提取 AI 上下文：包含相关来源路径、压缩摘要、当前目标、安全边界、生活/学习/工作分流和验收标准。",
+            outputs=["AI 上下文 prompt"],
             acceptance_checks=["包含 vault 和 runtime 路径。", "包含不删除边界。", "包含验收标准。"],
         ),
         scenario(
@@ -458,10 +469,10 @@ def render_markdown(result: dict[str, Any]) -> str:
         "## 四层结构",
         "",
         "```text",
-        "输入层：本地文件 / Obsidian 笔记 / Codex 会话 / OpenClaw 记录 / 手动输入",
+        "输入层：本地文件 / Obsidian 笔记 / AI 对话记录 / 手动输入",
         "判断层：生活 / 学习 / 工作 + Action / Card / Time / X-AI",
-        "执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / Codex 交接",
-        "输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / Codex prompt / 可选通知",
+        "执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / AI 对话归档 / AI 上下文取用",
+        "输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / AI 上下文 prompt / 可选通知",
         "```",
         "",
         "## 今日轻量规则",

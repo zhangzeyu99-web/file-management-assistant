@@ -28,6 +28,11 @@ class GuiServerTests(unittest.TestCase):
         (self.vault / "00 收件箱").mkdir(parents=True)
         (self.vault / "01 今日日志").mkdir(parents=True)
         (self.vault / "04 例行工作" / "知识行动助手").mkdir(parents=True)
+        (self.vault / "02 项目" / "知识行动助手" / "Card").mkdir(parents=True)
+        (self.vault / "02 项目" / "知识行动助手" / "Card" / "AI 上下文取用.md").write_text(
+            "# AI 上下文取用\n\n类型：Card\n来源：产品化计划\n\n## 关键结论\n\n先扫描已整理知识库，再把相关路径、摘要和下一步请求补给新的 AI 对话。\n",
+            encoding="utf-8",
+        )
 
         (self.runtime / "runs" / "2026-04-27" / "120000" / "summary.json").write_text(
             json.dumps({"total_files": 3, "counts": {"recent_review": 1, "archive_candidates": 2}}, ensure_ascii=False),
@@ -132,6 +137,45 @@ class GuiServerTests(unittest.TestCase):
         self.assertIn(str(self.vault), prompt)
         self.assertIn("生活 / 学习 / 工作", prompt)
         self.assertIn("不删除", prompt)
+        self.assertIn("AI 上下文取用", prompt)
+        self.assertNotIn("交接记录", prompt)
+
+    def test_ai_chat_archive_and_context_actions_are_separate(self) -> None:
+        archive = gui_server.run_gui_action(
+            "archive-ai-chat",
+            {
+                "title": "NotebookLM 教程讨论",
+                "source": "Codex 会话",
+                "background": "讨论如何让 Obsidian 新手理解助手用途",
+                "conclusions": "归档 AI 对话和提取 AI 上下文必须分成两个功能",
+                "outputs": "README 与 GUI 首屏",
+                "open_items": "补产品化文案",
+            },
+            self.config_path,
+        )
+        context = gui_server.run_gui_action(
+            "build-ai-context",
+            {"query": "AI 上下文取用", "request": "继续优化产品首屏"},
+            self.config_path,
+        )
+
+        self.assertTrue(archive["ok"], archive)
+        self.assertEqual("archive-ai-chat", archive["action"])
+        self.assertTrue(Path(archive["note"]).exists())
+        archive_text = Path(archive["note"]).read_text(encoding="utf-8")
+        self.assertIn("AI 对话归档", archive_text)
+        self.assertIn("已有 AI 对话整理", archive_text)
+        self.assertNotIn("补充给新的 AI 对话", archive_text)
+
+        self.assertTrue(context["ok"], context)
+        self.assertEqual("build-ai-context", context["action"])
+        self.assertIn("sources", context)
+        self.assertIn("compressed_context", context)
+        self.assertIn("next_request", context)
+        self.assertIn("safety", context)
+        self.assertTrue(any(str(item["path"]).endswith("AI 上下文取用.md") for item in context["sources"]), context)
+        self.assertIn("继续优化产品首屏", context["prompt"])
+        self.assertIn("AI 上下文取用", context["prompt"])
 
     def test_html_exposes_scenario_first_buttons_without_mojibake(self) -> None:
         html = gui_server.HTML
@@ -142,7 +186,9 @@ class GuiServerTests(unittest.TestCase):
             "这段内容放哪",
             "复盘今天",
             "检查知识库",
-            "生成 Codex 交接",
+            "归档 AI 对话",
+            "提取 AI 上下文",
+            "复制上下文 prompt",
             "查看文件雷达",
             "打开 Obsidian",
             "快速初始化",
@@ -151,6 +197,8 @@ class GuiServerTests(unittest.TestCase):
             "打开教程 PDF",
         ]:
             self.assertIn(label, html)
+        self.assertNotIn("生成 Codex 交接", html)
+        self.assertNotIn("AI 交接", html)
         self.assertNotRegex(html, r"鏂|绠|鍏|浠婃|瀛︿|宸ヤ")
 
     def test_evolution_actions_return_actionable_outputs(self) -> None:

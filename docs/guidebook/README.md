@@ -10,7 +10,7 @@
 - [slides/page-03.png](slides/page-03.png): 记录一个任务。
 - [slides/page-04.png](slides/page-04.png): 内容放哪。
 - [slides/page-05.png](slides/page-05.png): 文件雷达与 Obsidian 体检。
-- [slides/page-06.png](slides/page-06.png): Codex 交接与 AI 闭环。
+- [slides/page-06.png](slides/page-06.png): AI 上下文取用与闭环。
 - [slides/page-07.png](slides/page-07.png): 一周使用节奏。
 
 ## 使用方式

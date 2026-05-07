@@ -180,6 +180,78 @@ def compact_text(text: str, limit: int = 180) -> str:
     return normalized[: limit - 1] + "…" if len(normalized) > limit else normalized
 
 
+def lines_from_payload(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value or "").strip()
+    if not text:
+        return []
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def safe_filename(text: str, fallback: str = "AI 对话归档") -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*\r\n]+', "-", text).strip(" .-")
+    return cleaned[:80] or fallback
+
+
+def build_ai_chat_archive(config: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    generated = now_local()
+    title = str(payload.get("title") or "AI 对话归档").strip() or "AI 对话归档"
+    source = str(payload.get("source") or "AI 对话").strip()
+    background = str(payload.get("background") or payload.get("body") or "").strip()
+    conclusions = lines_from_payload(payload.get("conclusions") or payload.get("summary"))
+    outputs = lines_from_payload(payload.get("outputs") or payload.get("paths"))
+    open_items = lines_from_payload(payload.get("open_items") or payload.get("next"))
+    raw_excerpt = str(payload.get("raw") or payload.get("text") or "").strip()
+
+    archive_dir = obsidian_run_dir(config) / "AI 对话归档"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    note = archive_dir / f"{generated.strftime('%Y%m%d-%H%M%S')} {safe_filename(title)}.md"
+    lines = [
+        f"# {title}",
+        "",
+        "类型：AI 对话归档",
+        "用途：已有 AI 对话整理",
+        f"生成时间：`{generated.strftime('%Y-%m-%d %H:%M:%S %z')}`",
+        f"来源：{source}",
+        "",
+        "## 任务背景",
+        "",
+        background or "待补充。",
+        "",
+        "## 关键结论",
+        "",
+    ]
+    lines.extend(f"- {item}" for item in (conclusions or ["待补充。"]))
+    lines.extend(["", "## 产出路径", ""])
+    lines.extend(f"- {item}" for item in (outputs or ["待补充。"]))
+    lines.extend(["", "## 未完成事项", ""])
+    lines.extend(f"- {item}" for item in (open_items or ["待确认。"]))
+    if raw_excerpt:
+        lines.extend(["", "## 原始片段", "", raw_excerpt])
+    lines.extend(
+        [
+            "",
+            "## 边界",
+            "",
+            "- 这条记录只归档已有 AI 对话，不承担新对话的上下文提取。",
+            "- 需要给新的 AI 对话补上下文时，使用“AI 上下文取用”。",
+            "",
+        ]
+    )
+    note.write_text("\n".join(lines), encoding="utf-8")
+    return {
+        "ok": True,
+        "action": "archive-ai-chat",
+        "title": title,
+        "note": str(note),
+        "source": source,
+        "archive_type": "AI 对话归档",
+        "safety": "只写入新的归档笔记，不删除、不移动、不重命名、不重写源文件。",
+    }
+
+
 def build_knowledge_index(config: dict[str, Any], limit: int = 200) -> dict[str, Any]:
     vault = vault_path(config)
     roots = [
@@ -249,6 +321,56 @@ def build_knowledge_call_plan(config: dict[str, Any], query: str) -> dict[str, A
         "top_matches": matches,
         "next_action": next_action,
         "index": {"count": index["count"], "vault": index["vault"]},
+    }
+
+
+def build_ai_context(config: dict[str, Any], query: str, request: str = "") -> dict[str, Any]:
+    query = query.strip() or request.strip() or "当前任务"
+    request = request.strip() or query
+    call_plan = build_knowledge_call_plan(config, query)
+    sources = [
+        {
+            "title": item.get("title", ""),
+            "type": item.get("type", ""),
+            "path": item.get("path", ""),
+            "why": f"与查询“{query}”在标题、类型或摘要上匹配。",
+            "summary": item.get("summary", ""),
+        }
+        for item in call_plan.get("top_matches", [])
+    ]
+    compressed_lines = [
+        f"- [{source['type']}] {source['title']}：{source['summary']}（来源：{source['path']}）"
+        for source in sources
+    ]
+    compressed_context = "\n".join(compressed_lines) if compressed_lines else "未找到可用上下文，请先补充 Obsidian 笔记或运行知识库体检。"
+    next_request = f"请基于以上已整理上下文继续处理：{request}"
+    prompt = f"""AI 上下文取用
+
+当前请求：
+{request}
+
+可用上下文：
+{compressed_context}
+
+使用要求：
+- 先引用上述来源路径，再给结论。
+- 如果上下文不足，明确指出缺口，不要编造。
+- 输出下一步行动，并说明是否需要新建 Action、Card 或复盘记录。
+
+安全边界：
+- 不删除、不移动、不重命名、不重写源文件。
+- 需要写入时，只写新笔记或追加到明确位置。
+"""
+    return {
+        "ok": True,
+        "action": "build-ai-context",
+        "query": query,
+        "request": request,
+        "sources": sources,
+        "compressed_context": compressed_context,
+        "next_request": next_request,
+        "prompt": prompt,
+        "safety": "只读取已整理的 Obsidian 笔记、知识卡、项目记录和历史报告；不修改源文件。",
     }
 
 

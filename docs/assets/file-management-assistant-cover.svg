@@ -20,7 +20,7 @@
   <text x="834" y="262" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#0f172a">Capture</text>
   <text x="834" y="310" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">Inbox notes</text>
   <text x="834" y="350" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">Daily logs</text>
-  <text x="834" y="390" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">Codex handoff</text>
+  <text x="834" y="390" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#475569">AI context</text>
   <rect x="834" y="430" width="170" height="36" rx="8" fill="#16a34a"/>
   <text x="858" y="453" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff">report-only</text>
   <text x="100" y="548" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#0f172a">Safe by default: no delete, no move, no rename, no rewrite.</text>

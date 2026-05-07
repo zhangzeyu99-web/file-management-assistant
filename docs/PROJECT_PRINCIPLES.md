@@ -1,23 +1,25 @@
 # Project Principles
 
-This project is a local-first Knowledge Action Assistant, not a cloud file cleaner. It turns local files, Obsidian notes, Codex/OpenClaw conversations, and manual input into a personal workflow that is actionable, reviewable, and traceable.
+This project is a local-first Obsidian AI organizing workspace, not a cloud file cleaner. It turns local files, Obsidian notes, AI conversations, and manual input into records that are actionable, reviewable, traceable, and reusable as future AI context.
 
 ## Core Positioning
 
-- knowledge action assistant: the main product is the Obsidian + AI 知识行动助手.
+- knowledge action assistant: the product helps users turn messy inputs into Obsidian actions, cards, reviews, archives, and context prompts.
 - local-first: user files, reports, and Obsidian notes stay on the local machine by default.
 - private local configuration: machine-specific paths and secrets belong in `config.local.json`, which is ignored by git.
 - optional integrations: notification hooks are optional delivery channels, not the core open-source promise.
+- AI 对话归档: existing AI conversations become traceable archive notes.
+- AI 上下文取用: already-organized knowledge becomes copyable context for new AI conversations.
 
 ## Four-Layer Architecture
 
 The four-layer architecture is the public mental model:
 
 ```text
-输入层：本地文件 / Obsidian 笔记 / Codex 会话 / OpenClaw 记录 / 手动输入
+输入层：本地文件 / Obsidian 笔记 / AI 对话记录 / 手动输入
 判断层：生活 / 学习 / 工作 + Action / Card / Time / X-AI
-执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / Codex 交接
-输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / Codex prompt / 可选通知
+执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / AI 对话归档 / AI 上下文取用
+输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / AI 上下文 prompt / 可选通知
 ```
 
 ## Workflow Rules
@@ -28,6 +30,7 @@ The four-layer architecture is the public mental model:
 - lightweight daily triage: 今日轻量规则 means 1-3 daily priorities only; 不要每天处理全部归档候选.
 - scenario-based workflow: GUI and docs start from user phrases such as “今天先干什么” and “这段内容放哪”.
 - closed loop: every scenario has outputs, acceptance checks, and a next action.
+- archive versus retrieval: archiving saves what happened; retrieval extracts useful context for what happens next.
 
 ## Safety Rules
 
