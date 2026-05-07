@@ -17,6 +17,7 @@ REQUIRED_DOCS = [
     "docs/CONFIGURATION.md",
     "docs/OBSIDIAN_WORKFLOW_TUTORIAL.md",
     "docs/GUI_INTERACTION_GUIDE.md",
+    "docs/GUI_E2E_TESTING.md",
     "docs/USER_SCENARIOS.md",
     "docs/CLOSED_LOOP_USAGE.md",
     "docs/ARCHITECTURE.md",
