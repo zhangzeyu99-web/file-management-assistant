@@ -136,9 +136,37 @@ class GuiServerTests(unittest.TestCase):
     def test_html_exposes_scenario_first_buttons_without_mojibake(self) -> None:
         html = gui_server.HTML
 
-        for label in ["今天先干什么", "记录一个任务", "这段内容放哪", "复盘今天", "检查知识库", "生成 Codex 交接", "查看文件雷达", "打开 Obsidian"]:
+        for label in [
+            "今天先干什么",
+            "记录一个任务",
+            "这段内容放哪",
+            "复盘今天",
+            "检查知识库",
+            "生成 Codex 交接",
+            "查看文件雷达",
+            "打开 Obsidian",
+            "快速初始化",
+            "深度思考引导",
+            "调用知识索引",
+            "打开教程 PDF",
+        ]:
             self.assertIn(label, html)
         self.assertNotRegex(html, r"鏂|绠|鍏|浠婃|瀛︿|宸ヤ")
+
+    def test_evolution_actions_return_actionable_outputs(self) -> None:
+        onboarding = gui_server.run_gui_action("onboarding", {}, self.config_path)
+        thinking = gui_server.run_gui_action("deep-thinking", {}, self.config_path)
+        knowledge = gui_server.run_gui_action("knowledge-index", {"query": "ACT 方法"}, self.config_path)
+        guidebook = gui_server.run_gui_action("guidebook", {}, self.config_path)
+
+        self.assertTrue(onboarding["ok"], onboarding)
+        self.assertIn("commands", onboarding)
+        self.assertTrue(thinking["ok"], thinking)
+        self.assertEqual(["Action", "Card", "Time", "X-AI"], [item["mode"] for item in thinking["prompts"]])
+        self.assertTrue(knowledge["ok"], knowledge)
+        self.assertIn("items", knowledge["index"])
+        self.assertTrue(guidebook["ok"], guidebook)
+        self.assertEqual(7, guidebook["page_count"])
 
 
 if __name__ == "__main__":

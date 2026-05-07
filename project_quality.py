@@ -20,6 +20,8 @@ REQUIRED_DOCS = [
     "docs/CLOSED_LOOP_USAGE.md",
     "docs/ARCHITECTURE.md",
     "docs/PROJECT_PRINCIPLES.md",
+    "docs/SELF_EVOLUTION.md",
+    "docs/guidebook/README.md",
 ]
 
 PRINCIPLES = {
@@ -58,6 +60,7 @@ DESTRUCTIVE_CODE_PATTERNS = [
 ]
 MOJIBAKE_PATTERNS = ["鏂", "绠", "鍏", "浠婃", "瀛︿", "宸ヤ", "閺", "鐎", "瀹搞"]
 TEXT_SUFFIXES = {".md", ".py", ".json", ".ps1", ".js", ".yml", ".yaml", ".txt"}
+MOJIBAKE_PATTERNS.extend(["\u9435", "\u6d60\u5a09", "\u701b\ufe3f", "\u5b80\u30e4", "\u923f", "\u9354\u256a", "\u93c0\u6735", "\u8930\u6385", "\u6d93\u20ac", "\ufffd"])
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", "node_modules", "tests"}
 SKIP_FILES = {"config.local.json", "gui-server.err.log", "gui-server.out.log", "project_quality.py"}
 
@@ -174,6 +177,7 @@ def check_thin_gui_and_non_destructive_code(root: Path) -> dict[str, Any]:
 def check_validation_harness(root: Path) -> dict[str, Any]:
     harness = read_text(root, "scripts/verify-harness.ps1")
     required = [
+        "test_assistant_evolution.py",
         "test_scenario_playbook.py",
         "test_project_quality.py",
         "secret_scan",
@@ -184,6 +188,21 @@ def check_validation_harness(root: Path) -> dict[str, Any]:
     if missing:
         return fail_check("validation_harness", {"missing": missing})
     return ok_check("validation_harness", required)
+
+
+def check_guidebook_assets(root: Path) -> dict[str, Any]:
+    pdf = root / "docs" / "guidebook" / "knowledge-action-assistant-tutorial.pdf"
+    slides = sorted((root / "docs" / "guidebook" / "slides").glob("page-*.png"))
+    evidence = {
+        "pdf": str(pdf.relative_to(root)),
+        "pdf_exists": pdf.exists(),
+        "pdf_size": pdf.stat().st_size if pdf.exists() else 0,
+        "slide_count": len(slides),
+        "slides": [str(path.relative_to(root)) for path in slides],
+    }
+    if not pdf.exists() or evidence["pdf_size"] < 100_000 or len(slides) != 7:
+        return fail_check("guidebook_assets", evidence)
+    return ok_check("guidebook_assets", evidence)
 
 
 def check_scenario_workflow(root: Path) -> dict[str, Any]:
@@ -254,6 +273,7 @@ def run_checks(root: Path) -> dict[str, Any]:
         check_thin_gui_and_non_destructive_code(root),
         check_scenario_workflow(root),
         check_validation_harness(root),
+        check_guidebook_assets(root),
         check_mojibake_scan(root),
     ]
     return {

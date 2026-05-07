@@ -66,6 +66,14 @@ Copy-Item .\config.example.json .\config.local.json
 notepad .\config.local.json
 ```
 
+For a faster first run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\init-assistant.ps1
+```
+
+The initializer creates local reports and Obsidian notes only. It does not delete, move, rename, or rewrite source files.
+
 Run tests:
 
 ```powershell
@@ -90,6 +98,24 @@ Run the scenario demo:
 
 ```powershell
 python .\scenario_playbook.py demo --config .\config.json
+```
+
+Open the guidebook catalog:
+
+```powershell
+python .\assistant_evolution.py guidebook
+```
+
+Generate the self-evolution report:
+
+```powershell
+python .\assistant_evolution.py report --config .\config.json
+```
+
+Query reusable knowledge:
+
+```powershell
+python .\assistant_evolution.py call --query "ACT 方法怎么复用"
 ```
 
 Generate the Obsidian guide:
@@ -152,6 +178,7 @@ Read more:
 - [Configuration](docs/CONFIGURATION.md)
 - [Getting Started](docs/GETTING_STARTED.md)
 - [Obsidian Workflow Tutorial](docs/OBSIDIAN_WORKFLOW_TUTORIAL.md)
+- [Guidebook PDF and slides](docs/guidebook/README.md)
 
 ## Validation
 
@@ -165,8 +192,10 @@ The harness checks unit tests, secret-like patterns, dry-run execution, Obsidian
 
 ## Documentation
 
+- [Guidebook](docs/guidebook/README.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Project Principles](docs/PROJECT_PRINCIPLES.md)
+- [Self Evolution Roadmap](docs/SELF_EVOLUTION.md)
 - [User Scenarios](docs/USER_SCENARIOS.md)
 - [Closed Loop Usage](docs/CLOSED_LOOP_USAGE.md)
 - [Maintenance](MAINTENANCE.md)

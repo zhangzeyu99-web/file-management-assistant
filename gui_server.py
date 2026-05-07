@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import file_assistant
+import assistant_evolution
 import obsidian_assistant
 import obsidian_manager
 import scenario_playbook
@@ -44,6 +45,7 @@ def build_status(config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
         "file_report": latest_file_report(config),
         "obsidian_report": latest_obsidian_report(config),
         "scenarios": scenario_playbook.build_scenario_catalog(config),
+        "guidebook": assistant_evolution.build_guidebook_catalog(ROOT),
         "safety": scenario_playbook.SAFETY_TEXT,
     }
 
@@ -129,6 +131,26 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
     if action == "scenario-demo":
         return scenario_playbook.run_demo(config_path)
 
+    if action == "guidebook":
+        return assistant_evolution.build_guidebook_catalog(ROOT)
+
+    if action == "onboarding":
+        return assistant_evolution.build_initialization_plan(config_path)
+
+    if action == "deep-thinking":
+        return {"ok": True, "prompts": assistant_evolution.build_deep_thinking_prompts()}
+
+    if action == "knowledge-index":
+        query = str(payload.get("query") or payload.get("text") or "")
+        return {
+            "ok": True,
+            "index": assistant_evolution.build_knowledge_index(config),
+            "call_plan": assistant_evolution.build_knowledge_call_plan(config, query) if query else None,
+        }
+
+    if action == "self-evolution":
+        return assistant_evolution.run_self_evolution(config_path)
+
     if action == "ask":
         return obsidian_assistant.command_ask(config, str(payload.get("question") or ""), bool(payload.get("write_note")))
 
@@ -192,6 +214,13 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
         vault = scenario_playbook.obsidian_vault(config)
         webbrowser.open(str(vault))
         return {"ok": True, "opened": str(vault)}
+
+    if action == "open-guidebook":
+        catalog = assistant_evolution.build_guidebook_catalog(ROOT)
+        if not catalog["ok"]:
+            return {"ok": False, "error": "guidebook assets are missing"}
+        webbrowser.open(catalog["pdf"])
+        return {"ok": True, "opened": catalog["pdf"]}
 
     if action == "open-codex":
         subprocess.Popen(["cmd", "/c", "start", "", str(ROOT)], shell=False)
@@ -299,6 +328,10 @@ HTML = r"""<!doctype html>
       <div class="card"><button onclick="copyCodexPrompt()">生成 Codex 交接</button><p>生成带路径、边界、验收标准的 prompt。</p></div>
       <div class="card"><button onclick="runAction('file-radar')">查看文件雷达</button><p>查看近期、大文件、重复文件。</p></div>
       <div class="card"><button onclick="openObsidian()">打开 Obsidian</button><p>打开配置里的 vault。</p></div>
+      <div class="card"><button onclick="runAction('onboarding')">快速初始化</button><p>检查配置、教程、启动命令。</p></div>
+      <div class="card"><button onclick="runAction('deep-thinking')">深度思考引导</button><p>按 ACT 给出关键追问。</p></div>
+      <div class="card"><button onclick="runAction('knowledge-index')">调用知识索引</button><p>查可复用笔记与下一步。</p></div>
+      <div class="card"><button onclick="runAction('open-guidebook')">打开教程 PDF</button><p>查看 7 页使用教程。</p></div>
     </section>
 
     <section class="card" style="margin-top:16px">
@@ -308,6 +341,7 @@ HTML = r"""<!doctype html>
         <button class="secondary" onclick="ask()">问答助手</button>
         <button class="secondary" onclick="quickCardNote()">沉淀知识卡</button>
         <button class="secondary" onclick="runAction('scenario-demo')">跑场景演示</button>
+        <button class="secondary" onclick="runAction('self-evolution')">生成进化报告</button>
         <button class="secondary" onclick="runAction('full-scan')">高级：完整扫描</button>
       </div>
     </section>

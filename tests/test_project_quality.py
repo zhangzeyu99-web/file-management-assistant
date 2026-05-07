@@ -60,6 +60,14 @@ class ProjectQualityTests(unittest.TestCase):
 
         self.assertTrue(mojibake["ok"], mojibake)
 
+    def test_guidebook_assets_are_published(self) -> None:
+        result = project_quality.run_checks(self.repo)
+        guidebook = next(item for item in result["checks"] if item["name"] == "guidebook_assets")
+
+        self.assertTrue(guidebook["ok"], guidebook)
+        self.assertEqual(7, guidebook["evidence"]["slide_count"])
+        self.assertGreater(guidebook["evidence"]["pdf_size"], 100_000)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

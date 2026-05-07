@@ -51,7 +51,7 @@ try {
     }
 
     Invoke-Checked "unit_tests" {
-        $output = cmd.exe /d /c "python .\tests\test_config_loader.py -v 2>&1 && python .\tests\test_file_assistant.py -v 2>&1 && python .\tests\test_obsidian_assistant.py -v 2>&1 && python .\tests\test_obsidian_manager.py -v 2>&1 && python .\tests\test_scenario_playbook.py -v 2>&1 && python .\tests\test_gui_server.py -v 2>&1 && python .\tests\test_project_quality.py -v 2>&1"
+        $output = cmd.exe /d /c "python .\tests\test_config_loader.py -v 2>&1 && python .\tests\test_file_assistant.py -v 2>&1 && python .\tests\test_obsidian_assistant.py -v 2>&1 && python .\tests\test_obsidian_manager.py -v 2>&1 && python .\tests\test_scenario_playbook.py -v 2>&1 && python .\tests\test_gui_server.py -v 2>&1 && python .\tests\test_assistant_evolution.py -v 2>&1 && python .\tests\test_project_quality.py -v 2>&1"
         $exitCode = $LASTEXITCODE
         if ($exitCode -ne 0) { throw ($output -join "`n") }
         return ($output -join "`n")
