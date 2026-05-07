@@ -197,6 +197,15 @@ class GuiServerTests(unittest.TestCase):
             "打开教程 PDF",
         ]:
             self.assertIn(label, html)
+        for required in [
+            "Obsidian AI 整理工作台",
+            "今日操作台",
+            "本地状态",
+            "默认只读",
+            "文件 / 笔记 / AI 对话 / 可复用上下文",
+        ]:
+            self.assertIn(required, html)
+        self.assertNotIn("Codex 文件管理小助手", html)
         self.assertNotIn("生成 Codex 交接", html)
         self.assertNotIn("AI 交接", html)
         self.assertNotRegex(html, r"鏂|绠|鍏|浠婃|瀛︿|宸ヤ")
