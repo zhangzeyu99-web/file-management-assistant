@@ -49,7 +49,7 @@ def build_guidebook_catalog(repo_root: Path = ROOT) -> dict[str, Any]:
         "pdf_size": pdf.stat().st_size if pdf.exists() else 0,
         "page_count": len(slides),
         "slides": [str(path) for path in slides],
-        "usage": "先看 7 页教程，再从 GUI 的“今天先干什么”开始试用。",
+        "usage": "先看 7 页教程，再从 GUI 的“生成 Codex 接手包”开始试用。",
     }
 
 
@@ -91,7 +91,7 @@ def build_initialization_plan(config_path: Path = DEFAULT_CONFIG) -> dict[str, A
         "复制 config.example.json 到 config.local.json，并只在本机私有文件里填写真实路径。",
         "运行一键初始化脚本生成 Obsidian 指南和场景报告。",
         "启动 GUI，从“今天先干什么”开始，而不是先看全部扫描指标。",
-        "把 guidebook PDF 作为第一份教程资料导入 Obsidian 或 NotebookLM。",
+        "把 guidebook PDF 作为第一份教程资料导入 Obsidian 或 NotebookLM；GUI 主入口是生成 Codex 接手包。",
     ]
     commands = [
         "Copy-Item .\\config.example.json .\\config.local.json",

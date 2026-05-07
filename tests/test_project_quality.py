@@ -106,6 +106,33 @@ class ProjectQualityTests(unittest.TestCase):
         self.assertNotIn("Codex 交接", public_text)
         self.assertNotIn("AI 交接", public_text)
 
+    def test_interaction_and_guidebook_follow_context_entry_positioning(self) -> None:
+        public_text = "\n".join(
+            (self.repo / path).read_text(encoding="utf-8-sig")
+            for path in [
+                "docs/GUI_INTERACTION_GUIDE.md",
+                "docs/assets/gui/interaction-guide.html",
+                "docs/guidebook/README.md",
+            ]
+        )
+
+        for phrase in [
+            "可视化上下文入口",
+            "Codex 接手包",
+            "本地文件",
+            "Obsidian",
+            "历史报告",
+            "不是替代 Codex",
+        ]:
+            self.assertIn(phrase, public_text)
+        for obsolete in [
+            "今日操作台",
+            "执行结果",
+            "查看全部",
+            "伪控制台",
+        ]:
+            self.assertNotIn(obsolete, public_text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
