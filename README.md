@@ -211,6 +211,7 @@ The harness checks unit tests, secret-like patterns, dry-run execution, Obsidian
 - [Self Evolution Roadmap](docs/SELF_EVOLUTION.md)
 - [User Scenarios](docs/USER_SCENARIOS.md)
 - [GUI Interaction Guide](docs/GUI_INTERACTION_GUIDE.md)
+- [UX Feedback Log](docs/UX_FEEDBACK.md)
 - [Closed Loop Usage](docs/CLOSED_LOOP_USAGE.md)
 - [Maintenance](MAINTENANCE.md)
 - [Security](SECURITY.md)
