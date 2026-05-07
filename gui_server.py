@@ -243,6 +243,20 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
         webbrowser.open(catalog["pdf"])
         return {"ok": True, "opened": catalog["pdf"]}
 
+    if action == "open-interaction-guide":
+        guide = ROOT / "docs" / "assets" / "gui" / "interaction-guide.html"
+        if not guide.exists():
+            return {"ok": False, "error": f"interaction guide not found: {guide}"}
+        return {
+            "ok": True,
+            "opened": str(guide),
+            "url": "/assets/gui/interaction-guide.html",
+            "assets": [
+                str(ROOT / "docs" / "assets" / "gui" / "interaction-map.png"),
+                str(ROOT / "docs" / "assets" / "gui" / "interaction-states.png"),
+            ],
+        }
+
     if action == "open-codex":
         subprocess.Popen(["cmd", "/c", "start", "", str(ROOT)], shell=False)
         return {"ok": True, "opened": str(ROOT)}
@@ -1215,6 +1229,11 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if parsed.path == "/favicon.ico":
+            self.send_response(204)
+            self.send_header("content-length", "0")
+            self.end_headers()
+            return
         if parsed.path.startswith("/assets/"):
             relative = unquote(parsed.path.removeprefix("/assets/"))
             target = (ASSET_ROOT / relative).resolve()
@@ -1222,7 +1241,14 @@ class Handler(BaseHTTPRequestHandler):
             if not str(target).startswith(str(asset_root)) or not target.is_file():
                 self._json({"ok": False, "error": "asset not found"}, 404)
                 return
-            content_type = "image/png" if target.suffix.lower() == ".png" else "application/octet-stream"
+            content_types = {
+                ".html": "text/html; charset=utf-8",
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
+            }
+            content_type = content_types.get(target.suffix.lower(), "application/octet-stream")
             body = target.read_bytes()
             self.send_response(200)
             self.send_header("content-type", content_type)

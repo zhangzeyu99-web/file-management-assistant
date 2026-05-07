@@ -190,6 +190,7 @@ Read more:
 - [Configuration](docs/CONFIGURATION.md)
 - [Getting Started](docs/GETTING_STARTED.md)
 - [Obsidian Workflow Tutorial](docs/OBSIDIAN_WORKFLOW_TUTORIAL.md)
+- [GUI Interaction Guide](docs/GUI_INTERACTION_GUIDE.md)
 - [Guidebook PDF and slides](docs/guidebook/README.md)
 
 ## Validation
@@ -209,6 +210,7 @@ The harness checks unit tests, secret-like patterns, dry-run execution, Obsidian
 - [Project Principles](docs/PROJECT_PRINCIPLES.md)
 - [Self Evolution Roadmap](docs/SELF_EVOLUTION.md)
 - [User Scenarios](docs/USER_SCENARIOS.md)
+- [GUI Interaction Guide](docs/GUI_INTERACTION_GUIDE.md)
 - [Closed Loop Usage](docs/CLOSED_LOOP_USAGE.md)
 - [Maintenance](MAINTENANCE.md)
 - [Security](SECURITY.md)

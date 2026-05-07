@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
   <title>Obsidian AI 整理工作台</title>
   <style>
     :root {
@@ -291,6 +292,25 @@
       font-size: 12px;
       font-weight: 800;
       box-shadow: 0 4px 10px rgba(67, 128, 215, .24);
+    }
+    .guide-button {
+      min-height: 42px;
+      margin-top: 2px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: linear-gradient(180deg, #ffffff, #f4f7fb);
+      border: 1px solid #dfe7f2;
+      color: #2f6ecb;
+      font-size: 15px;
+      font-weight: 800;
+      box-shadow: var(--shadow-soft);
+    }
+    .guide-button:hover {
+      border-color: #b9c9df;
+      background: #fbfdff;
     }
     .action-board {
       padding: 20px 32px 24px;
@@ -589,7 +609,9 @@
             <div class="step"><span class="step-num">1</span>第 1 步：打开教程 PDF</div>
             <div class="step"><span class="step-num">2</span>第 2 步：点击「今天先干什么」</div>
             <div class="step"><span class="step-num">3</span>第 3 步：把一段内容交给助手归档或提取上下文</div>
+            <div class="step"><span class="step-num">4</span>第 4 步：查看每个按钮点击后的结果</div>
           </div>
+          <button class="guide-button" onclick="openInteractionGuide()"><span class="sprite icon-sm doc"></span>查看交互说明图</button>
         </div>
       </section>
 
@@ -601,6 +623,7 @@
               <button class="action-item" onclick="runAction('today')"><span class="sprite icon-sm card-icon"></span><span>今天先干什么</span><span class="chevron">›</span></button>
               <button class="action-item" onclick="runAction('onboarding')"><span class="sprite icon-sm doc"></span><span>快速初始化</span><span class="chevron">›</span></button>
               <button class="action-item" onclick="runAction('open-guidebook')"><span class="sprite icon-sm doc"></span><span>打开教程 PDF</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="openInteractionGuide()"><span class="sprite icon-sm doc"></span><span>查看交互说明</span><span class="chevron">›</span></button>
             </div>
           </div>
           <div class="action-column">
@@ -767,6 +790,7 @@
         "today": "今天先干什么",
         "onboarding": "快速初始化",
         "open-guidebook": "打开教程 PDF",
+        "open-interaction-guide": "查看交互说明",
         "file-radar": "查看文件雷达",
         "inbox-route": "这段内容放哪",
         "obsidian-health": "检查知识库",
@@ -829,6 +853,11 @@
 
     function openObsidian() {
       return api("open-obsidian");
+    }
+
+    function openInteractionGuide() {
+      window.open("/assets/gui/interaction-guide.html", "_blank", "noopener");
+      return api("open-interaction-guide");
     }
 
     function toggleOutput() {

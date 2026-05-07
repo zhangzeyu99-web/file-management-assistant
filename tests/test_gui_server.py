@@ -193,6 +193,8 @@ class GuiServerTests(unittest.TestCase):
             "打开 Obsidian",
             "快速初始化",
             "打开教程 PDF",
+            "查看交互说明图",
+            "查看交互说明",
             "新手 10 分钟上手",
             "本地状态概览",
             "执行结果",
@@ -205,6 +207,7 @@ class GuiServerTests(unittest.TestCase):
             "默认只读",
             "hero-illustration.png",
             "feature-icons.png",
+            "interaction-guide.html",
         ]:
             self.assertIn(required, html)
         self.assertNotIn("<symbol", html)
@@ -213,6 +216,17 @@ class GuiServerTests(unittest.TestCase):
         self.assertNotIn("生成 Codex 交接", html)
         self.assertNotIn("AI 交接", html)
         self.assertNotRegex(html, r"鏂|绠|鍏|浠婃|瀛︿|宸ヤ")
+
+    def test_interaction_guide_action_exposes_generated_assets(self) -> None:
+        result = gui_server.run_gui_action("open-interaction-guide", {}, self.config_path)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("/assets/gui/interaction-guide.html", result["url"])
+        self.assertTrue(Path(result["opened"]).exists())
+        self.assertTrue(any(path.endswith("interaction-map.png") for path in result["assets"]))
+        self.assertTrue(any(path.endswith("interaction-states.png") for path in result["assets"]))
+        for path in result["assets"]:
+            self.assertTrue(Path(path).exists(), path)
 
     def test_evolution_actions_return_actionable_outputs(self) -> None:
         onboarding = gui_server.run_gui_action("onboarding", {}, self.config_path)

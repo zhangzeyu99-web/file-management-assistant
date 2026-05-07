@@ -13,6 +13,8 @@ config.local.json
 .runtime/
 runs/
 logs/
+output/
+.playwright-cli/
 *.log
 *.tmp
 *.bak
