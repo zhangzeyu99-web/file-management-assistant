@@ -52,7 +52,7 @@ def folder_name(config: dict[str, Any], key: str, default: str) -> str:
 
 
 def obsidian_run_dir(config: dict[str, Any]) -> Path:
-    return Path(config.get("obsidian_run_dir") or vault_path(config) / folder_name(config, "routine", "04 例行工作") / "文件管理助手")
+    return Path(config.get("obsidian_run_dir") or vault_path(config) / folder_name(config, "routine", "04 例行工作") / "知识行动助手")
 
 
 def read_note(path: Path) -> str:

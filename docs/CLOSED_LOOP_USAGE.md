@@ -1,72 +1,49 @@
 # Closed Loop Usage
 
-The assistant is mature only if the user can start from a real need, get an output, verify it, and continue without manual glue work.
+Closed loop means every user-facing scenario has:
 
-## Closed Loop Definition
+- User phrase.
+- Actual action.
+- Safety boundary.
+- Output path or generated content.
+- Next action.
+- Acceptance checks.
 
-The minimum closed loop is:
+## Loop 1: Today
 
-```text
-User scenario -> assistant action -> local report -> Obsidian note -> next action -> verification
-```
+1. User says: `今天先干什么`.
+2. Assistant reads latest file radar and Obsidian health reports.
+3. Assistant returns 1-3 priorities only.
+4. Assistant separates 生活 / 学习 / 工作.
+5. Assistant keeps archive candidates for weekly or monthly review.
+6. Acceptance: no source files are deleted, moved, renamed, or rewritten.
 
-The assistant should not stop at advice. It should create durable artifacts that can be reviewed later.
+## Loop 2: Capture
 
-## What The Demo Does
+1. User says: `这段内容放哪`.
+2. Assistant preserves source text.
+3. Assistant suggests inbox, daily, project, routine, or archive.
+4. Assistant writes a new note only when explicitly requested.
+5. Acceptance: source and next step are visible.
 
-Run:
+## Loop 3: ACT Note
 
-```powershell
-python .\scenario_playbook.py demo --config .\config.json
-```
+1. User says: `记录一个任务` or `这个以后会复用`.
+2. Assistant chooses Action or Card.
+3. Assistant writes source, next step, and acceptance criteria.
+4. Acceptance: note is usable without rereading the whole conversation.
 
-The command:
+## Loop 4: Review
 
-1. Reads the latest file management report if available.
-2. Reads the latest Obsidian management report if available.
-3. Builds four scenario cards: daily review, inbox triage, Obsidian health, and Codex handoff.
-4. Writes `scenario-demo.md` and `scenario-demo.json` under the runtime `runs` folder.
-5. Writes the same Markdown report into the configured Obsidian assistant folder.
+1. User says: `复盘今天`.
+2. Assistant writes a lightweight Time note.
+3. Weekly review handles inbox and archive backlog.
+4. Monthly review considers structure changes.
+5. Acceptance: daily review does not become a burden.
 
-## Safety Boundary
+## Loop 5: Codex Handoff
 
-The scenario demo is report-only. It does not:
-
-- Delete source files.
-- Move source files.
-- Rename source files.
-- Rewrite existing source documents.
-- Bulk-edit the Obsidian vault.
-
-## Verification
-
-Run unit tests:
-
-```powershell
-python .\tests\test_scenario_playbook.py -v
-python .\tests\test_gui_server.py -v
-python .\tests\test_project_quality.py -v
-```
-
-Run the release harness:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1
-```
-
-Expected evidence:
-
-- `scenario_playbook.py` returns the four scenario IDs.
-- `scenario-demo` writes both runtime and Obsidian reports.
-- The GUI exposes scenario catalog and demo actions.
-- `project_quality.py` verifies scenario-based workflow and closed loop principles.
-
-## Operating Rule
-
-Prefer scenario-first usage:
-
-- If the user asks "what now", run the daily review scenario.
-- If the user asks "where should this go", run inbox triage.
-- If the user asks "is the knowledge base healthy", run Obsidian health check.
-- If the user asks "continue in Codex", generate the Codex handoff prompt.
-
+1. User says: `交给 Codex 继续`.
+2. Assistant generates an X-AI prompt with vault path, runtime path, reports, goal, safety boundary, and acceptance checks.
+3. Codex must read real files before executing.
+4. Acceptance: result is written back to local report or Obsidian note.

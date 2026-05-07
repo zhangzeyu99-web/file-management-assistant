@@ -1,70 +1,42 @@
 # Project Principles
 
-This document turns the original product ideas into checks that can be verified by code, docs, and the release harness.
+This project is a local-first Knowledge Action Assistant, not a cloud file cleaner. It turns local files, Obsidian notes, Codex/OpenClaw conversations, and manual input into a personal workflow that is actionable, reviewable, and traceable.
 
-## Local-First
+## Core Positioning
 
-The assistant runs on the user's machine. It reads configured local folders and writes local reports before any optional integration is used.
+- knowledge action assistant: the main product is the Obsidian + AI 知识行动助手.
+- local-first: user files, reports, and Obsidian notes stay on the local machine by default.
+- private local configuration: machine-specific paths and secrets belong in `config.local.json`, which is ignored by git.
+- optional integrations: notification hooks are optional delivery channels, not the core open-source promise.
 
-## Report-Only Safety
+## Four-Layer Architecture
 
-The default behavior is report-only. The project does not delete, move, rename, or rewrite source files. Obsidian writes are limited to explicit helper actions such as inbox capture, daily note append, and report generation.
-
-## Private Local Configuration
-
-Public defaults live in `config.json` and `config.example.json`. Machine-specific paths and private settings belong in `config.local.json`, which is ignored by Git.
-
-## Obsidian Workflow
-
-The recommended Obsidian workflow is intentionally small:
+The four-layer architecture is the public mental model:
 
 ```text
-00 收件箱 -> 01 今日日志 -> 02 项目 / 04 例行工作 -> 99 归档
+输入层：本地文件 / Obsidian 笔记 / Codex 会话 / OpenClaw 记录 / 手动输入
+判断层：生活 / 学习 / 工作 + Action / Card / Time / X-AI
+执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / Codex 交接
+输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / Codex prompt / 可选通知
 ```
 
-Obsidian should stay practical: capture first, organize later, and keep source paths traceable.
+## Workflow Rules
 
-## Scenario-Based Workflow
+- ACT workflow: Action / Card / Time / X-AI is the default output model.
+- Obsidian workflow: `00 收件箱`, `01 今日日志`, projects, routine work, templates, and archive stay simple and readable.
+- life / study / work: every routing decision starts with 生活 / 学习 / 工作 before choosing a folder or template.
+- lightweight daily triage: 今日轻量规则 means 1-3 daily priorities only; 不要每天处理全部归档候选.
+- scenario-based workflow: GUI and docs start from user phrases such as “今天先干什么” and “这段内容放哪”.
+- closed loop: every scenario has outputs, acceptance checks, and a next action.
 
-The assistant should be scenario-first, not command-first. User scenarios are part of the product surface:
+## Safety Rules
 
-- Daily review: what should I look at first today?
-- Inbox triage: where should this note or task go?
-- Obsidian health: is the knowledge base getting messy?
-- Codex handoff: continue this task with the right context.
+- report-only safety: scans and audits are read-only by default.
+- The assistant does not delete, move, rename, or rewrite source files unless a future explicit execution mode adds a whitelist and confirmation boundary.
+- Existing source notes and files keep their original context; new records preserve source paths.
 
-These user scenarios are documented in `docs/USER_SCENARIOS.md` and implemented in `scenario_playbook.py`.
+## Implementation Rules
 
-## Closed Loop
-
-Every mature workflow should produce a closed loop:
-
-```text
-User scenario -> assistant action -> local report -> Obsidian note -> next action -> verification
-```
-
-The scenario demo must create durable artifacts and include acceptance checks. It should not stop at advice or require the user to manually stitch together paths, reports, and next steps.
-
-## Thin GUI
-
-The GUI is a thin control layer over the same modules used by command-line runs:
-
-- `file_assistant.py`
-- `obsidian_manager.py`
-- `obsidian_assistant.py`
-- `scenario_playbook.py`
-
-It should not introduce separate hidden behavior.
-
-## Validation Harness
-
-The repository should stay maintainable through repeatable validation:
-
-- Unit tests.
-- `scripts/verify-harness.ps1`.
-- Project quality checks in `project_quality.py`.
-- Dry-run execution before release.
-
-## Optional Integrations
-
-Notification hooks are optional integrations, not the core product. The core product is local scanning, Obsidian workflow support, safe reporting, and repeatable validation.
+- thin gui: the GUI is a thin entry layer over the same underlying modules, not a separate product fork.
+- validation harness: `scripts/verify-harness.ps1` and the Python test suite are the release gate.
+- closed loop evidence matters more than optimistic claims: reports, written notes, and tests are the proof.

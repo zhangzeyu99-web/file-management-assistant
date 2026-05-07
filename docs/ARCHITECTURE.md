@@ -1,53 +1,58 @@
 # Architecture
 
-The assistant is a small local-first toolchain.
+The project is now an Obsidian + AI Knowledge Action Assistant. File scanning remains one capability, but the main architecture is scenario-first and ACT-driven.
+
+## Four-Layer Architecture
+
+```text
+输入层：本地文件 / Obsidian 笔记 / Codex 会话 / OpenClaw 记录 / 手动输入
+判断层：生活 / 学习 / 工作 + Action / Card / Time / X-AI
+执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / Codex 交接
+输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / Codex prompt / 可选通知
+```
 
 ## Components
 
 | Component | Role |
 | --- | --- |
 | `config_loader.py` | Loads `config.json`, merges `config.local.json`, expands path variables. |
-| `file_assistant.py` | Scans configured folders and renders file review reports. |
-| `obsidian_manager.py` | Performs read-only Obsidian vault audit and renders reports. |
-| `obsidian_assistant.py` | Provides guide, Q&A, inbox capture, and daily note helpers. |
-| `scenario_playbook.py` | Turns common user scenarios into steps, safe actions, outputs, and acceptance checks. |
-| `gui_server.py` | Serves a local control panel and safe action API. |
-| `send_report_to_feishu.js` | Optional local notification adapter for file reports. |
-| `send_obsidian_report_to_feishu.js` | Optional local notification adapter for Obsidian audit reports. |
-| `run-file-assistant.ps1` | Runs the main chain and optional delivery. |
-| `run-obsidian-manager.ps1` | Runs the Obsidian audit only. |
+| `file_assistant.py` | File radar: scans configured folders and renders JSON / Markdown / HTML reports. |
+| `obsidian_manager.py` | Read-only Obsidian vault health check. |
+| `obsidian_assistant.py` | Guide, Q&A, inbox capture, daily notes, and ACT note helpers. |
+| `scenario_playbook.py` | Main orchestration layer for scenario-first workflows and ACT templates. |
+| `gui_server.py` | Thin GUI over the same modules and action API. |
+| `run-file-assistant.ps1` | Runs file radar and optional follow-up delivery. |
+| `run-obsidian-manager.ps1` | Runs Obsidian health check only. |
+| `scripts/verify-harness.ps1` | Validation harness for tests, quality gates, dry-runs, and Git state. |
 
 ## Data Flow
 
 ```text
-config.json
-  + config.local.json
+config.json + config.local.json
         |
         v
-file_assistant.py -----> JSON / Markdown / HTML reports
+输入层数据
         |
         v
-obsidian_manager.py ---> Obsidian audit report
+scenario_playbook.py
         |
-        v
-scenario_playbook.py --> scenario demo Markdown / JSON / Obsidian note
-        |
-        v
-optional notification hooks
+        +--> file_assistant.py -------> report.md / report.html / summary.json
+        +--> obsidian_manager.py -----> Obsidian health report
+        +--> obsidian_assistant.py ---> Action / Card / Time / X-AI notes
+        +--> gui_server.py -----------> scenario buttons and Codex prompt
 ```
-
-The GUI uses the same underlying modules. It does not introduce separate behavior for scanning, auditing, scenario demos, or note writing.
 
 ## Safety Boundary
 
-The code can create reports and write explicitly requested Obsidian helper notes. It does not perform destructive source-file operations.
+The code can create reports and write explicitly requested Obsidian helper notes. It does not delete, move, rename, or rewrite source files.
 
 Allowed write targets:
 
 - Runtime report directory.
 - Obsidian report directory.
-- Obsidian inbox notes created by `capture`.
-- Obsidian daily notes appended by `daily`.
+- New inbox notes created by `capture`.
+- Daily notes appended by `daily`.
+- New Action / Card / Time notes created by ACT helpers.
 
 Blocked by design:
 

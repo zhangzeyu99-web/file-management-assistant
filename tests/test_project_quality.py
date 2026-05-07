@@ -22,7 +22,7 @@ class ProjectQualityTests(unittest.TestCase):
         result = project_quality.run_checks(self.repo)
 
         self.assertTrue(result["ok"], result)
-        self.assertGreaterEqual(len(result["checks"]), 7)
+        self.assertGreaterEqual(len(result["checks"]), 8)
 
     def test_public_docs_do_not_promote_notification_bridge_as_core_feature(self) -> None:
         result = project_quality.run_checks(self.repo)
@@ -38,9 +38,14 @@ class ProjectQualityTests(unittest.TestCase):
             "local-first",
             "report-only safety",
             "private local configuration",
+            "knowledge action assistant",
+            "four-layer architecture",
+            "act workflow",
             "obsidian workflow",
             "scenario-based workflow",
             "closed loop",
+            "lightweight daily triage",
+            "life study work separation",
             "thin gui",
             "validation harness",
             "optional integrations",
@@ -48,6 +53,12 @@ class ProjectQualityTests(unittest.TestCase):
 
         self.assertTrue(principles["ok"], principles)
         self.assertTrue(expected.issubset(set(principles["evidence"])), principles)
+
+    def test_public_text_has_no_common_mojibake(self) -> None:
+        result = project_quality.run_checks(self.repo)
+        mojibake = next(item for item in result["checks"] if item["name"] == "mojibake_scan")
+
+        self.assertTrue(mojibake["ok"], mojibake)
 
 
 if __name__ == "__main__":

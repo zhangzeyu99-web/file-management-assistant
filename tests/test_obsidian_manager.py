@@ -35,14 +35,17 @@ class ObsidianManagerTests(unittest.TestCase):
             "# 已索引\n\n链接到 [[不存在页面]] 和 [[00 收件箱]]。\n\n示例：`[[02 项目/某项目]]`\n",
             encoding="utf-8",
         )
-        (self.vault / "02 项目" / "Codex" / "02 未索引.md").write_text("# 未索引\n\n内容足够但没有入口链接。\n", encoding="utf-8")
+        (self.vault / "02 项目" / "Codex" / "02 未索引.md").write_text(
+            "# 未索引\n\n内容足够但没有入口链接。\n",
+            encoding="utf-8",
+        )
         (self.vault / "04 例行工作" / "短.md").write_text("# 短\n", encoding="utf-8")
         (self.vault / "90 模板" / "短模板.md").write_text("# 模板\n", encoding="utf-8")
 
         self.config = {
             "obsidian_vault": str(self.vault),
             "runtime_root": str(self.runtime),
-            "obsidian_run_dir": str(self.vault / "04 例行工作" / "文件管理助手"),
+            "obsidian_run_dir": str(self.vault / "04 例行工作" / "知识行动助手"),
         }
 
     def tearDown(self) -> None:

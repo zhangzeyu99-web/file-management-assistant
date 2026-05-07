@@ -1,12 +1,37 @@
 # User Scenarios
 
-This project is designed around scenario-first workflows. A user should not need to remember commands before getting value.
+The assistant should start from user language, not internal commands.
 
-## Scenario 1: Daily Review
+| GUI entry | User phrase | What it does | Default safety |
+| --- | --- | --- | --- |
+| 今天先干什么 | 今天先干什么 | Reads latest reports and returns only 1-3 daily priorities. | Does not process every archive candidate. |
+| 查看文件雷达 | 看看哪些文件要管 | Lists recent files, archive candidates, large files, duplicates. | Report only; no delete, move, rename, or rewrite. |
+| 这段内容放哪 | 这段内容放哪 | Routes by 生活 / 学习 / 工作, then inbox/daily/project/routine/archive. | Keeps source text and path. |
+| 记录一个任务 | 记录一个任务 | Writes an Action note with goal, background, process, result, next step, acceptance checks. | Writes a new note only. |
+| 沉淀一张知识卡 | 这个以后会复用 | Writes a Card note with source, use case, conclusion, links, next step. | Does not force complex backlinks. |
+| 复盘今天 | 复盘今天 | Writes a lightweight Time review. | Daily review stays lightweight; backlog is weekly/monthly. |
+| 检查知识库 | 知识库乱不乱 | Audits inbox, stubs, low-link notes, broken links, duplicate titles, Codex index gaps. | Does not bulk rewrite the vault. |
+| 生成 Codex 交接 | 交给 Codex 继续 | Generates a prompt with paths, boundaries, goals, and acceptance criteria. | Requires reading real files before execution. |
+| 问答助手 | 我该怎么用 | Answers Obsidian usage questions from local structure and rules. | Does not invent current state. |
 
-**User question:** "What should I look at first today?"
+## Today Scenario
 
-Use when starting or ending a workday. The assistant reads the latest file report and Obsidian audit, then turns raw metrics into a short action list.
+今日轻量规则:
+
+- Choose 1-3 daily priorities.
+- Start with today-related files and notes.
+- Do not process every archive candidate every day.
+- Split first by 生活 / 学习 / 工作.
+- If unsure, write to `00 收件箱` and preserve source.
+
+## ACT Outputs
+
+- Action: task note.
+- Card: reusable knowledge note.
+- Time: daily, weekly, or monthly review.
+- X-AI: Codex/OpenClaw handoff and memory note.
+
+## Scenario Demo
 
 Run:
 
@@ -14,87 +39,9 @@ Run:
 python .\scenario_playbook.py demo --config .\config.json
 ```
 
-Expected output:
+Expected outputs:
 
-- A Markdown scenario report under the runtime `runs` directory.
-- A JSON evidence file next to the Markdown report.
-- A copied Obsidian note under the configured assistant run folder.
-
-Acceptance checks:
-
-- The report links to the latest file and Obsidian outputs when they exist.
-- The next action is concrete enough to start immediately.
-- No source file is deleted, moved, renamed, or rewritten.
-
-## Scenario 2: Inbox Triage
-
-**User question:** "Where should this note or task go?"
-
-Use when the Obsidian inbox contains temporary ideas, Codex records, downloaded material, or unclear notes. The assistant keeps the workflow small:
-
-- Inbox for temporary capture.
-- Daily note for today-specific progress.
-- Projects for multi-day work.
-- Routine work for recurring automations and reviews.
-- Archive for completed reference material.
-
-Acceptance checks:
-
-- Every recommendation has a target bucket.
-- Source context stays traceable.
-- Original notes are not overwritten.
-
-## Scenario 3: Obsidian Health Check
-
-**User question:** "Is my knowledge base getting messy?"
-
-Use before weekly review, before importing into NotebookLM, or after several long automation sessions. The assistant summarizes the health signals that matter most:
-
-- Empty or stub notes.
-- Low-link notes.
-- Broken links.
-- Untriaged inbox notes.
-
-Acceptance checks:
-
-- Risks are ordered by impact.
-- The fix list is small enough to start within 30 minutes.
-- The assistant does not bulk-rewrite the vault.
-
-## Scenario 4: Codex Handoff
-
-**User question:** "Continue this task in Codex with the right context."
-
-Use when the GUI or report identifies the next task but execution should continue in a Codex conversation. The generated handoff prompt includes:
-
-- Obsidian vault path.
-- Runtime report path.
-- Repository path.
-- Safety boundary.
-- Acceptance checks.
-
-Acceptance checks:
-
-- The prompt contains real local paths.
-- The prompt tells Codex to inspect files and reports before acting.
-- The prompt includes the no-delete, no-move, no-rename safety boundary.
-
-## GUI Entry
-
-Start the GUI:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
-```
-
-Open:
-
-```text
-http://127.0.0.1:8765/
-```
-
-Use these buttons:
-
-- `查看使用场景`: show the scenario catalog.
-- `跑使用场景示例`: generate a local demo report and Obsidian note.
-
+- Runtime JSON report.
+- Runtime Markdown report.
+- Obsidian scenario report.
+- `acceptance_checks` for every scenario.

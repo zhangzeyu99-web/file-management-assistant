@@ -24,14 +24,19 @@ REQUIRED_DOCS = [
 
 PRINCIPLES = {
     "local-first": ["local-first", "local first"],
-    "report-only safety": ["report-only", "report only", "does not delete"],
+    "report-only safety": ["report-only", "report only", "does not delete", "不删除"],
     "private local configuration": ["config.local.json", "private local configuration"],
+    "knowledge action assistant": ["知识行动助手", "knowledge action assistant"],
+    "four-layer architecture": ["四层结构", "输入层", "判断层", "执行层", "输出层"],
+    "act workflow": ["Action / Card / Time / X-AI", "ACT workflow"],
     "obsidian workflow": ["00 收件箱", "01 今日日志", "obsidian workflow"],
-    "scenario-based workflow": ["scenario-based workflow", "scenario-first", "user scenarios"],
-    "closed loop": ["closed loop", "acceptance checks", "scenario demo"],
-    "thin gui": ["thin gui", "same underlying modules"],
+    "scenario-based workflow": ["scenario-based workflow", "scenario-first", "场景入口"],
+    "closed loop": ["closed loop", "acceptance checks", "闭环验收"],
+    "lightweight daily triage": ["lightweight daily triage", "今日轻量规则", "不要每天处理全部归档候选"],
+    "life study work separation": ["life / study / work", "生活 / 学习 / 工作"],
+    "thin gui": ["thin gui", "same underlying modules", "薄 GUI"],
     "validation harness": ["validation harness", "verify-harness"],
-    "optional integrations": ["optional integrations", "notification hooks"],
+    "optional integrations": ["optional integrations", "notification hooks", "可选通知"],
 }
 
 FORBIDDEN_PUBLIC_PATHS = [
@@ -51,6 +56,10 @@ DESTRUCTIVE_CODE_PATTERNS = [
     "fs.unlink",
     "fs.rm(",
 ]
+MOJIBAKE_PATTERNS = ["鏂", "绠", "鍏", "浠婃", "瀛︿", "宸ヤ", "閺", "鐎", "瀹搞"]
+TEXT_SUFFIXES = {".md", ".py", ".json", ".ps1", ".js", ".yml", ".yaml", ".txt"}
+SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", "node_modules", "tests"}
+SKIP_FILES = {"config.local.json", "gui-server.err.log", "gui-server.out.log", "project_quality.py"}
 
 
 def read_text(root: Path, relative: str) -> str:
@@ -182,10 +191,19 @@ def check_scenario_workflow(root: Path) -> dict[str, Any]:
     gui = read_text(root, "gui_server.py")
     docs = read_text(root, "docs/USER_SCENARIOS.md") + "\n" + read_text(root, "docs/CLOSED_LOOP_USAGE.md")
     required = [
-        "daily_review",
-        "inbox_triage",
+        "today",
+        "file_radar",
+        "inbox_route",
+        "action_note",
+        "card_capture",
+        "time_review",
         "obsidian_health",
-        "codex_handoff",
+        "x_ai_handoff",
+        "assistant_qa",
+        "build_act_templates",
+        "今日轻量规则",
+        "生活 / 学习 / 工作",
+        "Action / Card / Time / X-AI",
         "scenario-demo",
         "acceptance_checks",
     ]
@@ -194,6 +212,35 @@ def check_scenario_workflow(root: Path) -> dict[str, Any]:
     if missing:
         return fail_check("scenario_workflow", {"missing": missing})
     return ok_check("scenario_workflow", required)
+
+
+def iter_public_text_files(root: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        if any(part in SKIP_DIRS for part in path.relative_to(root).parts):
+            continue
+        if path.name in SKIP_FILES:
+            continue
+        if path.suffix.lower() in TEXT_SUFFIXES or path.name in {".gitignore", "LICENSE"}:
+            files.append(path)
+    return files
+
+
+def check_mojibake_scan(root: Path) -> dict[str, Any]:
+    hits: list[str] = []
+    for path in iter_public_text_files(root):
+        text = path.read_text(encoding="utf-8-sig", errors="ignore")
+        for pattern in MOJIBAKE_PATTERNS:
+            if pattern in text:
+                hits.append(f"{path.relative_to(root)}: {pattern}")
+                break
+        if len(hits) >= 20:
+            break
+    if hits:
+        return fail_check("mojibake_scan", hits)
+    return ok_check("mojibake_scan", f"checked {len(iter_public_text_files(root))} text files")
 
 
 def run_checks(root: Path) -> dict[str, Any]:
@@ -207,6 +254,7 @@ def run_checks(root: Path) -> dict[str, Any]:
         check_thin_gui_and_non_destructive_code(root),
         check_scenario_workflow(root),
         check_validation_harness(root),
+        check_mojibake_scan(root),
     ]
     return {
         "ok": all(item["ok"] for item in checks),

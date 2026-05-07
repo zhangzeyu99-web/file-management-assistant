@@ -22,7 +22,7 @@ class ScenarioPlaybookTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.runtime = self.root / "runtime"
         self.vault = self.root / "vault"
-        self.obsidian_run_dir = self.vault / "04 例行工作" / "文件管理助手"
+        self.obsidian_run_dir = self.vault / "04 例行工作" / "知识行动助手"
         self.config_path = self.root / "config.json"
 
         file_run = self.runtime / "runs" / "2026-05-06" / "120000"
@@ -38,11 +38,23 @@ class ScenarioPlaybookTests(unittest.TestCase):
                     "total_files": 12,
                     "total_size_mb": 34.5,
                     "counts": {
-                        "recent_review": 2,
-                        "archive_candidates": 3,
+                        "recent_review": 3,
+                        "archive_candidates": 25,
                         "installer_cleanup": 1,
+                        "large_files": 2,
                         "duplicate_groups": 0,
                         "warnings": 0,
+                    },
+                    "classifications": {
+                        "recent_review": [
+                            {"path": r"C:\Users\Administrator\Documents\New project\CSCSE_UCSC_degree_certification_pack\README.md"},
+                            {"path": r"D:\codex\output\notebooklm-obsidian-assistant-pack-2026-04-27"},
+                            {"path": r"C:\Users\Administrator\Downloads\巨神东南亚更新公告 5.7_tha.xlsx"},
+                        ],
+                        "large_files": [
+                            {"path": r"C:\Users\Administrator\Downloads\OpenAI.Codex.msix", "size_mb": 413},
+                            {"path": r"C:\Users\Administrator\Videos\NotebookLM课程素材.mp4", "size_mb": 380},
+                        ],
                     },
                 },
                 ensure_ascii=False,
@@ -57,7 +69,7 @@ class ScenarioPlaybookTests(unittest.TestCase):
                     "generated_at": "2026-05-06 12:00:05 +0800",
                     "total_notes": 8,
                     "counts": {
-                        "inbox_triage": 2,
+                        "inbox_triage": 4,
                         "empty_or_stub": 1,
                         "low_link_notes": 4,
                         "broken_links": 0,
@@ -85,24 +97,68 @@ class ScenarioPlaybookTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def test_catalog_exposes_scenario_first_workflows(self) -> None:
+    def test_catalog_exposes_knowledge_action_workflows(self) -> None:
         config = scenario_playbook.load_config(self.config_path)
         catalog = scenario_playbook.build_scenario_catalog(config)
 
         ids = {item["id"] for item in catalog}
         self.assertEqual(
-            {"daily_review", "inbox_triage", "obsidian_health", "codex_handoff"},
+            {
+                "today",
+                "file_radar",
+                "inbox_route",
+                "action_note",
+                "card_capture",
+                "time_review",
+                "obsidian_health",
+                "x_ai_handoff",
+                "assistant_qa",
+            },
             ids,
         )
         for item in catalog:
             self.assertTrue(item["title"])
-            self.assertTrue(item["user_need"])
-            self.assertGreaterEqual(len(item["steps"]), 3)
-            self.assertGreaterEqual(len(item["safe_actions"]), 2)
-            self.assertGreaterEqual(len(item["acceptance_checks"]), 2)
+            self.assertTrue(item["user_phrase"])
+            self.assertTrue(item["does"])
             self.assertIn("不删除", item["safety"])
             self.assertTrue(item["next_action"])
-            self.assertTrue(item["prompt"])
+
+    def test_daily_review_is_lightweight_and_domain_separated(self) -> None:
+        config = scenario_playbook.load_config(self.config_path)
+        today = next(item for item in scenario_playbook.build_scenario_catalog(config) if item["id"] == "today")
+
+        combined = "\n".join(today["steps"] + today["acceptance_checks"])
+        self.assertIn("今日轻量规则", combined)
+        self.assertIn("不要每天处理全部归档候选", combined)
+        self.assertIn("1-3 个今日重点", combined)
+        self.assertIn("今日相关", today["next_action"])
+        self.assertEqual(["生活", "学习", "工作"], [item["name"] for item in today["domain_buckets"]])
+
+    def test_domain_classifier_splits_life_study_and_work(self) -> None:
+        self.assertEqual(
+            "生活",
+            scenario_playbook.classify_domain(
+                r"C:\Users\Administrator\Documents\New project\CSCSE_UCSC_degree_certification_pack\README.md"
+            )["name"],
+        )
+        self.assertEqual(
+            "学习",
+            scenario_playbook.classify_domain(r"D:\codex\output\notebooklm-obsidian-assistant-pack-2026-04-27")["name"],
+        )
+        self.assertEqual(
+            "工作",
+            scenario_playbook.classify_domain(r"C:\Users\Administrator\Downloads\巨神东南亚更新公告 5.7_tha.xlsx")["name"],
+        )
+
+    def test_act_templates_are_exposed(self) -> None:
+        templates = scenario_playbook.build_act_templates()
+
+        self.assertEqual(["Action", "Card", "Time", "X-AI"], [item["name"] for item in templates])
+        for item in templates:
+            joined = "\n".join(item["fields"])
+            self.assertIn("来源", joined)
+            self.assertIn("下一步", joined)
+            self.assertIn("验收标准", joined)
 
     def test_demo_run_writes_json_markdown_and_obsidian_note(self) -> None:
         result = scenario_playbook.run_demo(self.config_path)
@@ -114,11 +170,13 @@ class ScenarioPlaybookTests(unittest.TestCase):
 
         markdown = Path(result["markdown_report"]).read_text(encoding="utf-8")
         note = Path(result["obsidian_note"]).read_text(encoding="utf-8")
-        self.assertIn("# 使用场景示例闭环报告", markdown)
-        self.assertIn("今天先看什么", markdown)
-        self.assertIn("12", markdown)
-        self.assertIn("闭环验收", note)
-        self.assertIn("codex_handoff", note)
+        self.assertIn("# 知识行动助手场景闭环报告", markdown)
+        self.assertIn("四层结构", markdown)
+        self.assertIn("今日轻量规则", markdown)
+        self.assertIn("生活 / 学习 / 工作", markdown)
+        self.assertIn("Action / Card / Time / X-AI", markdown)
+        self.assertIn("x_ai_handoff", note)
+        self.assertNotRegex(markdown, r"鏂|绠|鍏|浠婃|瀛︿|宸ヤ")
 
 
 if __name__ == "__main__":

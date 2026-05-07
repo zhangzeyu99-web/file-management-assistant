@@ -1,68 +1,32 @@
 # Getting Started
 
-This guide gets the assistant running on a Windows machine with an optional Obsidian vault and optional notification delivery.
+This guide gets the Knowledge Action Assistant running locally.
 
-## 1. Prerequisites
-
-Install or verify:
+## 1. Install Prerequisites
 
 ```powershell
 python --version
-node --version
-git --version
+powershell -NoProfile -Command "$PSVersionTable.PSVersion"
 ```
 
-Recommended versions:
+Python 3.11+ is recommended.
 
-- Python 3.11 or newer.
-- Node.js 18 or newer.
-- Windows PowerShell 5 or newer.
-
-## 2. Clone
-
-```powershell
-git clone https://github.com/zhangzeyu99-web/file-management-assistant.git
-cd file-management-assistant
-```
-
-## 3. Configure
-
-Create a private local override:
+## 2. Create Local Config
 
 ```powershell
 Copy-Item .\config.example.json .\config.local.json
 notepad .\config.local.json
 ```
 
-Edit at least:
+Edit local paths in `config.local.json`. Do not commit that file.
 
-- `runtime_root`: where reports and logs are written.
-- `obsidian_vault`: your Obsidian vault path.
-- `watch_roots`: folders to scan.
-- `allowed_open_roots`: folders the GUI is allowed to open.
-
-`config.local.json` is ignored by Git.
-
-## 4. Test
+## 3. Run Tests
 
 ```powershell
-python .\tests\test_config_loader.py -v
-python .\tests\test_file_assistant.py -v
-python .\tests\test_obsidian_assistant.py -v
-python .\tests\test_obsidian_manager.py -v
-python .\tests\test_scenario_playbook.py -v
-python .\tests\test_gui_server.py -v
+python -m unittest discover -s tests -v
 ```
 
-## 5. Run A Dry Check
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu
-```
-
-The command writes local reports and skips external delivery.
-
-## 6. Open The GUI
+## 4. Start The GUI
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
@@ -74,20 +38,22 @@ Open:
 http://127.0.0.1:8765/
 ```
 
-## 7. Run The Scenario Demo
+Start with these buttons:
 
-Use this when you want to test a complete workflow instead of a single command:
+- 今天先干什么
+- 记录一个任务
+- 这段内容放哪
+- 复盘今天
+- 检查知识库
+- 生成 Codex 交接
+- 查看文件雷达
+- 打开 Obsidian
 
-```powershell
-python .\scenario_playbook.py demo --config .\config.json
-```
+## 5. First Useful Workflow
 
-The demo writes a scenario report under the runtime directory and copies the same report into the configured Obsidian assistant folder.
+1. Click `今天先干什么`.
+2. If you have a concrete task, click `记录一个任务`.
+3. If you have reusable knowledge, use `沉淀知识卡`.
+4. At the end of the day, click `复盘今天`.
 
-## 8. Optional Scheduled Task
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduled-task.ps1
-```
-
-The default task runs daily at `20:30`.
+Keep daily work lightweight. Do not process every archive candidate every day.

@@ -1,83 +1,82 @@
 # Obsidian Workflow Tutorial
 
-This tutorial is for users who want Obsidian to become a practical work record system, not a decorative knowledge graph.
+This tutorial is for using Obsidian with the Knowledge Action Assistant.
 
-## Core Rule
+## Minimum Mental Model
 
-Do not start with a complicated vault design. Start with a reliable flow:
+You do not need a complex second-brain system first. Use this order:
 
 ```text
-00 收件箱 -> 01 今日日志 -> 02 项目 / 04 例行工作 -> 99 归档
+00 收件箱 -> 01 今日日志 -> Action / Card / Time / X-AI -> 02 项目 / 04 例行工作 / 99 归档
 ```
 
-## Folder Roles
+## Life / Study / Work First
 
-| Folder | Use it for |
-| --- | --- |
-| `00 收件箱` | Temporary notes, links, ideas, and items that are not classified yet. |
-| `01 今日日志` | What happened today, what is next, and what is blocked. |
-| `02 项目` | Work that lasts more than one day. |
-| `03 会议` | Meeting notes and decisions. |
-| `04 例行工作` | Repeated workflows, audits, automations, and review reports. |
-| `90 模板` | Reusable note templates. |
-| `99 归档` | Finished or inactive material kept for traceability. |
+Before choosing a folder, decide the domain:
 
-## Daily Use
+- 生活: certificates, accounts, finance, health, personal paperwork.
+- 学习: NotebookLM, Obsidian tutorials, courses, mind maps, study notes.
+- 工作: Codex projects, localization, announcements, clients, delivery files.
 
-Morning:
+## ACT Types
 
-- Open today's daily note.
-- Write the top tasks for the day.
-- Keep it short enough to guide action.
+### Action
 
-During work:
+Use for a task you need to finish.
 
-- Capture loose material into the inbox.
-- Let the assistant generate file and Obsidian review reports.
-- Avoid reorganizing the vault while doing the real work.
+Fields:
 
-Evening:
+- 领域
+- 目标
+- 来源
+- 任务背景
+- 行动过程
+- 任务成果
+- 下一步
+- 验收标准
 
-- Add completed work, next steps, and blockers.
-- Promote reusable workflows into `04 例行工作`.
-- Promote sustained topics into `02 项目`.
+### Card
 
-## Using The Assistant
+Use for reusable knowledge.
 
-Generate the guide:
+Fields:
 
-```powershell
-python .\obsidian_assistant.py guide
-```
+- 主题
+- 来源
+- 适用场景
+- 关键结论
+- 相关链接
+- 下一步
 
-Ask where something belongs:
+### Time
 
-```powershell
-python .\obsidian_assistant.py ask "这个内容应该放哪里？"
-```
+Use for daily, weekly, or monthly review.
 
-Capture an inbox note:
+Daily review stays lightweight:
 
-```powershell
-python .\obsidian_assistant.py capture --title "一个想法" --body "先放收件箱，之后整理。" --tags idea
-```
+- 完成
+- 卡点
+- 下一步
 
-Append to today's daily note:
+Weekly review handles inbox and archive backlog. Monthly review can change structure.
 
-```powershell
-python .\obsidian_assistant.py daily --done "完成文件助手检查" --next "整理收件箱" --blocker "暂无"
-```
+### X-AI
 
-## What The Audit Checks
+Use when handing work to Codex or OpenClaw.
 
-The Obsidian audit is read-only. It reports:
+Include:
 
-- Inbox items that need triage.
-- Empty or very short notes.
-- Notes with no links or backlinks.
-- Duplicate titles.
-- Broken internal links.
-- Folder-style links.
-- Codex project notes without index coverage.
+- local paths
+- safety boundaries
+- goal
+- acceptance checks
+- recent context
 
-The audit does not delete or move notes.
+## Daily Rule
+
+今日轻量规则:
+
+- Choose only 1-3 priorities.
+- Do not process every archive candidate.
+- Keep sources visible.
+- If unsure, use `00 收件箱`.

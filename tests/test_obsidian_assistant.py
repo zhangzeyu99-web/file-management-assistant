@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 import sys
 import tempfile
 import unittest
@@ -29,7 +28,7 @@ class ObsidianAssistantTests(unittest.TestCase):
         )
         self.config = {
             "obsidian_vault": str(self.vault),
-            "obsidian_run_dir": str(self.vault / "04 例行工作" / "文件管理助手"),
+            "obsidian_run_dir": str(self.vault / "04 例行工作" / "知识行动助手"),
         }
 
     def tearDown(self) -> None:
@@ -43,20 +42,23 @@ class ObsidianAssistantTests(unittest.TestCase):
         self.assertTrue(guide.exists())
         guide_text = guide.read_text(encoding="utf-8")
         overview_text = overview.read_text(encoding="utf-8")
-        self.assertIn("Obsidian 新手使用指南", guide_text)
-        self.assertIn("[[12 Codex 线程行为画像与帮助策略]]", guide_text)
-        self.assertIn("[[11 Obsidian 新手使用指南]]", overview_text)
-        self.assertIn("[[12 Codex 线程行为画像与帮助策略]]", overview_text)
+        self.assertIn("Obsidian + AI 知识行动助手使用指南", guide_text)
+        self.assertIn("生活 / 学习 / 工作", guide_text)
+        self.assertIn("Action / Card / Time / X-AI", guide_text)
+        self.assertIn("[[11 Obsidian + AI 知识行动助手使用指南]]", overview_text)
+        self.assertNotRegex(guide_text, r"鏂|绠|鍏|浠婃|瀛︿|宸ヤ")
 
     def test_ask_returns_daily_answer(self) -> None:
         result = obsidian_assistant.command_ask(self.config, "我今天怎么记录工作？", False)
         self.assertTrue(result["ok"])
-        self.assertIn("daily", result["answer"])
+        self.assertIn("今日轻量规则", result["answer"])
+        self.assertIn("Action", result["answer"])
 
     def test_ask_returns_behavior_profile_answer(self) -> None:
         result = obsidian_assistant.command_ask(self.config, "根据我的习惯怎么帮我？", False)
         self.assertTrue(result["ok"])
-        self.assertIn("行为画像", result["answer"])
+        self.assertIn("先读真实文件", result["answer"])
+        self.assertIn("不要停在建议", result["answer"])
 
     def test_capture_and_daily_write_notes(self) -> None:
         capture = obsidian_assistant.command_capture(self.config, "测试想法", "内容", ["idea"])
@@ -71,6 +73,40 @@ class ObsidianAssistantTests(unittest.TestCase):
         daily_path = Path(daily["daily"])
         self.assertTrue(daily_path.exists())
         self.assertIn("完成测试", daily_path.read_text(encoding="utf-8"))
+
+    def test_act_note_helpers_write_expected_sections(self) -> None:
+        action = obsidian_assistant.command_action_note(
+            self.config,
+            title="更新知识行动助手",
+            domain="工作",
+            goal="完成结构重整",
+            source="Codex 会话",
+        )
+        card = obsidian_assistant.command_card_note(
+            self.config,
+            title="ACT 方法",
+            domain="学习",
+            source="Obsidian+AI 课程",
+            conclusion="先行动，再沉淀知识。",
+        )
+        review = obsidian_assistant.command_time_review(
+            self.config,
+            title="今日复盘",
+            period="daily",
+            done=["完成结构设计"],
+            next_items=["跑验证"],
+        )
+
+        action_text = Path(action["note"]).read_text(encoding="utf-8")
+        card_text = Path(card["note"]).read_text(encoding="utf-8")
+        review_text = Path(review["note"]).read_text(encoding="utf-8")
+
+        self.assertIn("## 任务背景", action_text)
+        self.assertIn("## 任务成果", action_text)
+        self.assertIn("## 适用场景", card_text)
+        self.assertIn("## 关键结论", card_text)
+        self.assertIn("## 归档候选", review_text)
+        self.assertIn("## 结构调整", review_text)
 
 
 if __name__ == "__main__":

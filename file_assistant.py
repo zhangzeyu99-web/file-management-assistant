@@ -315,7 +315,7 @@ def markdown_table(items: list[dict[str, Any]], columns: list[tuple[str, str]], 
 def render_markdown(summary: dict[str, Any]) -> str:
     counts = summary["counts"]
     lines = [
-        "# 文件管理助手复盘",
+        "# 知识行动助手 · 文件雷达复盘",
         "",
         f"生成时间：`{summary['generated_at']}`",
         f"运行模式：`{summary['mode']}`",
@@ -436,7 +436,7 @@ def render_html(summary: dict[str, Any]) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>文件管理助手复盘</title>
+  <title>知识行动助手 · 文件雷达复盘</title>
   <style>
     :root {{
       --bg: #f4efe6;
@@ -552,7 +552,7 @@ def render_html(summary: dict[str, Any]) -> str:
 <body>
 <main>
   <header>
-    <h1>文件管理助手复盘</h1>
+    <h1>知识行动助手 · 文件雷达复盘</h1>
     <p class="sub">生成时间：{esc(summary["generated_at"])} | 模式：{esc(summary["mode"])} | 只做清单归档，不改源文件</p>
     <div class="metrics">{cards()}</div>
   </header>
@@ -583,11 +583,11 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
 def write_obsidian_run_note(config: dict[str, Any], summary: dict[str, Any], markdown_report: Path, html_report: Path) -> Path:
     run_dir = Path(config["obsidian_run_dir"])
     date_part = summary["generated_at"][:10]
-    note_path = run_dir / f"{date_part} 文件管理助手复盘.md"
+    note_path = run_dir / f"{date_part} 知识行动助手 文件雷达复盘.md"
     counts = summary["counts"]
     contents = "\n".join(
         [
-            "# 文件管理助手复盘",
+            "# 知识行动助手 · 文件雷达复盘",
             "",
             f"生成时间：`{summary['generated_at']}`",
             "",
@@ -648,7 +648,7 @@ def run(config_path: Path, mode: str) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Codex file management assistant")
+    parser = argparse.ArgumentParser(description="知识行动助手文件雷达")
     parser.add_argument("--config", default=str(Path(__file__).with_name("config.json")))
     parser.add_argument("--mode", default="Run", choices=["Run", "Test"])
     return parser.parse_args()

@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -51,12 +52,12 @@ def folder_name(config: dict[str, Any], key: str, default: str) -> str:
     return str(config.get("obsidian_folders", {}).get(key, default))
 
 
-def guide_path(config: dict[str, Any]) -> Path:
-    return vault_path(config) / folder_name(config, "projects", "02 项目") / folder_name(config, "codex_project", "Codex") / "11 Obsidian 新手使用指南.md"
+def projects_dir(config: dict[str, Any]) -> Path:
+    return vault_path(config) / folder_name(config, "projects", "02 项目")
 
 
-def behavior_profile_path(config: dict[str, Any]) -> Path:
-    return vault_path(config) / folder_name(config, "projects", "02 项目") / folder_name(config, "codex_project", "Codex") / "12 Codex 线程行为画像与帮助策略.md"
+def codex_dir(config: dict[str, Any]) -> Path:
+    return projects_dir(config) / folder_name(config, "codex_project", "Codex")
 
 
 def inbox_dir(config: dict[str, Any]) -> Path:
@@ -67,145 +68,93 @@ def daily_dir(config: dict[str, Any]) -> Path:
     return vault_path(config) / folder_name(config, "daily", "01 今日日志")
 
 
+def routine_dir(config: dict[str, Any]) -> Path:
+    return vault_path(config) / folder_name(config, "routine", "04 例行工作")
+
+
+def knowledge_action_dir(config: dict[str, Any]) -> Path:
+    return projects_dir(config) / "知识行动助手"
+
+
+def guide_path(config: dict[str, Any]) -> Path:
+    return codex_dir(config) / "11 Obsidian + AI 知识行动助手使用指南.md"
+
+
+def behavior_profile_path(config: dict[str, Any]) -> Path:
+    return codex_dir(config) / "12 Codex 线程行为画像与帮助策略.md"
+
+
 def codex_overview_path(config: dict[str, Any]) -> Path:
-    return vault_path(config) / folder_name(config, "projects", "02 项目") / folder_name(config, "codex_project", "Codex") / "00 Codex 总览.md"
+    return codex_dir(config) / "00 Codex 总览.md"
 
 
 def build_guide(config: dict[str, Any]) -> str:
     vault = vault_path(config)
     today = now_local().strftime("%Y-%m-%d")
-    return f"""# Obsidian 新手使用指南
+    return f"""# Obsidian + AI 知识行动助手使用指南
 
 生成日期：`{today}`
 
-## 先记住一句话
+## 一句话定位
 
-Obsidian 不需要一开始就搭复杂体系。你只要会做三件事：先丢进收件箱，每天做一次今日记录，重要内容再归到项目页。
+这个助手不是单纯帮你“清文件”，而是把本地文件、Obsidian 笔记、Codex/OpenClaw 会话和手动输入，转成可行动、可复盘、可追溯的个人知识工作流。
 
-## 你的当前库
+## 四层结构
 
-- Obsidian 仓库：`{vault}`
-- 收件箱：`{vault}\\00 收件箱`
-- 今日日志：`{vault}\\01 今日日志`
-- 项目：`{vault}\\02 项目`
-- 会议：`{vault}\\03 会议`
-- 例行工作：`{vault}\\04 例行工作`
-- 模板：`{vault}\\90 模板`
-- 归档：`{vault}\\99 归档`
+```text
+输入层：本地文件 / Obsidian 笔记 / Codex 会话 / OpenClaw 记录 / 手动输入
+判断层：生活 / 学习 / 工作 + Action / Card / Time / X-AI
+执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / Codex 交接
+输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / Codex prompt / 可选通知
+```
 
-## 每天怎么用
+## 你每天只需要做什么
 
-1. 有零碎想法、文件、链接、任务，先写进 `00 收件箱`。
-2. 当天做过什么、卡在哪里、明天继续什么，写进 `01 今日日志`。
-3. 能持续超过一天的事情，放进 `02 项目`。
-4. 重复发生的流程和自动化，放进 `04 例行工作`。
-5. 不确定放哪，就先放收件箱，不要停下来纠结分类。
+1. 有零碎内容，先丢进 `00 收件箱`。
+2. 今天做过什么、卡在哪里、明天继续什么，写进 `01 今日日志`。
+3. 持续超过一天的事情，用 `Action` 写成任务笔记。
+4. 以后会复用的经验，用 `Card` 沉淀成知识卡。
+5. 每天只做轻量复盘；归档候选放到周复盘或月复盘批处理。
 
-## 现在这个助手能帮你做什么
+## 生活 / 学习 / 工作怎么拆
 
-在 `D:\\codex\\file-management-assistant` 里运行：
+| 领域 | 放什么 | 默认入口 |
+| --- | --- | --- |
+| 生活 | 学历认证、证件、财务、健康、账户、家庭材料 | `00 收件箱` 或生活项目 |
+| 学习 | NotebookLM、Obsidian 教程、课程、思维导图、资料包 | 学习项目或 `Card` |
+| 工作 | Codex 项目、本地化、更新公告、客户材料、交付物 | 工作项目或 `Action` |
+
+## Action / Card / Time / X-AI 怎么用
+
+| 类型 | 什么时候用 | 必填字段 |
+| --- | --- | --- |
+| Action | 具体任务要推进 | 领域、目标、来源、背景、过程、结果、下一步、验收标准 |
+| Card | 以后会复用 | 主题、来源、适用场景、关键结论、相关链接、下一步 |
+| Time | 日/周/月复盘 | 完成、卡点、下一步、归档候选、结构调整 |
+| X-AI | 交给 Codex/OpenClaw 继续 | 用户偏好、工作流、工具边界、最近上下文、验收标准 |
+
+## 今日轻量规则
+
+- 今天只收敛 1-3 个重点。
+- 不要每天处理全部归档候选。
+- 收件箱只做分类和来源保留，不做大规模搬迁。
+- 大文件只判断未来 7 天是否会用，不直接删除。
+
+## 推荐命令
 
 ```powershell
 python .\\obsidian_assistant.py guide
+python .\\obsidian_assistant.py ask "我今天怎么记录工作？"
+python .\\obsidian_assistant.py action --title "更新知识行动助手" --domain "工作" --goal "完成结构重整" --source "Codex 会话"
+python .\\obsidian_assistant.py card --title "ACT 方法" --domain "学习" --source "Obsidian 课程" --conclusion "先行动，再沉淀知识。"
+python .\\obsidian_assistant.py review --title "今日复盘" --period daily --done "完成结构设计" --next "跑测试验证"
 ```
 
-重新生成这份指南。
+## 当你需要帮助时
 
-```powershell
-python .\\obsidian_assistant.py ask \"我今天怎么记录工作？\"
-```
+你不需要先学完整 Obsidian。直接说“这段内容放哪”“记录一个任务”“复盘今天”“交给 Codex 继续”，助手会先读真实配置和报告，再按生活 / 学习 / 工作与 ACT 结构处理。
 
-回答 Obsidian 常见问题。
-
-```powershell
-python .\\obsidian_assistant.py capture --title \"一个想法\" --body \"先丢进收件箱，之后再整理。\" --tags idea
-```
-
-写入收件箱。
-
-```powershell
-python .\\obsidian_assistant.py daily --done \"完成文件管理助手\" --next \"继续整理工作流\" --blocker \"暂无\"
-```
-
-写入今天的日志。
-
-## 我建议你的最小工作流
-
-### 早上
-
-- 打开 `01 今日日志`。
-- 写今天最多 3 件要推进的事。
-- 不要写很长，能指导今天行动就够。
-
-### 工作中
-
-- 临时想法直接 capture 到 `00 收件箱`。
-- 文件管理助手每天自动生成复盘。
-- 不要边做事边整理知识库，先保证工作不断流。
-
-### 晚上
-
-- 看今天的日志。
-- 把已完成、未完成、卡住点各写 1-3 条。
-- 能复用的流程再移动或链接到 `02 项目` / `04 例行工作`。
-
-## 如何判断放哪里
-
-| 内容 | 放哪里 |
-| --- | --- |
-| 临时想法、待处理材料 | `00 收件箱` |
-| 今天做了什么 | `01 今日日志` |
-| Codex / OpenClaw / 求职 / 文件管理助手这类持续事项 | `02 项目` |
-| 会议纪要 | `03 会议` |
-| 自动化、复盘、周期性检查 | `04 例行工作` |
-| 固定格式 | `90 模板` |
-| 阶段性完成、只需追溯的内容 | `99 归档` |
-
-## 常见问题
-
-### 我不会分类怎么办？
-
-先放 `00 收件箱`。分类不是第一步，记录才是第一步。
-
-### 我应该用标签还是文件夹？
-
-新手先用文件夹。标签只用于状态或类型，比如 `#todo`、`#idea`、`#review`。
-
-### 双链怎么用？
-
-只在确实要跳转时用，例如 `[[09 文件管理助手流程归档]]`。不要为了“高级”到处乱链。
-
-### 文件很多会乱吗？
-
-会，所以当前助手每天会生成文件复盘，提醒哪些该归档、哪些该回看。
-
-## 当前推荐入口
-
-- [[00 Codex 总览]]
-- [[09 文件管理助手流程归档]]
-- [[10 高难长任务 Harness 复盘]]
-- [[12 Codex 线程行为画像与帮助策略]]
-
-## 当你需要帮助时，助手应该怎么做
-
-你不需要先学会完整分类。直接把需求说出来，助手应按你的习惯处理：
-
-| 你说 | 助手处理 |
-| --- | --- |
-| “这段帮我归档” | 判断放收件箱、今日日志、项目、例行工作还是归档，并写入文件 |
-| “这个任务继续跑完” | 直接推进到产物和验证，不停在建议 |
-| “这个自动任务还在跑吗” | 检查任务配置、最近运行、日志和产物 |
-| “这个文件怎么整理” | 先读真实文件，再给分类和下一步 |
-| “复盘一下” | 写失败原因、改进规则和后续检查点 |
-
-## 下一步
-
-你不用先学完 Obsidian。接下来只按这个顺序：
-
-1. 有东西就丢收件箱。
-2. 每天写今日日志。
-3. 每周把收件箱里的内容归到项目或例行工作。
-4. 需要问怎么放、怎么写、怎么找，就用 `ask` 或直接问我。
+当前 vault：`{vault}`
 """
 
 
@@ -215,18 +164,11 @@ def ensure_overview_link(config: dict[str, Any]) -> None:
         return
     text = overview.read_text(encoding="utf-8")
     links = [
-        "- [[11 Obsidian 新手使用指南]]",
+        "- [[11 Obsidian + AI 知识行动助手使用指南]]",
         "- [[12 Codex 线程行为画像与帮助策略]]",
     ]
-    marker = "- [[10 高难长任务 Harness 复盘]]"
     for link in links:
-        if link in text:
-            marker = link
-            continue
-        if marker in text:
-            text = text.replace(marker, f"{marker}\n{link}")
-            marker = link
-        else:
+        if link not in text:
             text = text.rstrip() + f"\n{link}\n"
     overview.write_text(text, encoding="utf-8")
 
@@ -241,55 +183,43 @@ def answer_question(question: str, config: dict[str, Any]) -> str:
     q = question.strip().lower()
     vault = vault_path(config)
     if not q:
-        return "你可以问：怎么开始、怎么记录工作、怎么归档、怎么找东西、怎么写每日复盘。"
+        return "你可以问：今天先干什么、这段内容放哪、怎么记录工作、怎么复盘、怎么交给 Codex 继续。"
 
-    if any(word in q for word in ["开始", "新手", "怎么用", "入门", "打开"]):
+    if any(word in q for word in ["记录工作", "今天", "今日", "日报", "日志", "daily"]):
         return (
-            f"先打开 Obsidian 仓库 `{vault}`。新手只做三步："
-            "1. 零碎内容放 `00 收件箱`；2. 当天进展放 `01 今日日志`；"
-            "3. 持续项目放 `02 项目`。不要一开始折腾复杂插件。"
-        )
-    if any(word in q for word in ["记录工作", "今日", "日报", "日志", "daily"]):
-        return (
-            "记录工作用 `daily`：写今天完成了什么、下一步是什么、卡点是什么。"
-            "推荐命令：`python .\\obsidian_assistant.py daily --done \"完成事项\" --next \"下一步\" --blocker \"卡点\"`。"
-        )
-    if any(word in q for word in ["收件箱", "capture", "临时", "想法"]):
-        return (
-            "不确定放哪里时直接放 `00 收件箱`。"
-            "推荐命令：`python .\\obsidian_assistant.py capture --title \"标题\" --body \"内容\" --tags idea`。"
-        )
-    if any(word in q for word in ["归档", "整理", "分类", "放哪"]):
-        return (
-            "归档规则：临时材料进 `00 收件箱`；今天过程进 `01 今日日志`；"
-            "持续项目进 `02 项目`；会议进 `03 会议`；重复流程进 `04 例行工作`；"
-            "阶段完成但需要追溯的内容进 `99 归档`。"
+            "今日轻量规则：今天只收敛 1-3 个重点，不要每天处理全部归档候选。"
+            "如果是具体工作，用 Action：写领域、目标、来源、任务背景、行动过程、任务成果、下一步和验收标准。"
         )
     if any(word in q for word in ["习惯", "行为", "画像", "怎么帮我", "帮助我"]):
         return (
-            "按本地行为画像处理：先查真实文件和真实状态，低风险任务直接推进，"
-            "跨系统任务读回证据，最后把产物落盘并补入口。画像入口是 "
+            "按你的习惯，助手要先读真实文件、配置和报告，再执行；低风险任务直接推进到产物和验证，"
+            "不要停在建议，也不要把需要落盘的任务伪装成提醒。行为画像入口是 "
             f"`{behavior_profile_path(config)}`。"
         )
-    if any(word in q for word in ["找", "搜索", "查", "链接", "双链"]):
+    if any(word in q for word in ["开始", "新手", "怎么用", "入门", "打开"]):
         return (
-            "找东西优先用 Obsidian 全局搜索；确定是持续项目时看 `02 项目`。"
-            "双链只链接真正会复用的页面，例如 `[[09 文件管理助手流程归档]]`。"
+            f"先打开 Obsidian vault `{vault}`。新手只做三步："
+            "1. 零碎内容放 `00 收件箱`；2. 当天进展放 `01 今日日志`；"
+            "3. 持续任务写 Action，复用知识写 Card。"
         )
-    if any(word in q for word in ["模板", "格式"]):
+    if any(word in q for word in ["放哪", "归档", "整理", "分类", "收件箱"]):
         return (
-            "模板放 `90 模板`。新手先别追求复杂模板，先固定三段："
-            "`完成了什么`、`下一步`、`卡点`。"
+            "先分生活 / 学习 / 工作，再判断 inbox、daily、project、routine、archive。"
+            "不确定就放 `00 收件箱`，保留来源；周复盘再提升到项目或例行工作。"
         )
-    if any(word in q for word in ["助手", "自动", "文件管理"]):
+    if any(word in q for word in ["复盘", "time", "周复盘", "月复盘"]):
         return (
-            "文件管理助手负责每天扫描文件、生成 HTML/Markdown/JSON 报告、写 Obsidian 复盘并发飞书。"
-            "Obsidian 使用助手负责生成指南、写收件箱、写今日日志、读取本地行为画像并回答常见用法问题。"
+            "复盘用 Time：日复盘只写完成、卡点、下一步；周复盘再处理收件箱和归档候选；"
+            "月复盘才考虑结构调整。"
         )
-
+    if any(word in q for word in ["codex", "openclaw", "交接", "继续"]):
+        return (
+            "交接用 X-AI：写清路径、目标、安全边界、用户偏好、最近上下文和验收标准。"
+            "交给 Codex 前要求它先读真实文件再执行。"
+        )
     return (
-        "这个问题我会按最小 Obsidian 工作流处理：先判断是临时输入、当天记录、持续项目、会议还是例行流程。"
-        "如果你不确定，先放 `00 收件箱`，晚点再整理。"
+        "我会按最小 Obsidian 工作流处理：先判断生活 / 学习 / 工作，再落到 Action / Card / Time / X-AI。"
+        "如果无法确认当前状态，会明确说明并要求先读本地文件或报告。"
     )
 
 
@@ -348,8 +278,136 @@ def command_daily(config: dict[str, Any], done: list[str], next_items: list[str]
     return {"ok": True, "daily": str(path)}
 
 
+def command_action_note(config: dict[str, Any], title: str, domain: str, goal: str, source: str) -> dict[str, Any]:
+    stamp = now_local().strftime("%Y%m%d-%H%M%S")
+    path = knowledge_action_dir(config) / "Action" / f"{stamp} {safe_filename(title)}.md"
+    contents = f"""# {title}
+
+类型：Action
+领域：{domain}
+来源：{source}
+创建时间：`{now_local().strftime('%Y-%m-%d %H:%M:%S %z')}`
+
+## 目标
+
+{goal}
+
+## 任务背景
+
+- 来源：{source}
+
+## 行动过程
+
+- 待补充。
+
+## 任务成果
+
+- 待验收。
+
+## 相关资料
+
+- {source}
+
+## 下一步
+
+- 明确第一步可执行动作。
+
+## 验收标准
+
+- 有明确产物。
+- 有验证证据。
+"""
+    write_text(path, contents)
+    return {"ok": True, "note": str(path)}
+
+
+def command_card_note(config: dict[str, Any], title: str, domain: str, source: str, conclusion: str) -> dict[str, Any]:
+    stamp = now_local().strftime("%Y%m%d-%H%M%S")
+    path = knowledge_action_dir(config) / "Card" / f"{stamp} {safe_filename(title)}.md"
+    contents = f"""# {title}
+
+类型：Card
+领域：{domain}
+来源：{source}
+创建时间：`{now_local().strftime('%Y-%m-%d %H:%M:%S %z')}`
+
+## 主题
+
+{title}
+
+## 适用场景
+
+- 需要复用这条经验、规则或资料时。
+
+## 关键结论
+
+{conclusion}
+
+## 相关链接
+
+- {source}
+
+## 下一步
+
+- 在下次相关任务中验证是否可复用。
+
+## 验收标准
+
+- 能被下一次任务直接引用。
+"""
+    write_text(path, contents)
+    return {"ok": True, "note": str(path)}
+
+
+def command_time_review(
+    config: dict[str, Any],
+    title: str,
+    period: str,
+    done: list[str],
+    next_items: list[str],
+) -> dict[str, Any]:
+    stamp = now_local().strftime("%Y%m%d-%H%M%S")
+    path = routine_dir(config) / "知识行动助手" / "Time" / f"{stamp} {safe_filename(title)}.md"
+
+    def bullet(items: list[str]) -> str:
+        return "".join(f"- {item}\n" for item in items if item.strip()) or "- 暂无\n"
+
+    contents = f"""# {title}
+
+类型：Time
+周期：{period}
+来源：知识行动助手
+创建时间：`{now_local().strftime('%Y-%m-%d %H:%M:%S %z')}`
+
+## 完成
+
+{bullet(done)}
+## 卡点
+
+- 暂无
+
+## 下一步
+
+{bullet(next_items)}
+## 归档候选
+
+- 日复盘只记录候选，不批量处理；周复盘再集中处理。
+
+## 结构调整
+
+- 暂无。月复盘再评估结构是否需要调整。
+
+## 验收标准
+
+- 复盘没有制造额外整理负担。
+- 下一步可执行。
+"""
+    write_text(path, contents)
+    return {"ok": True, "note": str(path)}
+
+
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Obsidian helper for the file management assistant")
+    parser = argparse.ArgumentParser(description="Obsidian helper for the knowledge action assistant")
     parser.add_argument("--config", default=str(Path(__file__).with_name("config.json")))
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -369,6 +427,24 @@ def parse_args() -> argparse.Namespace:
     daily.add_argument("--next", dest="next_items", action="append", default=[])
     daily.add_argument("--blocker", action="append", default=[])
 
+    action = sub.add_parser("action")
+    action.add_argument("--title", required=True)
+    action.add_argument("--domain", default="工作")
+    action.add_argument("--goal", required=True)
+    action.add_argument("--source", default="手动输入")
+
+    card = sub.add_parser("card")
+    card.add_argument("--title", required=True)
+    card.add_argument("--domain", default="学习")
+    card.add_argument("--source", default="手动输入")
+    card.add_argument("--conclusion", required=True)
+
+    review = sub.add_parser("review")
+    review.add_argument("--title", required=True)
+    review.add_argument("--period", default="daily")
+    review.add_argument("--done", action="append", default=[])
+    review.add_argument("--next", dest="next_items", action="append", default=[])
+
     return parser.parse_args()
 
 
@@ -383,6 +459,12 @@ def main() -> None:
         result = command_capture(config, args.title, args.body, args.tags)
     elif args.command == "daily":
         result = command_daily(config, args.done, args.next_items, args.blocker)
+    elif args.command == "action":
+        result = command_action_note(config, args.title, args.domain, args.goal, args.source)
+    elif args.command == "card":
+        result = command_card_note(config, args.title, args.domain, args.source, args.conclusion)
+    elif args.command == "review":
+        result = command_time_review(config, args.title, args.period, args.done, args.next_items)
     else:
         raise ValueError(args.command)
     print(json.dumps(result, ensure_ascii=False))
