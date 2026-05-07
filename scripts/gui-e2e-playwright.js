@@ -10,6 +10,8 @@ async page => {
     skipped: [],
     actions: [],
   };
+  const includeOpeners = /[?&]includeOpeners=1(?:&|$)/.test(page.url());
+  report.include_openers = includeOpeners;
 
   const textInput = page.locator("#freeText");
   const output = page.locator("#out");
@@ -135,6 +137,25 @@ async page => {
     input: "我应该如何处理今天下载的一批报告？",
   });
   await clickAndCapture({
+    label: "今天先干什么",
+    expectedAction: "today",
+    input: "",
+  });
+  await clickAndCapture({
+    label: "快速初始化",
+    expectedAction: "onboarding",
+    input: "",
+  });
+  if (includeOpeners) {
+    await clickAndCapture({
+      label: "打开教程 PDF",
+      expectedAction: "open-guidebook",
+      input: "",
+    });
+  } else {
+    report.skipped.push({ label: "打开教程 PDF", action: "open-guidebook", reason: "external opener; use -IncludeOpeners" });
+  }
+  await clickAndCapture({
     label: "判断放哪",
     expectedAction: "inbox-route",
     input: "NotebookLM 和 Obsidian 教程资料，后续要复用。",
@@ -179,6 +200,15 @@ async page => {
     expectedAction: "build-ai-context",
     input: "把 GUI E2E 结果交给下一轮实现。",
   });
+  if (includeOpeners) {
+    await clickAndCapture({
+      label: "打开 Obsidian",
+      expectedAction: "open-obsidian",
+      input: "",
+    });
+  } else {
+    report.skipped.push({ label: "打开 Obsidian", action: "open-obsidian", reason: "external opener; use -IncludeOpeners" });
+  }
   await clickAndCapture({
     label: "查看交互说明",
     expectedAction: "open-interaction-guide",

@@ -24,6 +24,12 @@ Run visibly:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -Headed
 ```
 
+Include buttons that open external programs or OS paths:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -IncludeOpeners
+```
+
 Attach to an existing local GUI:
 
 ```powershell

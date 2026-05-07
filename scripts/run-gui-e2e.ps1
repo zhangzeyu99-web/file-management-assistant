@@ -151,7 +151,13 @@ try {
         Wait-HttpOk -Url $BaseUrl
     }
 
-    $openArgs = @("--package", "@playwright/cli", "playwright-cli", "-s=$Session", "open", $BaseUrl)
+    $TestUrl = $BaseUrl
+    if ($IncludeOpeners) {
+        $separator = if ($TestUrl.Contains("?")) { "&" } else { "?" }
+        $TestUrl = "$TestUrl${separator}includeOpeners=1"
+    }
+
+    $openArgs = @("--package", "@playwright/cli", "playwright-cli", "-s=$Session", "open", $TestUrl)
     if ($Headed) { $openArgs += "--headed" }
     & npx.cmd @openArgs | Out-Null
 
@@ -205,6 +211,8 @@ try {
         "# GUI E2E Playwright Report",
         "",
         "- Base URL: $BaseUrl",
+        "- Test URL: $TestUrl",
+        "- Include external openers: $($result.include_openers)",
         "- OK: $($result.ok)",
         "- Actions: $($result.actions.Count)",
         "- Mechanics failures: $($result.mechanics_failures.Count)",
@@ -215,6 +223,15 @@ try {
     )
     foreach ($action in $result.actions) {
         $lines += "- $($action.label) -> $($action.request_action) http=$($action.http_status) ok=$($action.ok) output_json=$($action.output_looks_like_json)"
+    }
+    $lines += ""
+    $lines += "## Skipped"
+    if ($result.skipped.Count -eq 0) {
+        $lines += "- None"
+    } else {
+        foreach ($skip in $result.skipped) {
+            $lines += "- $($skip.label) -> $($skip.action): $($skip.reason)"
+        }
     }
     $lines += ""
     $lines += "## UX Issues"
