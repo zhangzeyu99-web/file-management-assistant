@@ -198,6 +198,10 @@ class GuiServerTests(unittest.TestCase):
             "新手 10 分钟上手",
             "本地状态概览",
             "执行结果",
+            "本地执行",
+            "交给 Codex 接管",
+            "查看高级 JSON",
+            "结果卡片",
         ]:
             self.assertIn(label, html)
         for required in [
@@ -205,11 +209,17 @@ class GuiServerTests(unittest.TestCase):
             "今日操作台",
             "本地状态概览",
             "默认只读",
+            "这不是 Codex 本体",
+            "本地 Python 服务",
+            "本地文件扫描使用配置目录",
+            "默认不展示黑色 JSON",
             "hero-illustration.png",
             "feature-icons.png",
             "interaction-guide.html",
         ]:
             self.assertIn(required, html)
+        self.assertIn("renderOutput(data, {show: false})", html)
+        self.assertIn("renderWorkbenchResult(action, data)", html)
         self.assertNotIn("<symbol", html)
         self.assertNotIn("<svg", html)
         self.assertNotIn("Codex 文件管理小助手", html)

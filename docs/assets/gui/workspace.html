@@ -79,6 +79,19 @@
       padding: 32px 18px 24px 34px;
       overflow: hidden;
     }
+    .hero-kicker {
+      width: max-content;
+      max-width: 100%;
+      margin-bottom: 14px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: var(--blue-dark);
+      border: 1px solid #d8e6fb;
+      font-size: 13px;
+      font-weight: 850;
+      letter-spacing: .02em;
+    }
     h1 {
       margin: 0;
       font-size: clamp(40px, 4.1vw, 58px);
@@ -93,6 +106,33 @@
       font-size: 17px;
       line-height: 1.72;
       letter-spacing: -.01em;
+    }
+    .boundary-grid {
+      max-width: 780px;
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .boundary-card {
+      min-height: 74px;
+      padding: 13px 15px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.78);
+      border: 1px solid #dde7f3;
+      box-shadow: 0 4px 16px rgba(16, 24, 40, .04);
+    }
+    .boundary-card strong {
+      display: block;
+      margin-bottom: 5px;
+      color: #1d2939;
+      font-size: 14px;
+    }
+    .boundary-card span {
+      display: block;
+      color: #667085;
+      font-size: 12px;
+      line-height: 1.5;
     }
     .safe-pill {
       width: max-content;
@@ -220,6 +260,59 @@
       border-color: var(--blue);
       box-shadow: 0 0 0 4px rgba(47, 110, 203, .10);
     }
+    .work-intro {
+      margin: -4px 0 14px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .input-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(240px, .65fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+    .path-box {
+      min-height: 92px;
+      padding: 15px 16px;
+      border-radius: 10px;
+      border: 1px dashed #bfd0e7;
+      background: linear-gradient(180deg, #fbfdff, #f3f7fc);
+      color: #344054;
+    }
+    .path-box strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #172033;
+      font-size: 14px;
+    }
+    .path-box p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .mode-strip {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .mode-pill {
+      padding: 11px 13px;
+      border-radius: 10px;
+      border: 1px solid #e1e8f2;
+      background: #fff;
+      color: #475467;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .mode-pill strong {
+      display: block;
+      margin-bottom: 3px;
+      color: #172033;
+      font-size: 14px;
+    }
     .quick-actions {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -247,6 +340,73 @@
       box-shadow: 0 12px 26px rgba(47, 110, 203, .24);
     }
     .quick-button:hover { border-color: #b8c5d8; }
+    .workbench-result {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid #dbe7f6;
+      background: linear-gradient(180deg, #ffffff, #f8fbff);
+      box-shadow: var(--shadow-soft);
+    }
+    .workbench-result.waiting {
+      color: var(--muted);
+      background: #fbfcfe;
+    }
+    .workbench-eyebrow {
+      margin-bottom: 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: .03em;
+    }
+    .workbench-result h3 {
+      margin: 0;
+      color: #172033;
+      font-size: 17px;
+      line-height: 1.35;
+    }
+    .workbench-result p {
+      margin: 8px 0 0;
+      color: #475467;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .result-meta {
+      display: grid;
+      gap: 6px;
+      margin-top: 12px;
+      color: #667085;
+      font-size: 12px;
+    }
+    .result-meta code {
+      padding: 1px 5px;
+      border-radius: 5px;
+      background: #eef3f8;
+      color: #344054;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .result-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 13px;
+    }
+    .result-button {
+      min-height: 32px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid #dbe5f1;
+      background: #fff;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .result-button.primary {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
     .tutorial-card {
       display: grid;
       align-content: start;
@@ -552,7 +712,7 @@
       .app { width: min(100vw - 20px, 1648px); }
       .hero { padding: 24px; }
       .safe-pill { font-size: 14px; }
-      .feature-grid, .work-row, .action-columns, .metrics, .quick-actions { grid-template-columns: 1fr; }
+      .feature-grid, .work-row, .action-columns, .metrics, .quick-actions, .boundary-grid, .input-grid, .mode-strip { grid-template-columns: 1fr; }
       .feature-card { grid-template-columns: 54px minmax(0, 1fr); padding: 18px; }
       .feature-icon { width: 48px; height: 48px; }
       .action-column { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 18px; }
@@ -566,8 +726,13 @@
     <section class="main">
       <header class="panel hero">
         <div>
+          <div class="hero-kicker">本地服务状态页 / 这不是 Codex 本体</div>
           <h1>Obsidian AI 整理工作台</h1>
-          <p class="hero-subtitle">把本地文件、Obsidian 笔记、AI 对话整理成可归档、可复盘、可继续调用的上下文资产</p>
+          <p class="hero-subtitle">按钮连接的是本地 Python 服务：读取配置目录、Obsidian vault 和最新报告；需要 AI 判断时，生成上下文交给 Codex 接管。</p>
+          <div class="boundary-grid">
+            <div class="boundary-card"><strong>本地执行</strong><span>由 gui_server.py 调用本地脚本，产出报告或 Obsidian 笔记。</span></div>
+            <div class="boundary-card"><strong>交给 Codex 接管</strong><span>只生成整理过的上下文 prompt，不假装在网页里替代 Codex。</span></div>
+          </div>
           <div class="safe-pill"><span class="shield-dot">✓</span>只读建议，不删除、不移动、不重命名、不重写源文件</div>
         </div>
         <img class="hero-art" src="/assets/gui/hero-illustration.png" alt="Obsidian AI 上下文资产工作流主视觉" />
@@ -576,41 +741,58 @@
       <section class="feature-grid">
         <article class="panel feature-card">
           <span class="sprite feature-icon folder"></span>
-          <div><h2>整理本地文件</h2><p>扫描并理解本地文件，建立结构与索引，便于查找与复用。</p></div>
+          <div><h2>整理本地文件</h2><p>本地文件扫描使用配置目录，先给报告和建议，不直接移动文件。</p></div>
         </article>
         <article class="panel feature-card">
           <span class="sprite feature-icon chat"></span>
-          <div><h2>归档 AI 对话</h2><p>将与 AI 的对话归档为可检索记录，保留关键洞见与结论。</p></div>
+          <div><h2>归档 AI 对话</h2><p>保存来源、背景、关键结论、产出路径和未完成事项。</p></div>
         </article>
         <article class="panel feature-card">
           <span class="sprite feature-icon doc"></span>
-          <div><h2>提取 AI 上下文</h2><p>从内容中提炼关键信息、背景与要点，生成可复用片段。</p></div>
+          <div><h2>提取 AI 上下文</h2><p>从已整理内容中提取来源和摘要，复制给新的 Codex 对话。</p></div>
         </article>
         <article class="panel feature-card">
           <span class="sprite feature-icon card-icon"></span>
-          <div><h2>沉淀知识卡 / 今日行动</h2><p>把知识与洞见沉淀为知识卡，生成今日行动清单。</p></div>
+          <div><h2>沉淀知识卡 / 今日行动</h2><p>把经验写成知识卡，把今天只收敛成 1-3 个重点。</p></div>
         </article>
       </section>
 
       <section class="work-row">
         <div class="panel work-card">
           <h2 class="section-title"><span class="title-mark">✦</span>今日操作台</h2>
-          <textarea id="freeText" placeholder="把你现在要处理的内容贴进来"></textarea>
+          <p class="work-intro">这里用于输入一段文字、任务或 AI 对话摘要。它不是文件选择框；文件雷达会按 config.json 里的扫描目录执行。</p>
+          <div class="input-grid">
+            <textarea id="freeText" placeholder="贴入一段内容，或写：我今天要整理 NotebookLM / Obsidian 资料"></textarea>
+            <div class="path-box">
+              <strong>扫描范围</strong>
+              <p>本地文件扫描使用配置目录，不靠粘贴文件内容。当前版本只做报告和建议；下一步再补文件/目录选择器。</p>
+            </div>
+          </div>
+          <div class="mode-strip">
+            <div class="mode-pill"><strong>本地执行</strong>点击后会请求 /api/action，由本地 Python 服务跑脚本。</div>
+            <div class="mode-pill"><strong>交给 Codex 接管</strong>点击后生成上下文 prompt，你再交给 Codex 继续处理。</div>
+          </div>
           <div class="quick-actions">
             <button class="quick-button primary" onclick="ask()">？ 问怎么用</button>
             <button class="quick-button" onclick="runAction('inbox-route')"><span class="sprite icon-sm folder"></span>判断放哪</button>
             <button class="quick-button" onclick="copyAiContextPrompt()">▣ 复制上下文</button>
           </div>
+          <section id="workbenchResult" class="workbench-result waiting">
+            <div class="workbench-eyebrow">结果卡片</div>
+            <h3>等待操作</h3>
+            <p>点击一个按钮后，这里会显示它实际调用了什么、生成了什么、下一步去哪里看。默认不展示黑色 JSON。</p>
+          </section>
           <pre id="out" class="console-output">等待操作。</pre>
         </div>
         <div class="panel tutorial-card">
-          <h2 class="section-title"><span class="title-mark">▭</span>新手 10 分钟上手</h2>
+          <h2 class="section-title"><span class="title-mark">▭</span>点击后发生什么</h2>
           <div class="steps">
-            <div class="step"><span class="step-num">1</span>第 1 步：打开教程 PDF</div>
-            <div class="step"><span class="step-num">2</span>第 2 步：点击「今天先干什么」</div>
-            <div class="step"><span class="step-num">3</span>第 3 步：把一段内容交给助手归档或提取上下文</div>
-            <div class="step"><span class="step-num">4</span>第 4 步：查看每个按钮点击后的结果</div>
+            <div class="step"><span class="step-num">1</span>页面发送请求到本地 Python 服务</div>
+            <div class="step"><span class="step-num">2</span>服务读取配置目录、报告或 Obsidian vault</div>
+            <div class="step"><span class="step-num">3</span>结果写成报告、笔记或上下文 prompt</div>
+            <div class="step"><span class="step-num">4</span>你在结果卡片里看路径、摘要和下一步</div>
           </div>
+          <button class="guide-button" onclick="runAction('today')"><span class="sprite icon-sm card-icon"></span>新手 10 分钟上手：今天先干什么</button>
           <button class="guide-button" onclick="openInteractionGuide()"><span class="sprite icon-sm doc"></span>查看交互说明图</button>
         </div>
       </section>
@@ -665,26 +847,26 @@
           <div class="metric">
             <div class="metric-label"><span class="sprite icon-sm folder"></span>扫描文件数</div>
             <div class="metric-value" id="totalFiles">-</div>
-            <div class="metric-delta">今日 +268</div>
+            <div class="metric-delta">来自最新文件雷达</div>
           </div>
           <div class="metric">
             <div class="metric-label"><span class="sprite icon-sm card-icon"></span>扫描候选数</div>
             <div class="metric-value" id="archiveCount">-</div>
-            <div class="metric-delta">今日 +48</div>
+            <div class="metric-delta">来自最新报告</div>
           </div>
           <div class="metric">
             <div class="metric-label"><span class="sprite icon-sm chat"></span>Obsidian 笔记数</div>
             <div class="metric-value" id="totalNotes">-</div>
-            <div class="metric-delta">今日 +27</div>
+            <div class="metric-delta">来自知识库体检</div>
           </div>
           <div class="metric">
             <div class="metric-label"><span class="sprite icon-sm doc"></span>最新报告</div>
             <div class="metric-value" style="font-size:18px;letter-spacing:0" id="latestReportTime">-</div>
-            <div class="metric-delta">今日生成</div>
+            <div class="metric-delta">页面刷新时间</div>
           </div>
         </div>
         <div class="divider"></div>
-        <div class="result-head"><h2>执行结果</h2><button onclick="toggleOutput()">查看全部</button></div>
+        <div class="result-head"><h2>执行结果</h2><button onclick="toggleOutput()">查看高级 JSON</button></div>
         <div class="result-list" id="resultList">
           <div class="result-item">
             <div class="result-icon folder"></div>
@@ -720,18 +902,34 @@
       return typeof value === "number" ? value.toLocaleString("zh-CN") : "-";
     }
 
-    function renderOutput(data) {
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    function compact(value, limit = 130) {
+      const textValue = String(value ?? "").replace(/\s+/g, " ").trim();
+      if (!textValue) return "";
+      return textValue.length > limit ? `${textValue.slice(0, limit - 1)}…` : textValue;
+    }
+
+    function renderOutput(data, {show = false} = {}) {
       const out = $("out");
       out.textContent = JSON.stringify(data, null, 2);
-      out.classList.add("visible");
+      out.classList.toggle("visible", Boolean(show));
     }
 
     function setResultList(items) {
       $("resultList").innerHTML = items.map((item) => `
         <div class="result-item">
           <div class="result-icon ${item.icon || "folder"}"></div>
-          <div><div class="result-title">${item.title}</div><div class="result-sub">${item.sub}</div></div>
-          <div class="result-status">成功<span>${item.time || nowTime()}</span></div>
+          <div><div class="result-title">${escapeHtml(item.title)}</div><div class="result-sub">${escapeHtml(item.sub)}</div></div>
+          <div class="result-status">${item.ok === false ? "失败" : "成功"}<span>${item.time || nowTime()}</span></div>
         </div>
       `).join("");
     }
@@ -740,12 +938,150 @@
       const fileSummary = status.file_report?.summary || {};
       const obsidianSummary = status.obsidian_report?.summary || {};
       setResultList([
-        {title: "本地文件扫描完成", sub: `共扫描 ${formatNumber(fileSummary.total_files)} 个文件`, icon: "folder"},
-        {title: "AI 对话归档完成", sub: "新增归档 48 条对话", icon: "chat"},
-        {title: "上下文提取完成", sub: "提取上下文片段 76 条", icon: "doc"},
-        {title: "知识卡沉淀完成", sub: `当前 ${formatNumber(obsidianSummary.total_notes)} 篇笔记`, icon: "card-icon"},
-        {title: "每日复盘完成", sub: "生成今日行动清单 8 条", icon: "doc"}
+        {title: "本地服务状态", sub: "gui_server.py 已响应 /api/status", icon: "card-icon"},
+        {title: "最新文件雷达", sub: `报告路径：${status.file_report?.html_report ? compact(status.file_report.html_report, 44) : "暂无"}`, icon: "folder"},
+        {title: "扫描文件数", sub: `共 ${formatNumber(fileSummary.total_files)} 个，候选 ${formatNumber(fileSummary.counts?.archive_candidates)} 个`, icon: "doc"},
+        {title: "Obsidian 体检", sub: `当前 ${formatNumber(obsidianSummary.total_notes)} 篇笔记`, icon: "chat"},
+        {title: "默认安全边界", sub: "只读建议，不删除、不移动、不重命名", icon: "card-icon"}
       ]);
+    }
+
+    let lastResultPaths = [];
+    let lastPrompt = "";
+
+    function collectPaths(data) {
+      const result = [];
+      [
+        ["html_report", "打开 HTML 报告"],
+        ["markdown_report", "打开 Markdown 报告"],
+        ["summary_json", "打开摘要 JSON"],
+        ["note", "打开笔记"],
+        ["daily", "打开日记"],
+        ["opened", "打开位置"],
+        ["pdf", "打开 PDF"]
+      ].forEach(([key, label]) => {
+        if (data?.[key]) result.push({label, path: data[key]});
+      });
+      if (data?.file?.html_report) result.push({label: "打开文件雷达报告", path: data.file.html_report});
+      if (data?.obsidian?.markdown_report) result.push({label: "打开知识库体检", path: data.obsidian.markdown_report});
+      if (data?.url) result.push({label: "打开说明页", url: data.url});
+      return result;
+    }
+
+    function describeActionResult(action, data) {
+      const label = actionLabel(action);
+      if (!data?.ok) {
+        return {
+          title: `${label}失败`,
+          body: data?.error || "本地服务返回失败，请查看高级 JSON 获取错误详情。",
+          meta: ["状态：失败"]
+        };
+      }
+      const summary = data.summary || data || {};
+      const counts = summary.counts || data?.counts || {};
+      const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
+      const domainName = typeof data.domain === "object" ? (data.domain.name || data.domain.id) : data.domain;
+      const map = {
+        "today": {
+          title: "今天只处理轻量重点",
+          body: data.summary || "只给 1-3 个今日重点，不把全部归档候选都塞进今天。",
+          meta: ["执行方式：本地规则读取最新报告"]
+        },
+        "file-radar": {
+          title: "文件雷达已返回报告",
+          body: `报告已生成：扫描 ${formatNumber(summary.total_files)} 个文件，归档候选 ${formatNumber(counts.archive_candidates)} 个。`,
+          meta: ["执行方式：本地 Python 服务", `报告路径：${data.html_report || "暂无"}`]
+        },
+        "obsidian-health": {
+          title: "知识库体检已完成",
+          body: `当前 Obsidian 笔记 ${formatNumber(summary.total_notes)} 篇，结果写入体检报告。`,
+          meta: ["执行方式：本地 Python 服务", `报告路径：${data.markdown_report || "暂无"}`]
+        },
+        "inbox-route": {
+          title: `建议先归到：${domainName || "收件箱"}`,
+          body: data.route || "先分生活 / 学习 / 工作，再判断 Action / Card / Time / X-AI。",
+          meta: ["执行方式：本地分类规则", "不会写入或移动源文件"]
+        },
+        "ask": {
+          title: "使用建议已生成",
+          body: data.answer || "已基于本地规则回答。",
+          meta: ["执行方式：本地问答规则"]
+        },
+        "action-note": {
+          title: "Action 任务笔记已生成",
+          body: "已把输入写成一任务一笔记，便于后续复盘和追踪。",
+          meta: [`笔记路径：${data.note || "暂无"}`]
+        },
+        "card-note": {
+          title: "知识卡已沉淀",
+          body: "已把可复用经验写成 Card，后续可被 AI 上下文取用。",
+          meta: [`笔记路径：${data.note || "暂无"}`]
+        },
+        "time-review": {
+          title: "今日复盘已写入",
+          body: "已追加完成项和下一步，保持日复盘轻量。",
+          meta: [`日记路径：${data.note || data.daily || "暂无"}`]
+        },
+        "archive-ai-chat": {
+          title: "AI 对话已归档",
+          body: "这一步只保存已有对话，不承担新对话的上下文取用。",
+          meta: [`归档路径：${data.note || "暂无"}`]
+        },
+        "build-ai-context": {
+          title: "AI 上下文已提取",
+          body: `匹配 ${sourceCount} 个来源，已生成可复制给 Codex 的上下文 prompt。`,
+          meta: ["执行方式：读取已整理知识库", data.next_request || "下一步：复制 prompt 给 Codex"]
+        },
+        "onboarding": {
+          title: "初始化检查已生成",
+          body: "已列出配置、教程和启动命令，适合首次安装或换机器时检查。",
+          meta: ["执行方式：读取本地配置"]
+        },
+        "open-guidebook": {
+          title: "教程 PDF 已请求打开",
+          body: "系统会用本机默认程序打开教程文件。",
+          meta: [`打开位置：${data.opened || "暂无"}`]
+        },
+        "open-interaction-guide": {
+          title: "交互说明页已打开",
+          body: "说明页展示每个入口点击后的真实结果和边界。",
+          meta: [`说明页：${data.url || data.opened || "暂无"}`]
+        },
+        "open-obsidian": {
+          title: "Obsidian vault 已请求打开",
+          body: "系统会用本机默认程序打开 vault 路径。",
+          meta: [`打开位置：${data.opened || "暂无"}`]
+        }
+      };
+      return map[action] || {title: `${label}已完成`, body: "操作完成，查看下方路径或高级 JSON。", meta: ["状态：成功"]};
+    }
+
+    function renderWorkbenchResult(action, data) {
+      const view = describeActionResult(action, data);
+      const paths = collectPaths(data || {});
+      lastResultPaths = paths;
+      lastPrompt = data?.prompt || "";
+      const pathButtons = paths.map((item, index) => {
+        const label = escapeHtml(item.label);
+        return item.url
+          ? `<button class="result-button" onclick="window.open('${escapeHtml(item.url)}', '_blank', 'noopener')">${label}</button>`
+          : `<button class="result-button" onclick="openResultPath(${index})">${label}</button>`;
+      }).join("");
+      const promptButton = lastPrompt ? `<button class="result-button primary" onclick="copyPromptFromLast()">复制 prompt</button>` : "";
+      $("workbenchResult").classList.remove("waiting");
+      $("workbenchResult").innerHTML = `
+        <div class="workbench-eyebrow">结果卡片 · ${escapeHtml(actionLabel(action))}</div>
+        <h3>${escapeHtml(view.title)}</h3>
+        <p>${escapeHtml(compact(view.body, 220))}</p>
+        <div class="result-meta">
+          ${(view.meta || []).map((item) => `<div>${escapeHtml(compact(item, 180))}</div>`).join("")}
+        </div>
+        <div class="result-actions">
+          ${pathButtons}
+          ${promptButton}
+          <button class="result-button" onclick="toggleOutput()">查看高级 JSON</button>
+        </div>
+      `;
     }
 
     async function refreshStatus() {
@@ -771,13 +1107,15 @@
           body: JSON.stringify({action, payload})
         });
         const data = await response.json();
-        renderOutput(data);
-        await refreshStatus();
-        setResultList([{title: actionLabel(action), sub: data.ok ? "操作已完成" : (data.error || "执行失败"), icon: data.ok ? "card-icon" : "doc"}]);
+        renderOutput(data, {show: false});
+        await refreshStatus().catch(() => null);
+        renderWorkbenchResult(action, data);
+        setResultList([{title: actionLabel(action), sub: data.ok ? compact(describeActionResult(action, data).body, 52) : (data.error || "执行失败"), icon: data.ok ? "card-icon" : "doc", ok: data.ok}]);
         return data;
       } catch (error) {
         const data = {ok: false, error: String(error.stack || error)};
-        renderOutput(data);
+        renderOutput(data, {show: false});
+        renderWorkbenchResult(action, data);
         setResultList([{title: "执行失败", sub: data.error, icon: "doc"}]);
         return data;
       } finally {
@@ -832,11 +1170,30 @@
       const value = text() || "当前任务";
       const data = await api("build-ai-context", {query: value, request: value});
       if (data.prompt && navigator.clipboard) {
-        await navigator.clipboard.writeText(data.prompt);
-        $("out").textContent = "已复制上下文 prompt：\n\n" + data.prompt;
-        $("out").classList.add("visible");
+        await navigator.clipboard.writeText(data.prompt).catch(() => null);
+        renderWorkbenchResult("build-ai-context", {...data, next_request: "已复制 prompt。把它粘到 Codex，就能带着已整理上下文继续。"});
+        renderOutput({...data, copied_prompt: true}, {show: false});
       }
       return data;
+    }
+
+    function openResultPath(index) {
+      const item = lastResultPaths[index];
+      if (!item) return null;
+      if (item.url) {
+        window.open(item.url, "_blank", "noopener");
+        return null;
+      }
+      return api("open-path", {path: item.path});
+    }
+
+    async function copyPromptFromLast() {
+      if (!lastPrompt) return;
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(lastPrompt).catch(() => null);
+      }
+      $("workbenchResult").classList.remove("waiting");
+      $("workbenchResult").querySelector("p").textContent = "prompt 已复制。把它粘到 Codex，就能带着已整理上下文继续。";
     }
 
     function archiveAiChat() {
@@ -867,7 +1224,11 @@
       }
     }
 
-    refreshStatus().catch((error) => renderOutput({ok: false, error: String(error)}));
+    refreshStatus().catch((error) => {
+      const data = {ok: false, error: String(error)};
+      renderOutput(data, {show: false});
+      renderWorkbenchResult("status", data);
+    });
   </script>
 </body>
 </html>
