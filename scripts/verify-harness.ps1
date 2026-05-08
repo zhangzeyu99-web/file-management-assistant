@@ -72,7 +72,7 @@ try {
 
     Invoke-Checked "dry_run" {
         if ($SkipDryRun) { return "skipped" }
-        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu 2>&1
+        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
         $jsonLine = ($output | Where-Object { $_ -match '^\{"ok":' } | Select-Object -Last 1)
         if (-not $jsonLine) { throw "runner did not return JSON result" }
@@ -91,7 +91,7 @@ try {
 
     Invoke-Checked "obsidian_manager_dry_run" {
         if ($SkipDryRun) { return "skipped" }
-        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test -SkipFeishu 2>&1
+        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
         $jsonLine = ($output | Where-Object { $_ -match '^\{"ok":' } | Select-Object -Last 1)
         if (-not $jsonLine) { throw "obsidian manager did not return JSON result" }

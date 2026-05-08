@@ -1,7 +1,6 @@
 param(
     [ValidateSet("Run", "Test")]
-    [string]$Mode = "Run",
-    [switch]$SkipFeishu
+    [string]$Mode = "Run"
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,7 +26,7 @@ function Write-RunLog {
 }
 
 try {
-    Write-RunLog "obsidian manager start mode=$Mode skipFeishu=$SkipFeishu"
+    Write-RunLog "obsidian manager start mode=$Mode"
 
     $PythonScript = Join-Path $ScriptRoot "obsidian_manager.py"
     $ManagerOutput = python $PythonScript --config $ConfigPath --mode $Mode
@@ -40,20 +39,6 @@ try {
     $SummaryJson = [string]$ManagerResult.summary_json
     $MarkdownReport = [string]$ManagerResult.markdown_report
 
-    $FeishuResult = $null
-    if (-not $SkipFeishu) {
-        $NodeScript = Join-Path $ScriptRoot "send_obsidian_report_to_feishu.js"
-        $FeishuOutput = node $NodeScript --summary-json $SummaryJson --markdown-file $MarkdownReport
-        if ($LASTEXITCODE -ne 0) {
-            throw "Feishu sender failed with exit code $LASTEXITCODE"
-        }
-        Write-RunLog "feishu output: $FeishuOutput"
-        $FeishuResult = $FeishuOutput | Select-Object -Last 1 | ConvertFrom-Json
-    }
-    else {
-        Write-RunLog "feishu skipped by switch"
-    }
-
     $Result = [ordered]@{
         ok = $true
         mode = $Mode
@@ -62,7 +47,6 @@ try {
         obsidian_note = [string]$ManagerResult.obsidian_note
         total_notes = [int]$ManagerResult.total_notes
         counts = $ManagerResult.counts
-        feishu = $FeishuResult
         log = $LogPath
     }
     $Result | ConvertTo-Json -Depth 8 -Compress

@@ -12,7 +12,6 @@ Open a private report through GitHub if available, or create an issue with repro
 
 Do not commit:
 
-- Notification provider app secrets.
 - Access tokens.
 - Webhooks.
 - Open IDs.

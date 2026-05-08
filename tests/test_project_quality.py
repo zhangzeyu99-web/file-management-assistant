@@ -24,13 +24,6 @@ class ProjectQualityTests(unittest.TestCase):
         self.assertTrue(result["ok"], result)
         self.assertGreaterEqual(len(result["checks"]), 8)
 
-    def test_public_docs_do_not_promote_notification_bridge_as_core_feature(self) -> None:
-        result = project_quality.run_checks(self.repo)
-        bridge_check = next(item for item in result["checks"] if item["name"] == "optional_notification_positioning")
-
-        self.assertTrue(bridge_check["ok"], bridge_check)
-        self.assertNotIn("Feishu / Lark Delivery", bridge_check["evidence"])
-
     def test_past_design_ideas_are_captured_as_verifiable_principles(self) -> None:
         result = project_quality.run_checks(self.repo)
         principles = next(item for item in result["checks"] if item["name"] == "project_principles")
@@ -68,6 +61,12 @@ class ProjectQualityTests(unittest.TestCase):
         self.assertTrue(guidebook["ok"], guidebook)
         self.assertEqual(7, guidebook["evidence"]["slide_count"])
         self.assertGreater(guidebook["evidence"]["pdf_size"], 100_000)
+
+    def test_stale_legacy_files_are_removed(self) -> None:
+        result = project_quality.run_checks(self.repo)
+        stale = next(item for item in result["checks"] if item["name"] == "no_stale_legacy_files")
+
+        self.assertTrue(stale["ok"], stale)
 
     def test_readme_first_screen_explains_product_positioning(self) -> None:
         readme = (self.repo / "README.md").read_text(encoding="utf-8-sig")

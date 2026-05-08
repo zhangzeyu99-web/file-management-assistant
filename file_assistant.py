@@ -609,7 +609,7 @@ def write_obsidian_run_note(config: dict[str, Any], summary: dict[str, Any], mar
             "",
             "- 自动扫描、分类、生成清单。",
             "- 自动写 Obsidian 复盘。",
-            "- 自动推送飞书卡片。",
+            "- 通知交给外部工具处理，本项目只落盘报告和 Obsidian 记录。",
             "- 不删除、不移动、不改名源文件。",
             "",
         ]

@@ -19,7 +19,6 @@ REQUIRED_DOCS = [
     "docs/GUI_INTERACTION_GUIDE.md",
     "docs/GUI_E2E_TESTING.md",
     "docs/PRODUCT_UI_RESEARCH.md",
-    "docs/PRODUCTIZATION_TEST_RETRO.md",
     "docs/USER_SCENARIOS.md",
     "docs/CLOSED_LOOP_USAGE.md",
     "docs/ARCHITECTURE.md",
@@ -69,6 +68,15 @@ TEXT_SUFFIXES = {".md", ".py", ".json", ".ps1", ".js", ".yml", ".yaml", ".txt"}
 MOJIBAKE_PATTERNS.extend(["\u9435", "\u6d60\u5a09", "\u701b\ufe3f", "\u5b80\u30e4", "\u923f", "\u9354\u256a", "\u93c0\u6735", "\u8930\u6385", "\u6d93\u20ac", "\ufffd"])
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", ".playwright-cli", "node_modules", "output", "tests"}
 SKIP_FILES = {"config.local.json", "gui-server.err.log", "gui-server.out.log", "project_quality.py"}
+STALE_LEGACY_FILES = [
+    "docs/PRODUCTIZATION_TEST_RETRO.md",
+    "docs/UX_FEEDBACK.md",
+    "docs/assets/file-management-assistant-cover.svg",
+    "docs/assets/knowledge-action-assistant-cover.png",
+    "docs/assets/gui/hero-illustration.png",
+    "send_report_to_feishu.js",
+    "send_obsidian_report_to_feishu.js",
+]
 
 
 def read_text(root: Path, relative: str) -> str:
@@ -154,16 +162,6 @@ def check_project_principles(root: Path) -> dict[str, Any]:
     return ok_check("project_principles", found)
 
 
-def check_optional_notification_positioning(root: Path) -> dict[str, Any]:
-    readme = read_text(root, "README.md")
-    discouraged = ["Feishu / Lark Delivery", "Feishu/Lark notification", "Feishu/Lark card"]
-    hits = [item for item in discouraged if item in readme]
-    evidence = "README uses generic optional notification wording"
-    if hits:
-        return fail_check("optional_notification_positioning", {"discouraged": hits, "evidence": readme})
-    return ok_check("optional_notification_positioning", evidence)
-
-
 def check_thin_gui_and_non_destructive_code(root: Path) -> dict[str, Any]:
     gui = read_text(root, "gui_server.py")
     required_imports = ["import file_assistant", "import obsidian_assistant", "import obsidian_manager"]
@@ -217,6 +215,13 @@ def check_guidebook_assets(root: Path) -> dict[str, Any]:
     if not pdf.exists() or evidence["pdf_size"] < 100_000 or len(slides) != 7:
         return fail_check("guidebook_assets", evidence)
     return ok_check("guidebook_assets", evidence)
+
+
+def check_no_stale_legacy_files(root: Path) -> dict[str, Any]:
+    present = [relative for relative in STALE_LEGACY_FILES if (root / relative).exists()]
+    if present:
+        return fail_check("no_stale_legacy_files", present)
+    return ok_check("no_stale_legacy_files", STALE_LEGACY_FILES)
 
 
 def check_scenario_workflow(root: Path) -> dict[str, Any]:
@@ -309,12 +314,12 @@ def run_checks(root: Path) -> dict[str, Any]:
         check_local_config_is_private(root),
         check_safety_policy(root),
         check_project_principles(root),
-        check_optional_notification_positioning(root),
         check_thin_gui_and_non_destructive_code(root),
         check_scenario_workflow(root),
         check_validation_harness(root),
         check_backup_manifest(root),
         check_guidebook_assets(root),
+        check_no_stale_legacy_files(root),
         check_mojibake_scan(root),
     ]
     return {

@@ -14,16 +14,9 @@ python .\tests\test_config_loader.py -v
 python .\tests\test_obsidian_assistant.py -v
 python .\tests\test_obsidian_manager.py -v
 python .\tests\test_gui_server.py -v
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test -SkipFeishu
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test -SkipFeishu
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1
-```
-
-If optional notification delivery changed, also run:
-
-```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1
 ```
 
 ## Release Checklist

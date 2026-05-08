@@ -102,10 +102,10 @@ def build_guide(config: dict[str, Any]) -> str:
 ## 四层结构
 
 ```text
-输入层：本地文件 / Obsidian 笔记 / Codex 会话 / OpenClaw 记录 / 手动输入
+输入层：本地文件 / Obsidian 笔记 / AI 对话 / 手动输入
 判断层：生活 / 学习 / 工作 + Action / Card / Time / X-AI
-执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / Codex 交接
-输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / Codex prompt / 可选通知
+执行层：整理资料 / 回顾知识 / 提取上下文 / 今日提醒
+输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / AI 上下文包
 ```
 
 ## 你每天只需要做什么
