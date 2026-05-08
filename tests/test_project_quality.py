@@ -159,6 +159,8 @@ class ProjectQualityTests(unittest.TestCase):
             self.assertIn(phrase, script)
         self.assertIn("e2eLocalPath", runner)
         self.assertIn("LocalPathForE2E", runner)
+        self.assertIn("[string]$Browser", runner)
+        self.assertIn("--browser", runner)
         self.assertIn("read-only flag did not reach browser", runner)
 
 

@@ -50,6 +50,20 @@ Strict UX mode fails when known UX issues still exist:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -StrictUx
 ```
 
+### Chrome Channel
+
+Use the system Chrome browser for a closer user-facing smoke test:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -Browser chrome -StrictUx
+```
+
+For the live GUI:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -BaseUrl http://127.0.0.1:8765/ -Browser chrome -ReadOnly -StrictUx
+```
+
 ## Current UX checks
 
 The E2E audit now verifies these product-level behaviors:

@@ -1,6 +1,8 @@
 param(
     [string]$BaseUrl = "",
     [int]$Port = 8767,
+    [ValidateSet("chromium", "chrome", "firefox", "webkit", "msedge")]
+    [string]$Browser = "chromium",
     [switch]$Headed,
     [switch]$StrictUx,
     [switch]$ReadOnly,
@@ -23,7 +25,7 @@ function Add-QueryParam {
         [string]$Value
     )
     if ([string]::IsNullOrWhiteSpace($Value)) { return $Url }
-    $separator = if ($Url.Contains("?")) { "&" } else { "?" }
+    $separator = if ($Url.Contains("?")) { ";" } else { "?" }
     return "$Url$separator$Name=$([uri]::EscapeDataString($Value))"
 }
 
@@ -169,18 +171,17 @@ try {
 
     $TestUrl = $BaseUrl
     $TestUrl = Add-QueryParam -Url $TestUrl -Name "e2eLocalPath" -Value $LocalPathForE2E
-    $UrlFlags = @()
     if ($IncludeOpeners) {
-        $UrlFlags += "includeOpeners=1"
+        $TestUrl = Add-QueryParam -Url $TestUrl -Name "includeOpeners" -Value "1"
     }
     if ($ReadOnly) {
-        $UrlFlags += "readOnly=1"
-    }
-    if ($UrlFlags.Count -gt 0) {
-        $TestUrl = "$TestUrl#$($UrlFlags -join ';')"
+        $TestUrl = Add-QueryParam -Url $TestUrl -Name "readOnly" -Value "1"
     }
 
     $openArgs = @("--package", "@playwright/cli", "playwright-cli", "-s=$Session", "open", $TestUrl)
+    if ($Browser -ne "chromium") {
+        $openArgs += @("--browser", $Browser)
+    }
     if ($Headed) { $openArgs += "--headed" }
     & npx.cmd @openArgs | Out-Null
 
@@ -204,6 +205,7 @@ try {
     & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" close | Out-Null
 
     $result | Add-Member -NotePropertyName "base_url" -NotePropertyValue $BaseUrl -Force
+    $result | Add-Member -NotePropertyName "browser" -NotePropertyValue $Browser -Force
     $result | Add-Member -NotePropertyName "run_dir" -NotePropertyValue $RunDir -Force
     $result | Add-Member -NotePropertyName "screenshot" -NotePropertyValue $screenshot -Force
 
@@ -240,6 +242,7 @@ try {
         "- Test URL: $TestUrl",
         "- Include external openers: $($result.include_openers)",
         "- Read-only smoke mode: $($result.read_only)",
+        "- Browser: $Browser",
         "- OK: $($result.ok)",
         "- Actions: $($result.actions.Count)",
         "- Mechanics failures: $($result.mechanics_failures.Count)",
@@ -283,6 +286,7 @@ try {
         result_json = $jsonPath
         summary_md = $mdPath
         screenshot = $screenshot
+        browser = $Browser
         actions = $result.actions.Count
         mechanics_failures = $result.mechanics_failures.Count
         ux_issues = $result.ux_issues.Count

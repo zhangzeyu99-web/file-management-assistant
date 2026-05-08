@@ -17,7 +17,7 @@ async page => {
   const includeOpeners = /[?&#;]includeOpeners=1(?:[&;#]|$)/.test(page.url());
   const readOnly = /[?&#;]readOnly=1(?:[&;#]|$)/.test(page.url());
   function queryParam(name) {
-    const match = page.url().match(new RegExp(`[?&]${name}=([^&#]*)`));
+    const match = page.url().match(new RegExp(`[?&;]${name}=([^&#;]*)`));
     return match ? decodeURIComponent(match[1].replace(/\+/g, " ")) : "";
   }
   const e2eLocalPath = queryParam("e2eLocalPath");
