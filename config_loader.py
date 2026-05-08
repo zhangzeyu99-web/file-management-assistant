@@ -11,6 +11,7 @@ PATH_KEYS = {
     "runtime_root",
     "obsidian_vault",
     "obsidian_run_dir",
+    "knowledge_root",
     "codex_executable",
     "feishu_helper",
 }

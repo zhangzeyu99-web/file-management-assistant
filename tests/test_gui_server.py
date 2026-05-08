@@ -70,7 +70,7 @@ class GuiServerTests(unittest.TestCase):
         status = gui_server.build_status(self.config_path)
 
         self.assertTrue(status["ok"])
-        self.assertEqual("知识行动助手", status["product"]["name"])
+        self.assertEqual("本地知识整理助手", status["product"]["name"])
         self.assertEqual(3, status["file_report"]["summary"]["total_files"])
         self.assertTrue(status["file_report"]["html_report"].endswith("report.html"))
         self.assertEqual(2, status["obsidian_report"]["summary"]["total_notes"])
@@ -207,31 +207,41 @@ class GuiServerTests(unittest.TestCase):
         self.assertIn("继续优化产品首屏", context["prompt"])
         self.assertIn("AI 上下文取用", context["prompt"])
 
-    def test_html_exposes_scenario_first_buttons_without_mojibake(self) -> None:
+    def test_core_knowledge_actions_are_exposed_through_gui_api(self) -> None:
+        organize = gui_server.run_gui_action(
+            "organize",
+            {"kind": "text", "text": "NotebookLM Obsidian 教程需要整理", "source": "GUI test"},
+            self.config_path,
+        )
+        review = gui_server.run_gui_action("review", {"query": "NotebookLM Obsidian"}, self.config_path)
+        extract = gui_server.run_gui_action("extract", {"query": "NotebookLM", "request": "继续学习 Obsidian"}, self.config_path)
+        remind = gui_server.run_gui_action("remind", {}, self.config_path)
+
+        for action, result in {
+            "organize": organize,
+            "review": review,
+            "extract": extract,
+            "remind": remind,
+        }.items():
+            self.assertTrue(result["ok"], result)
+            self.assertEqual(action, result["action"])
+            for key in ["summary", "sources", "artifacts", "next_actions", "safety", "debug"]:
+                self.assertIn(key, result, result)
+        self.assertIn("AI 上下文包", extract["summary"])
+        self.assertIn("今日提醒", remind["summary"])
+
+    def test_html_exposes_four_core_entries_without_product_drift(self) -> None:
         html = gui_server.HTML
 
         for label in [
-            "今天先干什么",
-            "记录一个任务",
-            "这段内容放哪",
-            "复盘今天",
-            "检查知识库",
-            "归档 AI 对话",
-            "提取 AI 上下文",
-            "复制上下文 prompt",
-            "查看文件雷达",
-            "打开 Obsidian",
-            "快速初始化",
-            "打开教程 PDF",
-            "查看交互说明图",
-            "查看交互说明",
-            "新手 10 分钟上手",
-            "本地上下文概览",
-            "上下文来源",
-            "Codex 接手包",
-            "生成 Codex 接手包",
-            "查看高级 JSON",
-            "接手包预览",
+            "本地知识整理助手",
+            "整理资料",
+            "回顾知识",
+            "提取上下文",
+            "今日提醒",
+            "AI 上下文包",
+            "高级/诊断",
+            "结果预览",
             "本地文件 / 目录目标",
             "粘贴本地路径",
             "拖放文件到这里",
@@ -239,23 +249,22 @@ class GuiServerTests(unittest.TestCase):
         ]:
             self.assertIn(label, html)
         for required in [
-            "Obsidian AI 整理工作台",
-            "本地文件",
-            "Obsidian",
-            "历史报告",
-            "本地上下文概览",
+            "成熟个人知识工作台",
+            "文本 / 文件目录 / AI 对话",
+            "答案 + 来源",
             "默认只读",
-            "整理成可复制给 Codex 的上下文",
-            "扫描目录，生成文件雷达",
+            "不删除、不移动、不重命名、不重写源文件",
             "默认不展示黑色 JSON",
             "feature-icons.png",
-            "interaction-guide.html",
             'id="localPaths"',
             'id="fileDropZone"',
             'type="file"',
+            "runCoreAction('organize')",
+            "runCoreAction('review')",
+            "runCoreAction('extract')",
+            "runCoreAction('remind')",
             "inspect-local-targets",
             "readLocalTargets()",
-            "runFileRadar()",
         ]:
             self.assertIn(required, html)
         self.assertIn("renderOutput(data, {show: false})", html)
@@ -269,6 +278,9 @@ class GuiServerTests(unittest.TestCase):
         self.assertNotIn("执行结果", html)
         self.assertNotIn("伪控制台", html)
         self.assertNotIn("可视化上下文入口", html)
+        self.assertNotIn("Obsidian AI 整理工作台", html)
+        self.assertNotIn("Codex 接手包", html)
+        self.assertNotIn("生成 Codex 接手包", html)
         self.assertNotIn("这不是 Codex 本体", html)
         self.assertNotIn("不是替代 Codex", html)
         self.assertNotIn("hero-kicker", html)

@@ -51,7 +51,7 @@ try {
     }
 
     Invoke-Checked "unit_tests" {
-        $output = cmd.exe /d /c "python .\tests\test_config_loader.py -v 2>&1 && python .\tests\test_file_assistant.py -v 2>&1 && python .\tests\test_obsidian_assistant.py -v 2>&1 && python .\tests\test_obsidian_manager.py -v 2>&1 && python .\tests\test_scenario_playbook.py -v 2>&1 && python .\tests\test_gui_server.py -v 2>&1 && python .\tests\test_assistant_evolution.py -v 2>&1 && python .\tests\test_project_quality.py -v 2>&1"
+        $output = cmd.exe /d /c "python .\tests\test_config_loader.py -v 2>&1 && python .\tests\test_file_assistant.py -v 2>&1 && python .\tests\test_obsidian_assistant.py -v 2>&1 && python .\tests\test_obsidian_manager.py -v 2>&1 && python .\tests\test_scenario_playbook.py -v 2>&1 && python .\tests\test_knowledge_assistant.py -v 2>&1 && python .\tests\test_gui_server.py -v 2>&1 && python .\tests\test_assistant_evolution.py -v 2>&1 && python .\tests\test_project_quality.py -v 2>&1"
         $exitCode = $LASTEXITCODE
         if ($exitCode -ne 0) { throw ($output -join "`n") }
         return ($output -join "`n")
@@ -109,18 +109,48 @@ try {
     }
 
     Invoke-Checked "scheduled_task" {
-        $task = Get-ScheduledTask -TaskName "Codex File Management Assistant" -TaskPath "\"
+        $task = Get-ScheduledTask -TaskName "Knowledge Organizer Assistant" -TaskPath "\"
         $action = $task.Actions | Select-Object -First 1
         if ($task.State -notin @("Ready", "Running")) { throw "unexpected task state: $($task.State)" }
-        if ($action.Arguments -notlike "*D:\codex\file-management-assistant\run-file-assistant.ps1*") {
+        if ($action.Arguments -notlike "*run-knowledge-assistant.ps1*" -or $action.Arguments -notlike "*-Action remind*") {
             throw "scheduled task points to unexpected runner: $($action.Arguments)"
         }
-        $info = Get-ScheduledTaskInfo -TaskName "Codex File Management Assistant" -TaskPath "\"
+        $trigger = $task.Triggers | Select-Object -First 1
+        if ($trigger.StartBoundary -notlike "*T09:00:*") {
+            throw "scheduled task is not configured for 09:00: $($trigger.StartBoundary)"
+        }
+        $info = Get-ScheduledTaskInfo -TaskName "Knowledge Organizer Assistant" -TaskPath "\"
         return [ordered]@{
             state = [string]$task.State
             arguments = [string]$action.Arguments
+            trigger = [string]$trigger.StartBoundary
             last_task_result = [int]$info.LastTaskResult
             next_run_time = [string]$info.NextRunTime
+        }
+    }
+
+    Invoke-Checked "gui_e2e" {
+        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -StrictUx 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
+        $jsonLine = ($output | Where-Object { $_ -match '^\{' } | Select-Object -Last 1)
+        if (-not $jsonLine) { throw "GUI E2E did not return JSON result" }
+        $parsed = $output -join "`n" | ConvertFrom-Json
+        if (-not $parsed.ok -or -not $parsed.strict_ok) { throw "GUI E2E returned failing result" }
+        return $parsed
+    }
+
+    Invoke-Checked "backup_manifest" {
+        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\export-backup-manifest.ps1 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
+        $parsed = $output -join "`n" | ConvertFrom-Json
+        if (-not $parsed.ok) { throw "backup manifest returned ok=false" }
+        if (-not (Test-Path -LiteralPath $parsed.output)) { throw "manifest output missing: $($parsed.output)" }
+        if ($parsed.excluded_private_scope -notcontains "config.local.json") { throw "manifest does not document config.local.json exclusion" }
+        return [ordered]@{
+            commit = $parsed.commit
+            origin = $parsed.origin
+            output = $parsed.output
+            restore_commands = $parsed.restore_commands
         }
     }
 

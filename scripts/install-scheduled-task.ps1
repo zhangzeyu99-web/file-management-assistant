@@ -1,20 +1,29 @@
 param(
-    [string]$TaskName = "Codex File Management Assistant",
-    [string]$At = "20:30"
+    [string]$TaskName = "Knowledge Organizer Assistant",
+    [string]$At = "09:00",
+    [switch]$KeepLegacyTask
 )
 
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$Runner = Join-Path $RepoRoot "run-file-assistant.ps1"
+$Runner = Join-Path $RepoRoot "run-knowledge-assistant.ps1"
 
 if (-not (Test-Path -LiteralPath $Runner)) {
     throw "Runner not found: $Runner"
 }
 
+if (-not $KeepLegacyTask) {
+    $legacy = Get-ScheduledTask -TaskName "Codex File Management Assistant" -TaskPath "\" -ErrorAction SilentlyContinue
+    if ($legacy) {
+        Unregister-ScheduledTask -TaskName "Codex File Management Assistant" -TaskPath "\" -Confirm:$false
+    }
+}
+
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Runner`""
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Runner`" -Action remind -Config `"$RepoRoot\config.json`""
 
 $Trigger = New-ScheduledTaskTrigger -Daily -At $At
 $Principal = New-ScheduledTaskPrincipal `
@@ -27,7 +36,7 @@ Register-ScheduledTask `
     -Action $Action `
     -Trigger $Trigger `
     -Principal $Principal `
-    -Description "Daily file archive review reminder and Feishu report." `
+    -Description "Generate 1-3 local knowledge reminders at 09:00. Writes new notes only; does not move source files." `
     -Force | Out-Null
 
 Get-ScheduledTask -TaskName $TaskName -TaskPath "\" |

@@ -1,63 +1,52 @@
 # Architecture
 
-The project is an Obsidian AI organizing workspace. File scanning is one capability, but the main workflow is scenario-first: local files, Obsidian notes, and AI conversations become archive records, reusable knowledge, daily actions, and AI-usable context.
-
-## Four-Layer Architecture
+本地知识整理助手采用薄 GUI + 统一 action 内核。
 
 ```text
-输入层：本地文件 / Obsidian 笔记 / AI 对话记录 / 手动输入
-判断层：生活 / 学习 / 工作 + Action / Card / Time / X-AI
-执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / AI 对话归档 / AI 上下文取用
-输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / AI 上下文 prompt / 可选通知
+输入
+文本 / 本地路径 / AI 对话 / Obsidian 笔记 / 历史报告
+
+内核
+knowledge_assistant.py
+organize / review / extract / remind
+
+旧能力
+file-radar / obsidian-health / legacy-index / archive-ai-chat
+
+输出
+Obsidian 新笔记 / 本地 runtime / AI 上下文包 / 今日提醒
 ```
 
-## Components
+## Core Action Layer
 
-| Component | Role |
-| --- | --- |
-| `config_loader.py` | Loads `config.json`, merges `config.local.json`, expands path variables. |
-| `file_assistant.py` | File radar: scans configured folders and renders JSON / Markdown / HTML reports. |
-| `obsidian_manager.py` | Read-only Obsidian vault health check. |
-| `obsidian_assistant.py` | Guide, Q&A, inbox capture, daily notes, and ACT note helpers. |
-| `assistant_evolution.py` | Guidebook catalog, self-evolution report, AI conversation archive, and AI context retrieval. |
-| `scenario_playbook.py` | Scenario-first workflow catalog and ACT templates. |
-| `gui_server.py` | Thin GUI over the same modules and action API. |
+所有推荐入口都返回统一结构：
 
-## Data Flow
-
-```text
-config.json + config.local.json
-        |
-        v
-本地文件 / Obsidian / AI 对话输入
-        |
-        v
-scenario_playbook.py + assistant_evolution.py
-        |
-        +--> file_assistant.py -------> report.md / report.html / summary.json
-        +--> obsidian_manager.py -----> Obsidian health report
-        +--> obsidian_assistant.py ---> Action / Card / Time notes
-        +--> assistant_evolution.py --> AI 对话归档 / AI 上下文 prompt
-        +--> gui_server.py -----------> scenario buttons and natural-language actions
+```json
+{
+  "ok": true,
+  "action": "organize",
+  "summary": "做了什么",
+  "sources": [],
+  "artifacts": [],
+  "next_actions": [],
+  "safety": "不删除、不移动、不重命名、不重写源文件",
+  "debug": {}
+}
 ```
 
-## Safety Boundary
+## GUI Layer
 
-The code can create reports and write explicitly requested Obsidian helper notes. It does not delete, move, rename, or rewrite source files.
+`docs/assets/gui/workspace.html` 只负责展示和调用 API：
 
-Allowed write targets:
+- 主入口：整理资料、回顾知识、提取上下文、今日提醒。
+- 本地文件 / 目录目标：支持粘贴路径、选择文件、拖放文件。
+- 结果卡：展示做了什么、来源是什么、产物在哪、下一步能点什么。
+- 高级/诊断：保留旧 action，但不作为新用户主线。
 
-- Runtime report directory.
-- Obsidian report directory.
-- New inbox notes created by `capture`.
-- Daily notes appended by `daily`.
-- New Action / Card / Time notes created by ACT helpers.
-- New AI conversation archive notes created by `archive-ai-chat`.
+## Safety
 
-Blocked by design:
+The default behavior does not delete, move, rename, or rewrite source files. Write actions only create new Obsidian notes or runtime evidence.
 
-- Delete.
-- Move.
-- Rename.
-- Bulk rewrite of existing source notes.
-- Unbounded full-disk scan.
+## Backup Boundary
+
+GitHub stores project code, docs, templates, tests, config samples, and scripts. Personal Obsidian vaults and `config.local.json` remain private.

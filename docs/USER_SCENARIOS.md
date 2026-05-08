@@ -1,51 +1,21 @@
 # User Scenarios
 
-The assistant should start from user language, not internal commands. The important product distinction is:
+## 1. 整理资料
 
-- **AI 对话归档**: organize an existing AI conversation into a traceable Obsidian record.
-- **AI 上下文取用**: retrieve already-organized knowledge and reports for a new AI conversation.
+用户把一段文本、一个本地路径或一段 AI 对话放进 GUI，点击 `整理资料`。系统调用 `organize`，写入 Obsidian 新整理记录，包含来源、生活 / 学习 / 工作判断、归档建议和下一步。
 
-| GUI entry | User phrase | What it does | Default safety |
-| --- | --- | --- | --- |
-| 今天先干什么 | 今天先干什么 | Reads latest reports and returns only 1-3 daily priorities. | Does not process every archive candidate. |
-| 查看文件雷达 | 看看哪些文件要管 | Lists recent files, archive candidates, large files, duplicates. | Report only; no delete, move, rename, or rewrite. |
-| 这段内容放哪 | 这段内容放哪 | Routes by 生活 / 学习 / 工作, then inbox/daily/project/routine/archive. | Keeps source text and path. |
-| 记录一个任务 | 记录一个任务 | Writes an Action note with goal, background, process, result, next step, acceptance checks. | Writes a new note only. |
-| 沉淀知识卡 | 这个以后会复用 | Writes a Card note with source, use case, conclusion, links, next step. | Does not force complex backlinks. |
-| 复盘今天 | 复盘今天 | Writes a lightweight Time review. | Daily review stays lightweight; backlog is weekly/monthly. |
-| 检查知识库 | 知识库乱不乱 | Audits inbox, stubs, low-link notes, broken links, duplicate titles, and index gaps. | Does not bulk rewrite the vault. |
-| 归档 AI 对话 | 整理这段 AI 对话 | Saves source, background, key conclusions, output paths, and open items. | Writes a new archive note only. |
-| 提取 AI 上下文 | 给 AI 补上下文 | Retrieves relevant notes, cards, project records, and reports for a new AI conversation. | Reads existing records only. |
-| 问答助手 | 我该怎么用 | Answers Obsidian usage questions from local structure and rules. | Does not invent current state. |
+## 2. 回顾知识
 
-## Today Scenario
+用户输入关键词或问题，点击 `回顾知识`。系统调用 `review`，检索 Obsidian、助手报告、AI 归档和旧资料索引，返回本地摘要、匹配来源和路径。
 
-今日轻量规则:
+## 3. 提取上下文
 
-- Choose 1-3 daily priorities.
-- Start with today-related files and notes.
-- Do not process every archive candidate every day.
-- Split first by 生活 / 学习 / 工作.
-- If unsure, write to `00 收件箱` and preserve source.
+用户准备继续问 AI，输入当前任务并点击 `提取上下文`。系统调用 `extract`，生成 AI 上下文包，包含来源路径、压缩摘要、安全边界和下一步请求。
 
-## ACT Outputs
+## 4. 今日提醒
 
-- Action: task note.
-- Card: reusable knowledge note.
-- Time: daily, weekly, or monthly review.
-- X-AI: AI context retrieval note or prompt with source paths, boundaries, and next request.
+用户点击 `今日提醒`，或每天 9 点计划任务触发。系统调用 `remind`，只生成 1-3 个重点，不处理全部 backlog，不触发整理或文件移动。
 
-## Scenario Demo
+## 5. 高级/诊断
 
-Run:
-
-```powershell
-python .\scenario_playbook.py demo --config .\config.json
-```
-
-Expected outputs:
-
-- Runtime JSON report.
-- Runtime Markdown report.
-- Obsidian scenario report.
-- `acceptance_checks` for every scenario.
+旧能力仍可用：`file-radar` 查看文件雷达，`obsidian-health` 检查知识库，`legacy-index` 二次整理旧资料索引。它们只生成报告或索引，不移动旧文件。

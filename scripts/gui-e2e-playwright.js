@@ -5,11 +5,15 @@ async page => {
     started_at: startedAt,
     page_url: page.url(),
     title: "",
+    include_openers: false,
+    read_only: false,
+    e2e_local_path: "",
     mechanics_failures: [],
     ux_issues: [],
     skipped: [],
     actions: [],
   };
+
   const includeOpeners = /[?&#;]includeOpeners=1(?:[&;#]|$)/.test(page.url());
   const readOnly = /[?&#;]readOnly=1(?:[&;#]|$)/.test(page.url());
   function queryParam(name) {
@@ -57,7 +61,14 @@ async page => {
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
-  async function clickAndCapture({ label, expectedAction, input = "", expectPopup = false }) {
+  function buttonLocator(label, scope = "body") {
+    return page
+      .locator(scope)
+      .getByRole("button", { name: new RegExp(`^\\s*${escapeRegExp(label)}\\s*$`) })
+      .first();
+  }
+
+  async function clickAndCapture({ label, expectedAction, input = "", scope = "body", expectPopup = false }) {
     const item = {
       label,
       expected_action: expectedAction,
@@ -85,7 +96,7 @@ async page => {
         ? page.waitForEvent("popup", { timeout: 5000 }).catch(() => null)
         : Promise.resolve(null);
 
-      const button = page.getByRole("button", { name: new RegExp(escapeRegExp(label)) }).first();
+      const button = buttonLocator(label, scope);
       await button.scrollIntoViewIfNeeded();
       await button.click();
 
@@ -105,7 +116,7 @@ async page => {
       item.output_visible = await isOutputVisible();
       const outputText = await visibleText("#out");
       item.output_looks_like_json = /^\s*\{[\s\S]*\}\s*$/.test(outputText);
-      item.result_text = await visibleText("#resultList");
+      item.result_text = `${await visibleText("#workbenchResult")}\n${await visibleText("#resultList")}`;
       item.ok = item.http_status >= 200 && item.http_status < 400 && item.response_ok && item.request_action === expectedAction;
 
       if (!item.ok) {
@@ -124,6 +135,12 @@ async page => {
           action: expectedAction,
         });
       }
+      if (!/做了什么|来源|产物|下一步|结果|已生成|已写入|匹配|提醒|本地摘要/.test(item.result_text)) {
+        addIssue("unclear-result-card", "result card does not clearly explain outcome, sources, artifacts, or next steps", {
+          label,
+          action: expectedAction,
+        });
+      }
     } catch (error) {
       item.error = String(error && error.message ? error.message : error);
       addFailure("button click failed", { label, expected_action: expectedAction, error: item.error });
@@ -134,6 +151,28 @@ async page => {
   report.title = await page.title();
 
   const bodyText = await page.locator("body").innerText();
+  const mustHave = [
+    "本地知识整理助手",
+    "整理资料",
+    "回顾知识",
+    "提取上下文",
+    "今日提醒",
+    "本地文件 / 目录目标",
+    "拖放文件到这里",
+    "检查本地目标",
+    "高级/诊断",
+  ];
+  for (const phrase of mustHave) {
+    if (!bodyText.includes(phrase)) {
+      addIssue("missing-core-copy", `missing required UI copy: ${phrase}`);
+    }
+  }
+  for (const obsolete of ["Codex 文件管理小助手", "可视化上下文入口", "Codex 接手包", "今日操作台", "执行结果", "伪控制台"]) {
+    if (bodyText.includes(obsolete)) {
+      addIssue("obsolete-positioning-copy", `obsolete UI copy still appears: ${obsolete}`);
+    }
+  }
+
   const fileInputCount = await page.locator("input[type=file]").count();
   const localPathInputCount = await page.locator("#localPaths").count();
   const dropZoneCount = await page.locator("#fileDropZone").count();
@@ -149,102 +188,80 @@ async page => {
     label: "检查本地目标",
     expectedAction: "inspect-local-targets",
     input: "",
+    scope: ".path-actions",
   });
-  await clickAndCapture({
-    label: "问怎么用",
-    expectedAction: "ask",
-    input: "我应该如何处理今天下载的一批报告？",
-  });
-  await clickAndCapture({
-    label: "今天先干什么",
-    expectedAction: "today",
-    input: "",
-  });
-  await clickAndCapture({
-    label: "快速初始化",
-    expectedAction: "onboarding",
-    input: "",
-  });
-  if (includeOpeners) {
-    await clickAndCapture({
-      label: "打开教程 PDF",
-      expectedAction: "open-guidebook",
-      input: "",
-    });
-  } else {
-    report.skipped.push({ label: "打开教程 PDF", action: "open-guidebook", reason: "external opener; use -IncludeOpeners" });
-  }
-  await clickAndCapture({
-    label: "判断放哪",
-    expectedAction: "inbox-route",
-    input: "NotebookLM 和 Obsidian 教程资料，后续要复用。",
-  });
+
   if (readOnly) {
+    await clickAndCapture({
+      label: "回顾知识",
+      expectedAction: "review",
+      input: "Obsidian 教程和 AI 上下文包怎么用？",
+      scope: ".primary-actions",
+    });
+    report.skipped.push({ label: "整理资料", action: "organize", reason: "read-only smoke mode" });
+    report.skipped.push({ label: "提取上下文", action: "extract", reason: "read-only smoke mode" });
+    report.skipped.push({ label: "今日提醒", action: "remind", reason: "read-only smoke mode" });
     report.skipped.push({ label: "查看文件雷达", action: "file-radar", reason: "read-only smoke mode" });
     report.skipped.push({ label: "检查知识库", action: "obsidian-health", reason: "read-only smoke mode" });
-    report.skipped.push({ label: "记录一个任务", action: "action-note", reason: "read-only smoke mode" });
-    report.skipped.push({ label: "沉淀知识卡", action: "card-note", reason: "read-only smoke mode" });
-    report.skipped.push({ label: "复盘今天", action: "time-review", reason: "read-only smoke mode" });
-    report.skipped.push({ label: "归档 AI 对话", action: "archive-ai-chat", reason: "read-only smoke mode" });
   } else {
+    await clickAndCapture({
+      label: "整理资料",
+      expectedAction: "organize",
+      input: "NotebookLM 和 Obsidian 教程资料，后续要整理为学习资料并给 AI 复用。",
+      scope: ".primary-actions",
+    });
+    await clickAndCapture({
+      label: "回顾知识",
+      expectedAction: "review",
+      input: "Obsidian 教程",
+      scope: ".primary-actions",
+    });
+    await clickAndCapture({
+      label: "提取上下文",
+      expectedAction: "extract",
+      input: "继续优化本地知识整理助手，需要已有 Obsidian 教程和 GUI 测试上下文。",
+      scope: ".primary-actions",
+    });
+    await clickAndCapture({
+      label: "今日提醒",
+      expectedAction: "remind",
+      input: "今天只做 1-3 个重点，不处理全部 backlog。",
+      scope: ".primary-actions",
+    });
+
+    await page.locator("details").first().evaluate(el => { el.open = true; });
     await clickAndCapture({
       label: "查看文件雷达",
       expectedAction: "file-radar",
       input: "",
+      scope: ".advanced-card",
     });
     await clickAndCapture({
       label: "检查知识库",
       expectedAction: "obsidian-health",
       input: "",
+      scope: ".advanced-card",
     });
     await clickAndCapture({
-      label: "记录一个任务",
-      expectedAction: "action-note",
-      input: "E2E 测试：记录一个真实任务，并确认生成 Action 笔记。",
-    });
-    await clickAndCapture({
-      label: "沉淀知识卡",
-      expectedAction: "card-note",
-      input: "E2E 发现：GUI 结果不能默认展示 JSON，要展示人能读懂的结果卡。",
-    });
-    await clickAndCapture({
-      label: "复盘今天",
-      expectedAction: "time-review",
-      input: "完成 GUI E2E 真实点击测试，下一步修复输入与结果闭环。",
-    });
-    await clickAndCapture({
-      label: "归档 AI 对话",
-      expectedAction: "archive-ai-chat",
-      input: "用户反馈：操作台只显示黑框，文件扫描没有文件输入框。",
+      label: "二次整理旧资料",
+      expectedAction: "legacy-index",
+      input: "",
+      scope: ".advanced-card",
     });
   }
-  await clickAndCapture({
-    label: "提取 AI 上下文",
-    expectedAction: "build-ai-context",
-    input: "继续优化 GUI：文件输入框、人类可读结果卡、隐藏高级 JSON。",
-  });
-  await clickAndCapture({
-    label: "复制上下文 prompt",
-    expectedAction: "build-ai-context",
-    input: "把 GUI E2E 结果交给下一轮实现。",
-  });
+
   if (includeOpeners) {
+    await page.locator("details").first().evaluate(el => { el.open = true; });
     await clickAndCapture({
       label: "打开 Obsidian",
       expectedAction: "open-obsidian",
       input: "",
+      scope: ".advanced-card",
     });
   } else {
     report.skipped.push({ label: "打开 Obsidian", action: "open-obsidian", reason: "external opener; use -IncludeOpeners" });
   }
-  await clickAndCapture({
-    label: "查看交互说明",
-    expectedAction: "open-interaction-guide",
-    input: "",
-    expectPopup: true,
-  });
 
-  const fileRadar = report.actions.find(item => item.expected_action === "file-radar");
   const localTargetInspect = report.actions.find(item => item.expected_action === "inspect-local-targets");
   if (e2eLocalPath && localTargetInspect && localTargetInspect.response_ok) {
     if (localTargetInspect.response.mode !== "custom-local-paths" || !localTargetInspect.response.summary || localTargetInspect.response.summary.existing_count < 1) {
@@ -254,6 +271,8 @@ async page => {
       });
     }
   }
+
+  const fileRadar = report.actions.find(item => item.expected_action === "file-radar");
   if (fileRadar && fileRadar.response_ok) {
     if (e2eLocalPath && fileRadar.response.target_mode !== "custom-local-paths") {
       addIssue("file-radar-did-not-use-local-targets", "file radar did not use pasted local paths as scan targets", {
@@ -262,7 +281,7 @@ async page => {
       });
     }
     const resultText = `${fileRadar.result_text}\n${await visibleText("#out")}`;
-    if (!/打开|报告|路径|继续|复制/.test(resultText)) {
+    if (!/打开|报告|路径|继续|复制|产物|下一步/.test(resultText)) {
       addIssue("missing-next-action-buttons", "file radar result does not expose clear next action buttons in the main workbench", {
         action: "file-radar",
       });

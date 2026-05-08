@@ -57,7 +57,8 @@ class AssistantEvolutionTests(unittest.TestCase):
         self.assertTrue(catalog["pdf"].endswith("knowledge-action-assistant-tutorial.pdf"))
         self.assertEqual(7, catalog["page_count"])
         self.assertEqual(7, len(catalog["slides"]))
-        self.assertIn("生成 Codex 接手包", catalog["usage"])
+        self.assertIn("整理资料", catalog["usage"])
+        self.assertIn("提取上下文", catalog["usage"])
 
     def test_initialization_plan_is_fast_and_non_destructive(self) -> None:
         plan = assistant_evolution.build_initialization_plan(self.config_path)

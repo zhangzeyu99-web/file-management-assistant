@@ -24,26 +24,26 @@ REQUIRED_DOCS = [
     "docs/ARCHITECTURE.md",
     "docs/PROJECT_PRINCIPLES.md",
     "docs/SELF_EVOLUTION.md",
+    "docs/MIGRATION_BACKUP.md",
     "docs/guidebook/README.md",
 ]
 
 PRINCIPLES = {
-    "local-first": ["local-first", "local first"],
-    "report-only safety": ["report-only", "report only", "does not delete", "不删除"],
+    "local-first": ["local-first", "local first", "本地优先"],
+    "safe-by-default": ["safe-by-default", "不删除", "不移动", "不重命名", "不重写"],
     "private local configuration": ["config.local.json", "private local configuration"],
-    "knowledge action assistant": ["知识行动助手", "knowledge action assistant"],
-    "four-layer architecture": ["四层结构", "输入层", "判断层", "执行层", "输出层"],
-    "act workflow": ["Action / Card / Time / X-AI", "ACT workflow"],
-    "obsidian workflow": ["00 收件箱", "01 今日日志", "obsidian workflow"],
-    "scenario-based workflow": ["scenario-based workflow", "scenario-first", "场景入口"],
+    "local knowledge organizer": ["本地知识整理助手", "local knowledge organizer"],
+    "four core actions": ["整理 / 回顾 / 提取 / 提醒", "organize / review / extract / remind"],
+    "obsidian workflow": ["Obsidian", "新笔记", "obsidian workflow"],
+    "human-readable gui": ["成熟个人知识工作台", "默认不展示黑色 JSON", "human-readable GUI"],
+    "portable bootstrap": ["scripts/init-assistant.ps1", "demo mode", "一键初始化"],
+    "cloud backup boundary": ["GitHub 备份", "个人 Obsidian 内容不进公开仓库", "cloud backup boundary"],
     "closed loop": ["closed loop", "acceptance checks", "闭环验收"],
-    "lightweight daily triage": ["lightweight daily triage", "今日轻量规则", "不要每天处理全部归档候选"],
+    "lightweight daily triage": ["每天 9 点", "1-3 个重点", "不做定时整理"],
     "life study work separation": ["life / study / work", "生活 / 学习 / 工作"],
-    "thin gui": ["thin gui", "same underlying modules", "薄 GUI"],
+    "thin gui": ["thin gui", "GUI 只负责展示和调用"],
     "validation harness": ["validation harness", "verify-harness"],
-    "optional integrations": ["optional integrations", "notification hooks", "可选通知"],
-    "ai chat archive": ["AI 对话归档", "archive-ai-chat"],
-    "ai context retrieval": ["AI 上下文取用", "build-ai-context"],
+    "legacy compatibility": ["旧 action 保留兼容", "legacy compatibility"],
 }
 
 FORBIDDEN_PUBLIC_PATHS = [
@@ -122,12 +122,17 @@ def check_local_config_is_private(root: Path) -> dict[str, Any]:
 
 def check_safety_policy(root: Path) -> dict[str, Any]:
     docs = ["README.md", "SECURITY.md", "docs/ARCHITECTURE.md"]
-    required = ["delete", "move", "rename", "rewrite"]
+    required = {
+        "delete": ["delete", "删除"],
+        "move": ["move", "移动"],
+        "rename": ["rename", "重命名"],
+        "rewrite": ["rewrite", "重写"],
+    }
     missing: list[str] = []
     for relative in docs:
         lowered = read_text(root, relative).lower()
-        for term in required:
-            if term not in lowered:
+        for term, variants in required.items():
+            if not any(variant.lower() in lowered for variant in variants):
                 missing.append(f"{relative}: {term}")
     if missing:
         return fail_check("report_only_safety", missing)
@@ -182,12 +187,15 @@ def check_thin_gui_and_non_destructive_code(root: Path) -> dict[str, Any]:
 def check_validation_harness(root: Path) -> dict[str, Any]:
     harness = read_text(root, "scripts/verify-harness.ps1")
     required = [
+        "test_knowledge_assistant.py",
         "test_assistant_evolution.py",
         "test_scenario_playbook.py",
         "test_project_quality.py",
+        "run-gui-e2e.ps1",
         "secret_scan",
         "dry_run",
         "obsidian_manager_dry_run",
+        "backup_manifest",
     ]
     missing = [item for item in required if item not in harness]
     if missing:
@@ -211,34 +219,57 @@ def check_guidebook_assets(root: Path) -> dict[str, Any]:
 
 
 def check_scenario_workflow(root: Path) -> dict[str, Any]:
-    playbook = read_text(root, "scenario_playbook.py")
+    knowledge = read_text(root, "knowledge_assistant.py")
     gui = read_text(root, "gui_server.py")
-    docs = read_text(root, "docs/USER_SCENARIOS.md") + "\n" + read_text(root, "docs/CLOSED_LOOP_USAGE.md")
+    docs = "\n".join(
+        read_text(root, path)
+        for path in [
+            "README.md",
+            "docs/USER_SCENARIOS.md",
+            "docs/CLOSED_LOOP_USAGE.md",
+            "docs/GETTING_STARTED.md",
+            "docs/GUI_INTERACTION_GUIDE.md",
+        ]
+    )
     required = [
-        "today",
-        "file_radar",
-        "inbox_route",
-        "action_note",
-        "card_capture",
-        "time_review",
-        "obsidian_health",
-        "ai_chat_archive",
-        "ai_context_retrieval",
-        "archive-ai-chat",
-        "build-ai-context",
-        "assistant_qa",
-        "build_act_templates",
-        "今日轻量规则",
-        "生活 / 学习 / 工作",
-        "Action / Card / Time / X-AI",
-        "scenario-demo",
-        "acceptance_checks",
+        "本地知识整理助手",
+        "整理资料",
+        "回顾知识",
+        "提取上下文",
+        "今日提醒",
+        "organize",
+        "review",
+        "extract",
+        "remind",
+        "AI 上下文包",
+        "legacy-index",
+        "file-radar",
+        "obsidian-health",
+        "默认不展示黑色 JSON",
+        "不删除、不移动、不重命名、不重写源文件",
     ]
-    haystack = "\n".join([playbook, gui, docs])
+    haystack = "\n".join([knowledge, gui, docs])
     missing = [item for item in required if item not in haystack]
     if missing:
         return fail_check("scenario_workflow", {"missing": missing})
     return ok_check("scenario_workflow", required)
+
+
+def check_backup_manifest(root: Path) -> dict[str, Any]:
+    script = read_text(root, "scripts/export-backup-manifest.ps1")
+    doc = read_text(root, "docs/MIGRATION_BACKUP.md")
+    required = [
+        "git rev-parse HEAD",
+        "git remote get-url origin",
+        "config.local.json",
+        "个人 Obsidian 内容不进公开仓库",
+        "restore_commands",
+    ]
+    haystack = script + "\n" + doc
+    missing = [item for item in required if item not in haystack]
+    if missing:
+        return fail_check("backup_manifest", {"missing": missing})
+    return ok_check("backup_manifest", required)
 
 
 def iter_public_text_files(root: Path) -> list[Path]:
@@ -281,6 +312,7 @@ def run_checks(root: Path) -> dict[str, Any]:
         check_thin_gui_and_non_destructive_code(root),
         check_scenario_workflow(root),
         check_validation_harness(root),
+        check_backup_manifest(root),
         check_guidebook_assets(root),
         check_mojibake_scan(root),
     ]

@@ -1,7 +1,8 @@
 {
   "runtime_root": "%USERPROFILE%\\file-assistant",
   "obsidian_vault": "%USERPROFILE%\\Documents\\Obsidian",
-  "obsidian_run_dir": "%USERPROFILE%\\Documents\\Obsidian\\04 例行工作\\知识行动助手",
+  "obsidian_run_dir": "%USERPROFILE%\\Documents\\Obsidian\\04 例行工作\\知识整理助手",
+  "knowledge_root": "%USERPROFILE%\\Documents\\Obsidian\\04 例行工作\\知识整理助手",
   "codex_executable": "%LOCALAPPDATA%\\Programs\\OpenAI\\CodexDesktop\\Codex.exe",
   "allowed_open_roots": [
     "%USERPROFILE%\\file-assistant",

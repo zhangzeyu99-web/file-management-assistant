@@ -36,19 +36,20 @@ class ProjectQualityTests(unittest.TestCase):
         principles = next(item for item in result["checks"] if item["name"] == "project_principles")
         expected = {
             "local-first",
-            "report-only safety",
+            "safe-by-default",
             "private local configuration",
-            "knowledge action assistant",
-            "four-layer architecture",
-            "act workflow",
+            "local knowledge organizer",
+            "four core actions",
             "obsidian workflow",
-            "scenario-based workflow",
+            "human-readable gui",
+            "portable bootstrap",
+            "cloud backup boundary",
             "closed loop",
             "lightweight daily triage",
             "life study work separation",
             "thin gui",
             "validation harness",
-            "optional integrations",
+            "legacy compatibility",
         }
 
         self.assertTrue(principles["ok"], principles)
@@ -74,19 +75,22 @@ class ProjectQualityTests(unittest.TestCase):
 
         for phrase in [
             "Obsidian",
-            "本地文件",
-            "AI 对话归档",
-            "AI 上下文取用",
+            "本地知识整理助手",
+            "整理",
+            "回顾",
+            "提取",
+            "提醒",
+            "AI 上下文包",
             "知识卡",
-            "今日行动",
+            "今日提醒",
             "不会删除",
             "不会移动",
             "不会重命名",
         ]:
             self.assertIn(phrase, first_screen)
-        self.assertNotIn("交接记录", first_screen)
+        self.assertNotIn("Codex 接手包", first_screen)
 
-    def test_public_docs_separate_ai_archive_from_context_retrieval(self) -> None:
+    def test_public_docs_promote_four_core_actions(self) -> None:
         public_files = [
             "README.md",
             "docs/ARCHITECTURE.md",
@@ -100,13 +104,16 @@ class ProjectQualityTests(unittest.TestCase):
         ]
         public_text = "\n".join((self.repo / path).read_text(encoding="utf-8-sig") for path in public_files)
 
-        self.assertIn("AI 对话归档", public_text)
-        self.assertIn("AI 上下文取用", public_text)
+        self.assertIn("整理资料", public_text)
+        self.assertIn("回顾知识", public_text)
+        self.assertIn("提取上下文", public_text)
+        self.assertIn("今日提醒", public_text)
+        self.assertIn("AI 上下文包", public_text)
         self.assertNotIn("生成 Codex 交接", public_text)
         self.assertNotIn("Codex 交接", public_text)
         self.assertNotIn("AI 交接", public_text)
 
-    def test_interaction_and_guidebook_follow_context_entry_positioning(self) -> None:
+    def test_interaction_and_guidebook_follow_four_action_positioning(self) -> None:
         public_text = "\n".join(
             (self.repo / path).read_text(encoding="utf-8-sig")
             for path in [
@@ -117,12 +124,14 @@ class ProjectQualityTests(unittest.TestCase):
         )
 
         for phrase in [
-            "可视化上下文入口",
-            "Codex 接手包",
+            "本地知识整理助手",
+            "整理资料",
+            "回顾知识",
+            "提取上下文",
+            "今日提醒",
+            "AI 上下文包",
             "本地文件",
             "Obsidian",
-            "历史报告",
-            "不是替代 Codex",
             "本地文件 / 目录目标",
             "检查本地目标",
         ]:
@@ -130,8 +139,9 @@ class ProjectQualityTests(unittest.TestCase):
         for obsolete in [
             "今日操作台",
             "执行结果",
-            "查看全部",
             "伪控制台",
+            "可视化上下文入口",
+            "Codex 接手包",
         ]:
             self.assertNotIn(obsolete, public_text)
 

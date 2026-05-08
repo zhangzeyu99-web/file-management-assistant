@@ -32,14 +32,14 @@ function New-FixtureConfig {
     $fixture = Join-Path $RunDir "fixture-files"
     $vault = Join-Path $RunDir "vault"
     $runtime = Join-Path $RunDir "runtime"
-    $obsidianRun = Join-Path $vault "routine\knowledge-action-assistant"
+    $obsidianRun = Join-Path $vault "routine\knowledge-organizer"
 
     foreach ($path in @(
         $fixture,
         $runtime,
         (Join-Path $vault "inbox"),
         (Join-Path $vault "daily"),
-        (Join-Path $vault "projects\knowledge-action-assistant\Card"),
+        (Join-Path $vault "projects\knowledge-organizer\Card"),
         $obsidianRun
     )) {
         New-Item -ItemType Directory -Force -Path $path | Out-Null
@@ -48,7 +48,7 @@ function New-FixtureConfig {
     Set-Content -Path (Join-Path $fixture "2026-05-07-gui-e2e-todo-report.md") -Value "# GUI E2E todo report`n`n- Check raw JSON output`n- Check file input area" -Encoding UTF8
     Set-Content -Path (Join-Path $fixture "notebooklm-obsidian-tutorial.txt") -Value "NotebookLM and Obsidian learning material for reusable notes." -Encoding UTF8
     Set-Content -Path (Join-Path $fixture "work-project-review.csv") -Value "task,status`nGUI E2E,done" -Encoding UTF8
-    Set-Content -Path (Join-Path $vault "projects\knowledge-action-assistant\Card\gui-result-card.md") -Value "# GUI result card`n`nType: Card`nSource: E2E fixture`n`n## Key conclusion`n`nThe result area should show human-readable cards instead of default JSON." -Encoding UTF8
+    Set-Content -Path (Join-Path $vault "projects\knowledge-organizer\Card\gui-result-card.md") -Value "# GUI result card`n`nType: Card`nSource: E2E fixture`n`n## Key conclusion`n`nThe result area should show human-readable cards instead of default JSON." -Encoding UTF8
 
     $oldFile = Join-Path $fixture "old-installer.exe"
     Set-Content -Path $oldFile -Value "fake installer" -Encoding ASCII
@@ -58,6 +58,7 @@ function New-FixtureConfig {
         runtime_root = $runtime
         obsidian_vault = $vault
         obsidian_run_dir = $obsidianRun
+        knowledge_root = $obsidianRun
         codex_executable = ""
         allowed_open_roots = @($runtime, $vault, $fixture)
         obsidian_folders = [ordered]@{

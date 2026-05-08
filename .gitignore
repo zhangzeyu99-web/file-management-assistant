@@ -10,6 +10,8 @@ npm-debug.log*
 .env
 .env.*
 config.local.json
+config.demo.json
+demo/
 .runtime/
 runs/
 logs/

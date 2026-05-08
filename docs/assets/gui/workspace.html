@@ -4,30 +4,31 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="data:," />
-  <title>Obsidian AI 整理工作台</title>
+  <title>本地知识整理助手</title>
   <style>
     :root {
-      --bg: #f5f7fb;
+      --bg: #f4f7f6;
+      --paper: #fffdf8;
       --panel: #ffffff;
-      --panel-soft: #f8fafd;
-      --line: #e5eaf2;
-      --line-strong: #d8e0eb;
-      --ink: #121826;
-      --muted: #667085;
-      --muted-2: #98a2b3;
+      --panel-soft: #f8fbfa;
+      --ink: #14211f;
+      --muted: #61706c;
+      --subtle: #8b9995;
+      --line: #dfe8e4;
+      --line-strong: #cddbd6;
       --blue: #2f6ecb;
-      --blue-dark: #235eb2;
-      --blue-soft: #eaf2ff;
-      --cyan: #1d9bb2;
-      --violet: #6b5cf6;
-      --green: #26875a;
-      --green-soft: #eef7f1;
-      --amber: #f5a524;
-      --shadow: 0 18px 55px rgba(16, 24, 40, .08);
-      --shadow-soft: 0 8px 24px rgba(16, 24, 40, .06);
-      --radius-xl: 18px;
-      --radius-lg: 14px;
-      --radius-md: 10px;
+      --blue-soft: #ebf3ff;
+      --green: #2c7a58;
+      --green-soft: #edf7f1;
+      --amber: #c77b22;
+      --amber-soft: #fff5e8;
+      --teal: #16818d;
+      --violet: #6157d8;
+      --shadow: 0 18px 52px rgba(28, 43, 39, .09);
+      --shadow-soft: 0 8px 24px rgba(28, 43, 39, .06);
+      --radius-xl: 24px;
+      --radius-lg: 18px;
+      --radius-md: 12px;
       --font: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
       --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
     }
@@ -38,97 +39,114 @@
       color: var(--ink);
       font-family: var(--font);
       background:
-        radial-gradient(circle at 12% 0%, rgba(107, 92, 246, .07), transparent 38rem),
-        radial-gradient(circle at 92% 16%, rgba(29, 155, 178, .07), transparent 28rem),
-        var(--bg);
+        radial-gradient(circle at 8% 4%, rgba(47, 110, 203, .08), transparent 32rem),
+        radial-gradient(circle at 88% 0%, rgba(22, 129, 141, .09), transparent 30rem),
+        linear-gradient(180deg, #f7faf8 0%, #edf2f0 100%);
     }
-    button, textarea, input { font: inherit; }
+    button, textarea, input, select { font: inherit; }
     button {
       border: 0;
       cursor: pointer;
-      background: none;
       color: inherit;
+      background: none;
       transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
     }
     button:hover { transform: translateY(-1px); }
-    button:disabled { cursor: wait; opacity: .58; transform: none; }
+    button:disabled { opacity: .58; cursor: wait; transform: none; }
     .app {
-      width: min(1648px, calc(100vw - 32px));
+      width: min(1600px, calc(100vw - 34px));
       margin: 0 auto;
-      padding: 16px 0;
+      padding: 18px 0;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 414px;
-      gap: 14px;
+      grid-template-columns: minmax(0, 1fr) 390px;
+      gap: 16px;
     }
-    .main {
-      display: grid;
-      gap: 14px;
-      min-width: 0;
-    }
+    .main { display: grid; gap: 16px; min-width: 0; }
     .panel {
-      background: rgba(255,255,255,.94);
+      background: rgba(255,255,255,.95);
       border: 1px solid var(--line);
       border-radius: var(--radius-xl);
       box-shadow: var(--shadow);
     }
     .hero {
-      padding: 26px 32px 24px;
-      overflow: hidden;
+      padding: 30px 34px 28px;
+      background:
+        linear-gradient(120deg, rgba(255,255,255,.98), rgba(255,253,248,.94)),
+        var(--panel);
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: #1f6044;
+      border: 1px solid #d7eadc;
+      font-size: 13px;
+      font-weight: 800;
     }
     h1 {
-      margin: 0;
-      font-size: clamp(34px, 3.1vw, 48px);
+      margin: 16px 0 0;
+      font-size: clamp(36px, 3.5vw, 56px);
       line-height: 1.04;
-      letter-spacing: -.035em;
+      letter-spacing: -.04em;
       font-weight: 900;
     }
     .hero-subtitle {
-      margin: 12px 0 0;
-      max-width: 850px;
-      color: #344054;
-      font-size: 16px;
-      line-height: 1.64;
-      letter-spacing: -.01em;
+      max-width: 840px;
+      margin: 14px 0 0;
+      color: #31413d;
+      font-size: 17px;
+      line-height: 1.66;
     }
-    .safe-pill {
+    .safe-line {
       width: max-content;
       max-width: 100%;
-      margin-top: 16px;
+      margin-top: 18px;
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      padding: 9px 16px;
+      padding: 9px 15px;
       border-radius: 999px;
-      background: var(--green-soft);
+      background: #f7fbf8;
+      border: 1px solid #d8eadf;
       color: #174a34;
-      border: 1px solid #d7eadc;
-      font-size: 15px;
-      font-weight: 750;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+      font-size: 14px;
+      font-weight: 800;
     }
-    .shield-dot {
+    .safe-dot {
       width: 22px;
       height: 22px;
       border-radius: 50%;
       display: grid;
       place-items: center;
       background: var(--green);
-      color: white;
+      color: #fff;
       font-size: 13px;
       font-weight: 900;
     }
-    .feature-grid {
+    .core-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .core-card {
+      min-height: 148px;
+      padding: 22px;
+      text-align: left;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(255,255,255,.96);
+      box-shadow: var(--shadow-soft);
+      display: grid;
+      align-content: start;
       gap: 12px;
     }
-    .feature-card {
-      min-height: 104px;
-      padding: 18px 20px;
-      display: grid;
-      grid-template-columns: 54px minmax(0, 1fr);
-      gap: 14px;
-      align-items: center;
+    .core-card.active,
+    .core-card:hover {
+      border-color: #b8c9df;
+      box-shadow: 0 16px 34px rgba(47, 110, 203, .12);
     }
     .sprite {
       display: inline-block;
@@ -137,106 +155,100 @@
       background-size: 200% 200%;
       flex: 0 0 auto;
     }
-    .feature-icon {
-      width: 50px;
-      height: 50px;
-      border-radius: 14px;
-    }
-    .icon-sm {
-      width: 22px;
-      height: 22px;
-      border-radius: 6px;
-    }
+    .feature-icon { width: 48px; height: 48px; border-radius: 14px; }
+    .icon-sm { width: 22px; height: 22px; border-radius: 7px; }
     .folder { background-position: 0 0; }
     .chat { background-position: 100% 0; }
     .doc { background-position: 0 100%; }
     .card-icon { background-position: 100% 100%; }
-    .feature-card h2 {
-      margin: 0 0 8px;
-      font-size: 16px;
-      line-height: 1.25;
+    .card-title {
+      margin: 0;
+      color: #15221f;
+      font-size: 20px;
+      font-weight: 900;
       letter-spacing: -.02em;
     }
-    .feature-card p {
+    .card-copy {
       margin: 0;
-      color: #475467;
-      font-size: 13px;
-      line-height: 1.5;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
     }
-    .work-row {
+    .workspace {
       display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
-      gap: 14px;
+      grid-template-columns: minmax(0, 1.2fr) minmax(340px, .8fr);
+      gap: 16px;
     }
-    .work-card, .tutorial-card {
-      padding: 22px 32px;
-      min-height: 232px;
-    }
+    .work-card, .flow-card, .advanced-card { padding: 24px 30px; }
     .section-title {
+      margin: 0 0 12px;
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin: 0 0 14px;
-      color: #172033;
+      gap: 10px;
       font-size: 22px;
-      font-weight: 850;
+      font-weight: 900;
       letter-spacing: -.02em;
     }
-    .title-mark {
-      color: var(--blue);
-      font-size: 22px;
-      line-height: 1;
+    .title-mark { color: var(--blue); }
+    .intro {
+      margin: -4px 0 16px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .kind-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .kind-tab {
+      min-height: 34px;
+      padding: 0 13px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #40504c;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .kind-tab.active {
+      color: #fff;
+      border-color: var(--green);
+      background: var(--green);
+    }
+    .input-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr);
+      gap: 14px;
+      align-items: stretch;
     }
     textarea {
       width: 100%;
-      height: 92px;
       resize: vertical;
-      border: 1px solid #97b7ea;
-      border-radius: 8px;
-      padding: 18px;
+      border: 1px solid #a9c5ef;
+      border-radius: 14px;
+      padding: 16px;
       outline: none;
       background: #fff;
       color: var(--ink);
-      font-size: 16px;
-      line-height: 1.6;
+      font-size: 15px;
+      line-height: 1.62;
       box-shadow: 0 0 0 3px rgba(47, 110, 203, .04);
     }
-    textarea::placeholder { color: #98a2b3; }
     textarea:focus {
       border-color: var(--blue);
       box-shadow: 0 0 0 4px rgba(47, 110, 203, .10);
     }
-    .work-intro {
-      margin: -4px 0 14px;
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    .input-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(240px, .65fr);
-      gap: 14px;
-      align-items: stretch;
-    }
+    #freeText { min-height: 150px; }
+    textarea::placeholder { color: #99a7a3; }
     .file-target-panel {
-      min-height: 92px;
-      padding: 15px 16px;
-      border-radius: 10px;
-      border: 1px dashed #bfd0e7;
-      background: linear-gradient(180deg, #fbfdff, #f3f7fc);
-      color: #344054;
-    }
-    .file-target-panel strong {
-      display: block;
-      margin-bottom: 4px;
-      color: #172033;
-      font-size: 14px;
-    }
-    .file-target-panel p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.55;
+      min-height: 150px;
+      padding: 15px;
+      border: 1px dashed #b9cce5;
+      border-radius: 16px;
+      background: linear-gradient(180deg, #fbfdff, #f3f8f7);
+      color: #354743;
     }
     .target-head {
       display: flex;
@@ -245,15 +257,11 @@
       gap: 10px;
       margin-bottom: 8px;
     }
-    .target-head span {
-      color: var(--green);
-      font-size: 12px;
-      font-weight: 800;
-      white-space: nowrap;
-    }
+    .target-head strong { color: #14211f; font-size: 14px; }
+    .target-head span { color: var(--green); font-size: 12px; font-weight: 900; }
     .local-paths {
-      height: 54px;
       min-height: 54px;
+      height: 54px;
       padding: 10px 12px;
       border-color: #d3e0ef;
       font-size: 12px;
@@ -264,20 +272,14 @@
       margin-top: 8px;
       padding: 10px 12px;
       border: 1px dashed #b9cce5;
-      border-radius: 9px;
-      background: rgba(255,255,255,.72);
-      color: #475467;
+      border-radius: 11px;
+      background: rgba(255,255,255,.75);
+      color: #52635f;
       font-size: 12px;
       line-height: 1.45;
     }
-    .drop-zone.dragging {
-      border-color: var(--blue);
-      background: var(--blue-soft);
-      color: var(--blue-dark);
-    }
-    .file-input {
-      display: none;
-    }
+    .drop-zone.dragging { border-color: var(--blue); background: var(--blue-soft); color: #235eb2; }
+    .file-input { display: none; }
     .path-actions {
       display: flex;
       flex-wrap: wrap;
@@ -285,354 +287,193 @@
       margin-top: 8px;
     }
     .mini-button {
-      min-height: 28px;
+      min-height: 29px;
       padding: 0 10px;
-      border-radius: 7px;
+      border-radius: 9px;
       border: 1px solid #dbe5f1;
       background: #fff;
       color: var(--blue);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 850;
     }
     .target-summary {
       margin-top: 8px;
-      color: #667085;
+      color: var(--muted);
       font-size: 12px;
       line-height: 1.45;
     }
-    .quick-actions {
+    .primary-actions {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
+      gap: 10px;
       margin-top: 14px;
     }
-    .quick-button {
-      min-height: 44px;
-      border-radius: 8px;
+    .action-button {
+      min-height: 46px;
+      border-radius: 13px;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      background: #f2f5f9;
-      border: 1px solid #e3e8f0;
-      color: #344054;
-      font-size: 16px;
-      font-weight: 760;
+      gap: 8px;
+      border: 1px solid #dfe8f1;
+      background: #fff;
+      color: #263734;
+      font-size: 15px;
+      font-weight: 900;
       box-shadow: var(--shadow-soft);
     }
-    .quick-button.primary {
+    .action-button.primary {
       background: linear-gradient(180deg, #3478d7, #2360b2);
       color: #fff;
       border-color: #2360b2;
-      box-shadow: 0 12px 26px rgba(47, 110, 203, .24);
+      box-shadow: 0 14px 28px rgba(47, 110, 203, .22);
     }
-    .quick-button:hover { border-color: #b8c5d8; }
-    .workbench-result {
+    .result-card {
       margin-top: 16px;
-      padding: 16px;
-      border-radius: 14px;
+      padding: 18px;
+      border-radius: 18px;
       border: 1px solid #dbe7f6;
       background: linear-gradient(180deg, #ffffff, #f8fbff);
       box-shadow: var(--shadow-soft);
     }
-    .workbench-result.waiting {
-      color: var(--muted);
-      background: #fbfcfe;
-    }
-    .workbench-eyebrow {
+    .result-card.waiting { background: #fbfcfe; color: var(--muted); }
+    .result-eyebrow {
       margin-bottom: 8px;
       color: var(--blue);
       font-size: 12px;
-      font-weight: 850;
+      font-weight: 900;
       letter-spacing: .03em;
     }
-    .workbench-result h3 {
-      margin: 0;
-      color: #172033;
-      font-size: 17px;
-      line-height: 1.35;
-    }
-    .workbench-result p {
-      margin: 8px 0 0;
-      color: #475467;
-      font-size: 13px;
-      line-height: 1.6;
-    }
-    .result-meta {
-      display: grid;
-      gap: 6px;
-      margin-top: 12px;
-      color: #667085;
-      font-size: 12px;
-    }
-    .result-meta code {
-      padding: 1px 5px;
-      border-radius: 5px;
-      background: #eef3f8;
-      color: #344054;
-      font-family: var(--mono);
-      font-size: 11px;
-    }
-    .result-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 13px;
-    }
+    .result-card h3 { margin: 0; font-size: 18px; line-height: 1.35; }
+    .result-card p { margin: 9px 0 0; color: #475467; font-size: 13px; line-height: 1.6; }
+    .result-meta { display: grid; gap: 7px; margin-top: 12px; color: #667085; font-size: 12px; }
+    .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
     .result-button {
-      min-height: 32px;
+      min-height: 33px;
       padding: 0 12px;
-      border-radius: 8px;
+      border-radius: 9px;
       border: 1px solid #dbe5f1;
       background: #fff;
       color: var(--blue);
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 850;
     }
-    .result-button.primary {
-      background: var(--blue);
-      color: #fff;
-      border-color: var(--blue);
-    }
-    .tutorial-card {
+    .result-button.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .flow-card { display: grid; align-content: start; gap: 12px; }
+    .flow-list { display: grid; gap: 10px; }
+    .flow-step {
       display: grid;
-      align-content: start;
-      gap: 12px;
-    }
-    .steps {
-      display: grid;
-      gap: 10px;
-      position: relative;
-      padding-left: 34px;
-    }
-    .steps::before {
-      content: "";
-      position: absolute;
-      left: 13px;
-      top: 16px;
-      bottom: 16px;
-      width: 1px;
-      background: linear-gradient(#c9d9f3, #dce7f7);
-    }
-    .step {
-      min-height: 42px;
-      display: flex;
+      grid-template-columns: 30px minmax(0, 1fr);
       align-items: center;
-      position: relative;
-      padding: 0 14px;
-      border-radius: 8px;
-      background: linear-gradient(90deg, #f2f5f9, #f8fafc);
-      color: #344054;
-      font-size: 15px;
-      font-weight: 650;
+      gap: 10px;
+      min-height: 46px;
+      padding: 9px 12px;
+      border-radius: 14px;
+      background: #f5f8f7;
+      color: #263734;
+      font-size: 14px;
+      font-weight: 760;
     }
     .step-num {
-      position: absolute;
-      left: -34px;
-      width: 24px;
-      height: 24px;
+      width: 26px;
+      height: 26px;
       display: grid;
       place-items: center;
       border-radius: 50%;
       background: #4380d7;
-      color: white;
+      color: #fff;
       font-size: 12px;
-      font-weight: 800;
-      box-shadow: 0 4px 10px rgba(67, 128, 215, .24);
+      font-weight: 900;
     }
-    .guide-button {
-      min-height: 42px;
-      margin-top: 2px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      background: linear-gradient(180deg, #ffffff, #f4f7fb);
-      border: 1px solid #dfe7f2;
-      color: #2f6ecb;
-      font-size: 15px;
-      font-weight: 800;
-      box-shadow: var(--shadow-soft);
+    .advanced-card summary {
+      cursor: pointer;
+      color: #20312e;
+      font-size: 17px;
+      font-weight: 900;
     }
-    .guide-button:hover {
-      border-color: #b9c9df;
-      background: #fbfdff;
-    }
-    .action-board {
-      padding: 20px 32px 24px;
-    }
-    .action-columns {
+    .advanced-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 28px;
-    }
-    .action-column {
-      min-width: 0;
-      padding-right: 18px;
-      border-right: 1px solid var(--line);
-    }
-    .action-column:last-child { border-right: 0; padding-right: 0; }
-    .column-title {
-      display: flex;
-      align-items: center;
       gap: 10px;
-      margin-bottom: 12px;
-      font-weight: 850;
-      color: var(--green);
-      font-size: 17px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
     }
-    .action-column:nth-child(2) .column-title { color: var(--blue); }
-    .action-column:nth-child(3) .column-title { color: var(--violet); }
-    .action-column:nth-child(4) .column-title { color: var(--cyan); }
-    .action-list {
-      display: grid;
-      gap: 8px;
-    }
-    .action-item {
-      min-height: 39px;
-      width: 100%;
-      border: 1px solid #e1e7f0;
-      border-radius: 7px;
+    .advanced-button {
+      min-height: 38px;
+      border-radius: 11px;
+      border: 1px solid #e1e8f0;
       background: #fff;
-      display: grid;
-      grid-template-columns: 24px minmax(0, 1fr) 14px;
-      align-items: center;
-      gap: 10px;
-      padding: 0 12px;
-      color: #344054;
-      font-size: 15px;
-      font-weight: 650;
-      text-align: left;
-      box-shadow: 0 2px 8px rgba(16, 24, 40, .03);
+      color: #40504c;
+      font-size: 13px;
+      font-weight: 800;
     }
-    .action-item:hover {
-      border-color: #c8d7ec;
-      background: #fbfdff;
-      box-shadow: 0 8px 18px rgba(16, 24, 40, .06);
-    }
-    .chevron {
-      color: #98a2b3;
-      font-size: 20px;
-      line-height: 1;
-    }
-    .side {
-      display: grid;
-      align-content: start;
-      position: sticky;
-      top: 16px;
-    }
-    .status-panel {
-      padding: 26px 24px 22px;
-      min-height: calc(100vh - 32px);
-    }
+    .side { display: grid; align-content: start; position: sticky; top: 18px; }
+    .status-panel { padding: 26px 24px 22px; min-height: calc(100vh - 36px); }
     .side-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 24px;
+      margin-bottom: 22px;
     }
-    .side-head h2 {
-      margin: 0;
-      font-size: 20px;
-      letter-spacing: -.02em;
-    }
-    .refresh {
-      width: 32px;
-      height: 32px;
-      display: grid;
-      place-items: center;
-      border-radius: 8px;
-      color: var(--blue);
-      font-size: 18px;
-    }
+    .side-head h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
+    .refresh { width: 32px; height: 32px; border-radius: 10px; color: var(--blue); font-size: 18px; }
     .refresh:hover { background: var(--blue-soft); }
     .metrics {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-bottom: 20px;
+      gap: 12px;
+      margin-bottom: 18px;
     }
     .metric {
-      min-height: 137px;
-      padding: 18px;
+      min-height: 118px;
+      padding: 16px;
       border: 1px solid var(--line);
-      border-radius: 14px;
+      border-radius: 16px;
       background: #fff;
       box-shadow: var(--shadow-soft);
     }
     .metric-label {
       display: flex;
       align-items: center;
-      gap: 10px;
-      color: #344054;
-      font-size: 14px;
-      font-weight: 650;
-      white-space: nowrap;
-    }
-    .metric-value {
-      margin-top: 18px;
-      color: var(--ink);
-      font-size: 27px;
-      line-height: 1;
-      font-weight: 850;
-      letter-spacing: -.035em;
-    }
-    .metric-delta {
-      margin-top: 13px;
-      color: var(--green);
+      gap: 8px;
+      color: #40504c;
       font-size: 13px;
+      font-weight: 780;
     }
-    .divider {
-      height: 1px;
-      margin: 18px 0;
-      background: var(--line-strong);
-    }
+    .metric-value { margin-top: 16px; color: var(--ink); font-size: 27px; line-height: 1; font-weight: 900; }
+    .metric-delta { margin-top: 12px; color: var(--green); font-size: 12px; }
+    .divider { height: 1px; margin: 18px 0; background: var(--line-strong); }
     .result-head {
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
       margin-bottom: 12px;
     }
-    .result-head h2 {
-      margin: 0;
-      font-size: 18px;
-    }
-    .result-head button {
-      color: var(--blue);
-      font-size: 13px;
-      font-weight: 700;
-    }
-    .result-list {
-      display: grid;
-      gap: 8px;
-      margin-bottom: 24px;
-    }
+    .result-head h2 { margin: 0; font-size: 18px; }
+    .result-head button { color: var(--blue); font-size: 13px; font-weight: 850; }
+    .result-list { display: grid; gap: 8px; margin-bottom: 22px; }
     .result-item {
       display: grid;
-      grid-template-columns: 42px minmax(0, 1fr) 48px;
+      grid-template-columns: 38px minmax(0, 1fr) 46px;
       gap: 10px;
       align-items: center;
-      min-height: 62px;
+      min-height: 60px;
       padding: 10px 12px;
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: 13px;
       background: #fff;
-      box-shadow: 0 2px 8px rgba(16, 24, 40, .03);
+      box-shadow: 0 2px 8px rgba(28, 43, 39, .03);
     }
     .result-icon {
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       border-radius: 9px;
-      background-size: 200% 200%;
       background-image: url("/assets/gui/feature-icons.png");
       background-repeat: no-repeat;
+      background-size: 200% 200%;
     }
-    .result-title {
-      color: #253044;
-      font-size: 14px;
-      font-weight: 750;
-    }
+    .result-title { color: #263734; font-size: 14px; font-weight: 850; }
     .result-sub {
       margin-top: 3px;
       color: var(--muted);
@@ -641,40 +482,29 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .result-status {
-      text-align: right;
-      color: var(--green);
-      font-size: 12px;
-      font-weight: 800;
-    }
-    .result-status span {
-      display: block;
-      margin-top: 4px;
-      color: var(--muted);
-      font-weight: 500;
-    }
+    .result-status { text-align: right; color: var(--green); font-size: 12px; font-weight: 900; }
+    .result-status span { display: block; margin-top: 4px; color: var(--muted); font-weight: 500; }
     .safety-box {
       display: grid;
-      grid-template-columns: 42px minmax(0, 1fr);
+      grid-template-columns: 36px minmax(0, 1fr);
       gap: 10px;
       align-items: center;
-      margin-top: 18px;
-      padding: 14px 16px;
-      border-radius: 12px;
+      padding: 14px;
+      border-radius: 15px;
       background: #f7f9fb;
       border: 1px solid var(--line);
-      color: #475467;
-      font-size: 14px;
+      color: #52635f;
+      font-size: 13px;
       line-height: 1.5;
     }
     .advanced-output {
       display: none;
       margin-top: 16px;
-      max-height: 210px;
+      max-height: 220px;
       overflow: auto;
       white-space: pre-wrap;
       border: 1px solid #d9e2ef;
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 12px;
       background: #101828;
       color: #f2f4f7;
@@ -683,26 +513,14 @@
       line-height: 1.55;
     }
     .advanced-output.visible { display: block; }
-    @media (max-width: 1500px) {
-      .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    @media (max-width: 1260px) {
+    @media (max-width: 1320px) {
       .app { grid-template-columns: 1fr; }
       .side { position: static; }
       .status-panel { min-height: auto; }
-      .action-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .action-column:nth-child(2) { border-right: 0; padding-right: 0; }
     }
-    @media (max-width: 760px) {
-      .app { width: min(100vw - 20px, 1648px); }
-      .hero { padding: 24px; }
-      .safe-pill { font-size: 14px; }
-      .feature-grid, .work-row, .action-columns, .metrics, .quick-actions, .input-grid { grid-template-columns: 1fr; }
-      .feature-card { grid-template-columns: 54px minmax(0, 1fr); padding: 18px; }
-      .feature-icon { width: 48px; height: 48px; }
-      .action-column { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 18px; }
-      .action-column:last-child { border-bottom: 0; padding-bottom: 0; }
-      .work-card, .tutorial-card, .action-board, .status-panel { padding: 20px; }
+    @media (max-width: 900px) {
+      .core-grid, .workspace, .input-grid, .primary-actions, .advanced-grid, .metrics { grid-template-columns: 1fr; }
+      .hero, .work-card, .flow-card, .advanced-card, .status-panel { padding: 22px; }
     }
   </style>
 </head>
@@ -710,36 +528,46 @@
   <main class="app">
     <section class="main">
       <header class="panel hero">
-        <h1>Obsidian AI 整理工作台</h1>
-        <p class="hero-subtitle">把本地文件、Obsidian 笔记、历史报告和 AI 对话整理成可复制给 Codex 的上下文。</p>
-        <div class="safe-pill"><span class="shield-dot">✓</span>默认只读，不删除、不移动、不重命名、不重写源文件</div>
+        <div class="eyebrow">成熟个人知识工作台</div>
+        <h1>本地知识整理助手</h1>
+        <p class="hero-subtitle">把本地文件、Obsidian 笔记和 AI 对话整理成可归档、可回顾、可提取给 AI 续用、可定时提醒的个人知识系统。</p>
+        <div class="safe-line"><span class="safe-dot">✓</span>默认只读，不删除、不移动、不重命名、不重写源文件</div>
       </header>
 
-      <section class="feature-grid">
-        <article class="panel feature-card">
+      <section class="core-grid" aria-label="四功能主线">
+        <button class="core-card active" data-core-card="organize" onclick="setCoreMode('organize')">
           <span class="sprite feature-icon folder"></span>
-          <div><h2>本地文件</h2><p>扫描目录，生成文件雷达和可追溯报告。</p></div>
-        </article>
-        <article class="panel feature-card">
+          <h2 class="card-title">整理资料</h2>
+          <p class="card-copy">文本 / 文件目录 / AI 对话，写成 Obsidian 整理记录。</p>
+        </button>
+        <button class="core-card" data-core-card="review" onclick="setCoreMode('review')">
           <span class="sprite feature-icon chat"></span>
-          <div><h2>Obsidian 笔记</h2><p>查看收件箱、知识卡和项目记录。</p></div>
-        </article>
-        <article class="panel feature-card">
+          <h2 class="card-title">回顾知识</h2>
+          <p class="card-copy">关键词检索已整理内容，返回答案 + 来源。</p>
+        </button>
+        <button class="core-card" data-core-card="extract" onclick="setCoreMode('extract')">
           <span class="sprite feature-icon doc"></span>
-          <div><h2>历史报告</h2><p>复用文件雷达、体检和运行结果。</p></div>
-        </article>
-        <article class="panel feature-card">
+          <h2 class="card-title">提取上下文</h2>
+          <p class="card-copy">生成 AI 上下文包，输出 prompt + Markdown。</p>
+        </button>
+        <button class="core-card" data-core-card="remind" onclick="setCoreMode('remind')">
           <span class="sprite feature-icon card-icon"></span>
-          <div><h2>AI 对话归档</h2><p>保存已有对话，后续提取上下文。</p></div>
-        </article>
+          <h2 class="card-title">今日提醒</h2>
+          <p class="card-copy">每天 9 点只给 1-3 个重点，不定时整理。</p>
+        </button>
       </section>
 
-      <section class="work-row">
+      <section class="workspace">
         <div class="panel work-card">
-          <h2 class="section-title"><span class="title-mark">✦</span>Codex 接手包</h2>
-          <p class="work-intro">写下要交给 Codex 的任务；需要扫描文件时，在右侧粘贴本地路径。</p>
+          <h2 class="section-title"><span class="title-mark">✦</span><span id="workTitle">整理资料</span></h2>
+          <p class="intro" id="workIntro">把资料放进来，助手会保留来源、判断领域、写入新的 Obsidian 整理记录。</p>
+          <div class="kind-tabs" aria-label="整理资料类型">
+            <button class="kind-tab active" data-kind="text" onclick="setInputKind('text')">文本</button>
+            <button class="kind-tab" data-kind="file" onclick="setInputKind('file')">文件目录</button>
+            <button class="kind-tab" data-kind="ai" onclick="setInputKind('ai')">AI 对话</button>
+          </div>
           <div class="input-grid">
-            <textarea id="freeText" placeholder="写要交给 Codex 的任务，例如：继续优化 Obsidian 知识库结构"></textarea>
+            <textarea id="freeText" placeholder="写下要整理、回顾或提取的内容。例如：NotebookLM 和 Obsidian 教程需要整理，后续给 AI 复用。"></textarea>
             <div class="file-target-panel">
               <div class="target-head"><strong>本地文件 / 目录目标</strong><span>默认只读</span></div>
               <textarea id="localPaths" class="local-paths" placeholder="粘贴本地路径，例如 D:\Downloads 或 D:\Work\report.md"></textarea>
@@ -751,81 +579,58 @@
                 <button class="mini-button" onclick="$('folderPicker').click()">选择目录</button>
                 <button class="mini-button" onclick="inspectLocalTargets()">检查本地目标</button>
               </div>
-              <div id="targetSummary" class="target-summary">未选择路径时，文件雷达使用配置文件里的默认扫描范围。</div>
+              <div id="targetSummary" class="target-summary">未选择路径时，只处理文本和已整理知识；文件类动作会提示使用默认配置范围。</div>
             </div>
           </div>
-          <div class="quick-actions">
-            <button class="quick-button primary" onclick="runAction('build-ai-context')">生成 Codex 接手包</button>
-            <button class="quick-button" onclick="runFileRadar()"><span class="sprite icon-sm doc"></span>查看文件雷达</button>
-            <button class="quick-button" onclick="ask()">？ 问怎么用</button>
-            <button class="quick-button" onclick="runAction('inbox-route')"><span class="sprite icon-sm folder"></span>判断放哪</button>
+          <div class="primary-actions">
+            <button class="action-button primary" onclick="runCoreAction('organize')">整理资料</button>
+            <button class="action-button" onclick="runCoreAction('review')">回顾知识</button>
+            <button class="action-button" onclick="runCoreAction('extract')">提取上下文</button>
+            <button class="action-button" onclick="runCoreAction('remind')">今日提醒</button>
           </div>
-          <section id="workbenchResult" class="workbench-result waiting">
-            <div class="workbench-eyebrow">接手包预览</div>
-            <h3>等待生成</h3>
-            <p>点击“生成 Codex 接手包”后，这里会显示匹配来源、压缩摘要、建议给 Codex 的下一步。默认不展示黑色 JSON。</p>
+          <section id="workbenchResult" class="result-card waiting">
+            <div class="result-eyebrow">结果预览</div>
+            <h3>等待操作</h3>
+            <p>点击四个主入口后，这里会显示做了什么、来源是什么、产物在哪、下一步能点什么。默认不展示黑色 JSON。</p>
           </section>
           <pre id="out" class="advanced-output">等待操作。</pre>
         </div>
-        <div class="panel tutorial-card">
-          <h2 class="section-title"><span class="title-mark">▭</span>Codex 接手流程</h2>
-          <div class="steps">
-            <div class="step"><span class="step-num">1</span>先看本地文件、Obsidian、历史报告三类来源</div>
-            <div class="step"><span class="step-num">2</span>写下要交给 Codex 的当前任务</div>
-            <div class="step"><span class="step-num">3</span>生成包含路径、摘要、边界的接手包</div>
-            <div class="step"><span class="step-num">4</span>复制给 Codex，让它基于真实上下文继续</div>
+
+        <div class="panel flow-card">
+          <h2 class="section-title"><span class="title-mark">□</span>使用流程</h2>
+          <div class="flow-list">
+            <div class="flow-step"><span class="step-num">1</span><span>先把资料、路径或 AI 对话放进来。</span></div>
+            <div class="flow-step"><span class="step-num">2</span><span>整理成 Obsidian 新记录，旧文件不动。</span></div>
+            <div class="flow-step"><span class="step-num">3</span><span>需要时回顾知识，查看答案和来源。</span></div>
+            <div class="flow-step"><span class="step-num">4</span><span>继续问 AI 前，提取 AI 上下文包。</span></div>
           </div>
-          <button class="guide-button" onclick="runAction('today')"><span class="sprite icon-sm card-icon"></span>新手 10 分钟上手：今天先干什么</button>
-          <button class="guide-button" onclick="openInteractionGuide()"><span class="sprite icon-sm doc"></span>查看交互说明图</button>
         </div>
       </section>
 
-      <section class="panel action-board">
-        <div class="action-columns">
-          <div class="action-column">
-            <div class="column-title"><span class="sprite icon-sm folder"></span>开始</div>
-            <div class="action-list">
-              <button class="action-item" onclick="runAction('today')"><span class="sprite icon-sm card-icon"></span><span>今天先干什么</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="runAction('onboarding')"><span class="sprite icon-sm doc"></span><span>快速初始化</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="runAction('open-guidebook')"><span class="sprite icon-sm doc"></span><span>打开教程 PDF</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="openInteractionGuide()"><span class="sprite icon-sm doc"></span><span>查看交互说明</span><span class="chevron">›</span></button>
-            </div>
+      <section class="panel advanced-card">
+        <details>
+          <summary>高级/诊断</summary>
+          <div class="advanced-grid">
+            <button class="advanced-button" onclick="runLegacyAction('file-radar')">查看文件雷达</button>
+            <button class="advanced-button" onclick="runLegacyAction('obsidian-health')">检查知识库</button>
+            <button class="advanced-button" onclick="runLegacyAction('legacy-index')">二次整理旧资料</button>
+            <button class="advanced-button" onclick="runLegacyAction('today')">今天先干什么</button>
+            <button class="advanced-button" onclick="runLegacyAction('inbox-route')">判断放哪</button>
+            <button class="advanced-button" onclick="runLegacyAction('action-note')">记录一个任务</button>
+            <button class="advanced-button" onclick="runLegacyAction('card-note')">沉淀知识卡</button>
+            <button class="advanced-button" onclick="runLegacyAction('time-review')">复盘今天</button>
+            <button class="advanced-button" onclick="runLegacyAction('archive-ai-chat')">归档 AI 对话</button>
+            <button class="advanced-button" onclick="runLegacyAction('onboarding')">快速初始化</button>
+            <button class="advanced-button" onclick="runLegacyAction('open-obsidian')">打开 Obsidian</button>
+            <button class="advanced-button" onclick="toggleOutput()">查看高级 JSON</button>
           </div>
-          <div class="action-column">
-            <div class="column-title"><span class="sprite icon-sm folder"></span>整理</div>
-            <div class="action-list">
-              <button class="action-item" onclick="runFileRadar()"><span class="sprite icon-sm doc"></span><span>查看文件雷达</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="runAction('inbox-route')"><span class="sprite icon-sm folder"></span><span>这段内容放哪</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="runAction('obsidian-health')"><span class="sprite icon-sm card-icon"></span><span>检查知识库</span><span class="chevron">›</span></button>
-            </div>
-          </div>
-          <div class="action-column">
-            <div class="column-title"><span class="sprite icon-sm card-icon"></span>记录</div>
-            <div class="action-list">
-              <button class="action-item" onclick="quickActionNote()"><span class="sprite icon-sm card-icon"></span><span>记录一个任务</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="quickCardNote()"><span class="sprite icon-sm card-icon"></span><span>沉淀知识卡</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="quickTimeReview()"><span class="sprite icon-sm doc"></span><span>复盘今天</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="archiveAiChat()"><span class="sprite icon-sm chat"></span><span>归档 AI 对话</span><span class="chevron">›</span></button>
-            </div>
-          </div>
-          <div class="action-column">
-            <div class="column-title"><span class="sprite icon-sm doc"></span>AI 续用</div>
-            <div class="action-list">
-              <button class="action-item" onclick="runAction('build-ai-context')"><span class="sprite icon-sm doc"></span><span>提取 AI 上下文</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="copyAiContextPrompt()"><span class="sprite icon-sm card-icon"></span><span>复制上下文 prompt</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="openObsidian()"><span class="sprite icon-sm folder"></span><span>打开 Obsidian</span><span class="chevron">›</span></button>
-            </div>
-          </div>
-        </div>
+        </details>
       </section>
     </section>
 
     <aside class="side">
       <section class="panel status-panel">
-        <div class="side-head">
-          <h2>本地上下文概览</h2>
-          <button class="refresh" onclick="refreshStatus()" title="刷新状态">↻</button>
-        </div>
+        <div class="side-head"><h2>本地状态摘要</h2><button class="refresh" onclick="refreshStatus()">↻</button></div>
         <div class="metrics">
           <div class="metric">
             <div class="metric-label"><span class="sprite icon-sm folder"></span>扫描文件数</div>
@@ -833,7 +638,7 @@
             <div class="metric-delta">来自最新文件雷达</div>
           </div>
           <div class="metric">
-            <div class="metric-label"><span class="sprite icon-sm card-icon"></span>扫描候选数</div>
+            <div class="metric-label"><span class="sprite icon-sm doc"></span>归档候选数</div>
             <div class="metric-value" id="archiveCount">-</div>
             <div class="metric-delta">来自最新报告</div>
           </div>
@@ -843,23 +648,23 @@
             <div class="metric-delta">来自知识库体检</div>
           </div>
           <div class="metric">
-            <div class="metric-label"><span class="sprite icon-sm doc"></span>最新报告</div>
+            <div class="metric-label"><span class="sprite icon-sm card-icon"></span>最新刷新</div>
             <div class="metric-value" style="font-size:18px;letter-spacing:0" id="latestReportTime">-</div>
-            <div class="metric-delta">页面刷新时间</div>
+            <div class="metric-delta">页面状态</div>
           </div>
         </div>
         <div class="divider"></div>
-        <div class="result-head"><h2>最近上下文素材</h2><button onclick="toggleOutput()">查看高级 JSON</button></div>
+        <div class="result-head"><h2>最近动作</h2><button onclick="toggleOutput()">查看高级 JSON</button></div>
         <div class="result-list" id="resultList">
           <div class="result-item">
-            <div class="result-icon folder"></div>
-            <div><div class="result-title">本地上下文入口待加载</div><div class="result-sub">等待首次状态加载</div></div>
-            <div class="result-status">成功<span>--:--</span></div>
+            <div class="result-icon card-icon"></div>
+            <div><div class="result-title">等待状态加载</div><div class="result-sub">本地知识整理助手</div></div>
+            <div class="result-status">就绪<span>--:--</span></div>
           </div>
         </div>
         <div class="safety-box">
           <span class="sprite icon-sm card-icon"></span>
-          <div id="safety">安全边界：默认只读，只读建议，不删除、不移动、不重命名、不重写源文件</div>
+          <div id="safety">默认不删除、不移动、不重命名、不重写源文件；只读取报告、生成建议、写入新的 Obsidian 记录。</div>
         </div>
       </section>
     </aside>
@@ -867,11 +672,37 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
-    let lastStatus = null;
     let selectedLocalFiles = [];
+    let currentKind = "text";
+    let currentCore = "organize";
+    let lastResultPaths = [];
+    let lastPrompt = "";
+
+    const coreCopy = {
+      organize: ["整理资料", "把资料放进来，助手会保留来源、判断领域、写入新的 Obsidian 整理记录。"],
+      review: ["回顾知识", "输入关键词或问题，助手会在已整理内容中检索，并返回答案和来源。"],
+      extract: ["提取上下文", "输入当前任务，助手会生成 AI 上下文包，同时输出 prompt 和 Markdown。"],
+      remind: ["今日提醒", "生成今天 1-3 个重点。计划任务每天 9 点运行；整理仍需要手动触发。"]
+    };
 
     function text() {
       return $("freeText").value.trim();
+    }
+
+    function nowTime() {
+      return new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit", hour12: false});
+    }
+
+    function setCoreMode(action) {
+      currentCore = action;
+      document.querySelectorAll("[data-core-card]").forEach((card) => card.classList.toggle("active", card.dataset.coreCard === action));
+      $("workTitle").textContent = coreCopy[action][0];
+      $("workIntro").textContent = coreCopy[action][1];
+    }
+
+    function setInputKind(kind) {
+      currentKind = kind;
+      document.querySelectorAll("[data-kind]").forEach((tab) => tab.classList.toggle("active", tab.dataset.kind === kind));
     }
 
     function readLocalTargets() {
@@ -888,19 +719,14 @@
       const summary = $("targetSummary");
       if (!summary) return;
       if (pathCount || fileCount) {
-        summary.textContent = `本次目标：${pathCount} 个粘贴路径，${fileCount} 个选择/拖放文件。文件雷达会优先使用粘贴路径；文件选择用于上下文提示。`;
+        summary.textContent = `本次目标：${pathCount} 个粘贴路径，${fileCount} 个选择/拖放文件。整理会记录来源；文件雷达会优先使用粘贴路径。`;
       } else {
-        summary.textContent = "未选择路径时，文件雷达使用配置文件里的默认扫描范围。";
+        summary.textContent = "未选择路径时，只处理文本和已整理知识；文件类动作会提示使用默认配置范围。";
       }
     }
 
     function fileMeta(file) {
-      return {
-        name: file.name,
-        size: file.size || 0,
-        type: file.type || "",
-        relative_path: file.webkitRelativePath || ""
-      };
+      return {name: file.name, size: file.size || 0, type: file.type || "", relative_path: file.webkitRelativePath || ""};
     }
 
     function handleFileSelect(event) {
@@ -925,10 +751,6 @@
       $("localPaths")?.addEventListener("input", updateTargetSummary);
     }
 
-    function nowTime() {
-      return new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit", hour12: false});
-    }
-
     function setBusy(value) {
       document.querySelectorAll("button").forEach((button) => { button.disabled = value; });
     }
@@ -939,15 +761,11 @@
 
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       }[char]));
     }
 
-    function compact(value, limit = 130) {
+    function compact(value, limit = 150) {
       const textValue = String(value ?? "").replace(/\s+/g, " ").trim();
       if (!textValue) return "";
       return textValue.length > limit ? `${textValue.slice(0, limit - 1)}…` : textValue;
@@ -962,7 +780,7 @@
     function setResultList(items) {
       $("resultList").innerHTML = items.map((item) => `
         <div class="result-item">
-          <div class="result-icon ${item.icon || "folder"}"></div>
+          <div class="result-icon ${item.icon || "card-icon"}"></div>
           <div><div class="result-title">${escapeHtml(item.title)}</div><div class="result-sub">${escapeHtml(item.sub)}</div></div>
           <div class="result-status">${item.ok === false ? "失败" : "成功"}<span>${item.time || nowTime()}</span></div>
         </div>
@@ -973,19 +791,19 @@
       const fileSummary = status.file_report?.summary || {};
       const obsidianSummary = status.obsidian_report?.summary || {};
       setResultList([
-        {title: "上下文入口状态", sub: "gui_server.py 已响应 /api/status", icon: "card-icon"},
-        {title: "最新文件雷达", sub: `报告路径：${status.file_report?.html_report ? compact(status.file_report.html_report, 44) : "暂无"}`, icon: "folder"},
-        {title: "扫描文件数", sub: `共 ${formatNumber(fileSummary.total_files)} 个，候选 ${formatNumber(fileSummary.counts?.archive_candidates)} 个`, icon: "doc"},
+        {title: "本地知识整理助手就绪", sub: "四功能主线：整理 / 回顾 / 提取 / 提醒", icon: "card-icon"},
+        {title: "最新文件雷达", sub: `扫描 ${formatNumber(fileSummary.total_files)} 个文件`, icon: "folder"},
         {title: "Obsidian 体检", sub: `当前 ${formatNumber(obsidianSummary.total_notes)} 篇笔记`, icon: "chat"},
-        {title: "默认安全边界", sub: "只读建议，不删除、不移动、不重命名", icon: "card-icon"}
+        {title: "默认安全边界", sub: "只写新记录，不动源文件", icon: "doc"}
       ]);
     }
 
-    let lastResultPaths = [];
-    let lastPrompt = "";
-
     function collectPaths(data) {
       const result = [];
+      (data?.artifacts || []).forEach((item) => {
+        if (item.path) result.push({label: item.label || "打开产物", path: item.path});
+        if (item.type === "prompt" && item.content) lastPrompt = item.content;
+      });
       [
         ["html_report", "打开 HTML 报告"],
         ["markdown_report", "打开 Markdown 报告"],
@@ -998,129 +816,52 @@
       ].forEach(([key, label]) => {
         if (data?.[key]) result.push({label, path: data[key]});
       });
-      if (data?.file?.html_report) result.push({label: "打开文件雷达报告", path: data.file.html_report});
-      if (data?.obsidian?.markdown_report) result.push({label: "打开知识库体检", path: data.obsidian.markdown_report});
-      if (data?.url) result.push({label: "打开说明页", url: data.url});
       return result;
     }
 
-    function describeActionResult(action, data) {
-      const label = actionLabel(action);
-      if (!data?.ok) {
-        return {
-          title: `${label}失败`,
-          body: data?.error || "本地服务返回失败，请查看高级 JSON 获取错误详情。",
-          meta: ["状态：失败"]
-        };
-      }
-      const summary = data.summary || data || {};
-      const counts = summary.counts || data?.counts || {};
-      const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
-      const domainName = typeof data.domain === "object" ? (data.domain.name || data.domain.id) : data.domain;
+    function actionLabel(action) {
       const map = {
-        "today": {
-          title: "今天只处理轻量重点",
-          body: data.summary || "只给 1-3 个今日重点，不把全部归档候选都塞进今天。",
-          meta: ["执行方式：本地规则读取最新报告"]
-        },
-        "file-radar": {
-          title: "文件雷达已返回报告",
-          body: `报告已生成：扫描 ${formatNumber(summary.total_files)} 个文件，归档候选 ${formatNumber(counts.archive_candidates)} 个。`,
-          meta: [
-            data.target_mode === "custom-local-paths" ? `扫描目标：${formatNumber(data.scan_targets?.summary?.existing_count)} 个粘贴路径` : "扫描目标：配置文件默认目录",
-            `报告路径：${data.html_report || "暂无"}`
-          ]
-        },
-        "inspect-local-targets": {
-          title: "本地目标已识别",
-          body: data.mode === "custom-local-paths"
-            ? `识别 ${formatNumber(summary.existing_count)} 个存在的路径。下一步可以点击“查看文件雷达”生成报告。`
-            : "未粘贴路径，将使用配置文件里的默认扫描目录。",
-          meta: ["执行方式：只读检查", data.safety || "不删除、不移动、不重命名"]
-        },
-        "obsidian-health": {
-          title: "知识库体检已完成",
-          body: `当前 Obsidian 笔记 ${formatNumber(summary.total_notes)} 篇，结果写入体检报告。`,
-          meta: ["执行方式：本地 Python 服务", `报告路径：${data.markdown_report || "暂无"}`]
-        },
-        "inbox-route": {
-          title: `建议先归到：${domainName || "收件箱"}`,
-          body: data.route || "先分生活 / 学习 / 工作，再判断 Action / Card / Time / X-AI。",
-          meta: ["执行方式：本地分类规则", "不会写入或移动源文件"]
-        },
-        "ask": {
-          title: "使用建议已生成",
-          body: data.answer || "已基于本地规则回答。",
-          meta: ["执行方式：本地问答规则"]
-        },
-        "action-note": {
-          title: "Action 任务笔记已生成",
-          body: "已把输入写成一任务一笔记，便于后续复盘和追踪。",
-          meta: [`笔记路径：${data.note || "暂无"}`]
-        },
-        "card-note": {
-          title: "知识卡已沉淀",
-          body: "已把可复用经验写成 Card，后续可被 AI 上下文取用。",
-          meta: [`笔记路径：${data.note || "暂无"}`]
-        },
-        "time-review": {
-          title: "今日复盘已写入",
-          body: "已追加完成项和下一步，保持日复盘轻量。",
-          meta: [`日记路径：${data.note || data.daily || "暂无"}`]
-        },
-        "archive-ai-chat": {
-          title: "AI 对话已归档",
-          body: "这一步只保存已有对话，不承担新对话的上下文取用。",
-          meta: [`归档路径：${data.note || "暂无"}`]
-        },
-        "build-ai-context": {
-          title: "Codex 接手包已生成",
-          body: `匹配 ${sourceCount} 个来源，已生成可复制给 Codex 的上下文 prompt。`,
-          meta: ["来源：本地文件 / Obsidian / 历史报告", data.next_request || "下一步：复制 prompt 给 Codex"]
-        },
-        "onboarding": {
-          title: "初始化检查已生成",
-          body: "已列出配置、教程和启动命令，适合首次安装或换机器时检查。",
-          meta: ["执行方式：读取本地配置"]
-        },
-        "open-guidebook": {
-          title: "教程 PDF 已请求打开",
-          body: "系统会用本机默认程序打开教程文件。",
-          meta: [`打开位置：${data.opened || "暂无"}`]
-        },
-        "open-interaction-guide": {
-          title: "交互说明页已打开",
-          body: "说明页展示每个入口点击后的真实结果和边界。",
-          meta: [`说明页：${data.url || data.opened || "暂无"}`]
-        },
-        "open-obsidian": {
-          title: "Obsidian vault 已请求打开",
-          body: "系统会用本机默认程序打开 vault 路径。",
-          meta: [`打开位置：${data.opened || "暂无"}`]
-        }
+        organize: "整理资料",
+        review: "回顾知识",
+        extract: "提取上下文",
+        remind: "今日提醒",
+        "inspect-local-targets": "检查本地目标",
+        "file-radar": "查看文件雷达",
+        "obsidian-health": "检查知识库",
+        "legacy-index": "二次整理旧资料",
+        today: "今天先干什么",
+        "inbox-route": "判断放哪",
+        "action-note": "记录一个任务",
+        "card-note": "沉淀知识卡",
+        "time-review": "复盘今天",
+        "archive-ai-chat": "归档 AI 对话",
+        onboarding: "快速初始化",
+        "open-obsidian": "打开 Obsidian"
       };
-      return map[action] || {title: `${label}已完成`, body: "操作完成，查看下方路径或高级 JSON。", meta: ["状态：成功"]};
+      return map[action] || action;
     }
 
     function renderWorkbenchResult(action, data) {
-      const view = describeActionResult(action, data);
-      const paths = collectPaths(data || {});
-      lastResultPaths = paths;
-      lastPrompt = data?.prompt || "";
-      const pathButtons = paths.map((item, index) => {
-        const label = escapeHtml(item.label);
-        return item.url
-          ? `<button class="result-button" onclick="window.open('${escapeHtml(item.url)}', '_blank', 'noopener')">${label}</button>`
-          : `<button class="result-button" onclick="openResultPath(${index})">${label}</button>`;
-      }).join("");
+      lastPrompt = "";
+      lastResultPaths = collectPaths(data || {});
+      const label = actionLabel(action);
+      const ok = Boolean(data?.ok);
+      const sourceCount = Array.isArray(data?.sources) ? data.sources.length : 0;
+      const artifactCount = Array.isArray(data?.artifacts) ? data.artifacts.length : 0;
+      const pathButtons = lastResultPaths.slice(0, 5).map((item, index) =>
+        `<button class="result-button" onclick="openResultPath(${index})">${escapeHtml(item.label)}</button>`
+      ).join("");
       const promptButton = lastPrompt ? `<button class="result-button primary" onclick="copyPromptFromLast()">复制 prompt</button>` : "";
+      const nextItems = (data?.next_actions || []).slice(0, 3).map((item) => `<div>${escapeHtml(compact(item, 130))}</div>`).join("");
       $("workbenchResult").classList.remove("waiting");
       $("workbenchResult").innerHTML = `
-        <div class="workbench-eyebrow">接手包预览 · ${escapeHtml(actionLabel(action))}</div>
-        <h3>${escapeHtml(view.title)}</h3>
-        <p>${escapeHtml(compact(view.body, 220))}</p>
+        <div class="result-eyebrow">结果预览 · ${escapeHtml(label)}</div>
+        <h3>${ok ? "操作完成" : "操作失败"}</h3>
+        <p>${escapeHtml(compact(data?.summary || data?.error || "没有返回摘要。", 240))}</p>
         <div class="result-meta">
-          ${(view.meta || []).map((item) => `<div>${escapeHtml(compact(item, 180))}</div>`).join("")}
+          <div>来源：${sourceCount} 条</div>
+          <div>产物：${artifactCount} 个</div>
+          ${nextItems}
         </div>
         <div class="result-actions">
           ${pathButtons}
@@ -1132,16 +873,16 @@
 
     async function refreshStatus() {
       const response = await fetch("/api/status");
-      lastStatus = await response.json();
-      const fileSummary = lastStatus.file_report?.summary || {};
-      const obsidianSummary = lastStatus.obsidian_report?.summary || {};
+      const status = await response.json();
+      const fileSummary = status.file_report?.summary || {};
+      const obsidianSummary = status.obsidian_report?.summary || {};
       $("totalFiles").textContent = formatNumber(fileSummary.total_files);
       $("archiveCount").textContent = formatNumber(fileSummary.counts?.archive_candidates);
       $("totalNotes").textContent = formatNumber(obsidianSummary.total_notes);
       $("latestReportTime").textContent = nowTime();
-      $("safety").textContent = lastStatus.safety || "安全边界：默认只读，只读建议，不删除、不移动、不重命名、不重写源文件";
-      updateResultsFromStatus(lastStatus);
-      return lastStatus;
+      $("safety").textContent = status.safety || "默认不删除、不移动、不重命名、不重写源文件。";
+      updateResultsFromStatus(status);
+      return status;
     }
 
     async function api(action, payload = {}) {
@@ -1154,91 +895,59 @@
         });
         const data = await response.json();
         renderOutput(data, {show: false});
-        await refreshStatus().catch(() => null);
         renderWorkbenchResult(action, data);
-        setResultList([{title: actionLabel(action), sub: data.ok ? compact(describeActionResult(action, data).body, 52) : (data.error || "执行失败"), icon: data.ok ? "card-icon" : "doc", ok: data.ok}]);
+        setResultList([{title: actionLabel(action), sub: data.ok ? compact(data.summary || "操作完成", 56) : (data.error || "执行失败"), icon: data.ok ? "card-icon" : "doc", ok: data.ok}]);
         return data;
       } catch (error) {
         const data = {ok: false, error: String(error.stack || error)};
         renderOutput(data, {show: false});
         renderWorkbenchResult(action, data);
-        setResultList([{title: "执行失败", sub: data.error, icon: "doc"}]);
+        setResultList([{title: "执行失败", sub: data.error, icon: "doc", ok: false}]);
         return data;
       } finally {
         setBusy(false);
       }
     }
 
-    function actionLabel(action) {
-      const map = {
-        "today": "今天先干什么",
-        "onboarding": "快速初始化",
-        "open-guidebook": "打开教程 PDF",
-        "open-interaction-guide": "查看交互说明",
-        "file-radar": "查看文件雷达",
-        "inspect-local-targets": "检查本地目标",
-        "inbox-route": "这段内容放哪",
-        "obsidian-health": "检查知识库",
-        "build-ai-context": "生成 Codex 接手包",
-        "archive-ai-chat": "归档 AI 对话",
-        "action-note": "记录一个任务",
-        "card-note": "沉淀知识卡",
-        "time-review": "复盘今天",
-        "ask": "问怎么用"
-      };
-      return map[action] || action;
+    function payloadBase() {
+      return {kind: currentKind, text: text(), query: text(), request: text(), source: "GUI", ...readLocalTargets()};
     }
 
-    function runAction(action) {
+    function runCoreAction(action) {
+      setCoreMode(action);
+      return api(action, payloadBase());
+    }
+
+    function runLegacyAction(action) {
       const value = text();
-      return api(action, {text: value, body: value, query: value, request: value, ...readLocalTargets()});
+      if (action === "action-note") {
+        return api(action, {title: value || "记录一个任务", domain: "工作", goal: value || "待明确目标", source: "GUI"});
+      }
+      if (action === "card-note") {
+        return api(action, {title: value || "知识卡", domain: "学习", source: "GUI", conclusion: value || "待补充结论"});
+      }
+      if (action === "time-review") {
+        return api(action, {title: "今日复盘", period: "daily", done: value || "完成轻量复盘", next: "明确下一步"});
+      }
+      if (action === "archive-ai-chat") {
+        return api(action, {title: value || "AI 对话归档", source: "GUI", background: value, conclusions: "待提炼结论", outputs: "待补充产出", open_items: "待确认"});
+      }
+      if (action === "inbox-route") {
+        return api(action, {text: value, body: value});
+      }
+      if (action === "file-radar") {
+        return api(action, {...readLocalTargets(), text: value});
+      }
+      return api(action, payloadBase());
     }
 
     function inspectLocalTargets() {
       return api("inspect-local-targets", readLocalTargets());
     }
 
-    function runFileRadar() {
-      return api("file-radar", {...readLocalTargets(), text: text()});
-    }
-
-    function ask() {
-      return api("ask", {question: text() || "我现在应该怎么用这个 Obsidian 助手？"});
-    }
-
-    function quickActionNote() {
-      const value = text() || "记录一个任务";
-      return api("action-note", {title: value.slice(0, 48), domain: "工作", goal: value, source: "GUI"});
-    }
-
-    function quickCardNote() {
-      const value = text() || "知识卡";
-      return api("card-note", {title: value.slice(0, 48), domain: "学习", source: "GUI", conclusion: value});
-    }
-
-    function quickTimeReview() {
-      const value = text() || "完成轻量复盘";
-      return api("time-review", {title: "今日复盘", period: "daily", done: value, next: "明确下一步"});
-    }
-
-    async function copyAiContextPrompt() {
-      const value = text() || "当前任务";
-      const data = await api("build-ai-context", {query: value, request: value, ...readLocalTargets()});
-      if (data.prompt && navigator.clipboard) {
-        await navigator.clipboard.writeText(data.prompt).catch(() => null);
-        renderWorkbenchResult("build-ai-context", {...data, next_request: "已复制 prompt。把它粘到 Codex，就能带着已整理上下文继续。"});
-        renderOutput({...data, copied_prompt: true}, {show: false});
-      }
-      return data;
-    }
-
     function openResultPath(index) {
       const item = lastResultPaths[index];
       if (!item) return null;
-      if (item.url) {
-        window.open(item.url, "_blank", "noopener");
-        return null;
-      }
       return api("open-path", {path: item.path});
     }
 
@@ -1247,29 +956,8 @@
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(lastPrompt).catch(() => null);
       }
-      $("workbenchResult").classList.remove("waiting");
-      $("workbenchResult").querySelector("p").textContent = "prompt 已复制。把它粘到 Codex，就能带着已整理上下文继续。";
-    }
-
-    function archiveAiChat() {
-      const value = text() || "待归档 AI 对话";
-      return api("archive-ai-chat", {
-        title: value.slice(0, 48),
-        source: "GUI",
-        background: value,
-        conclusions: "待提炼关键结论",
-        outputs: "待补充产出路径",
-        open_items: "待确认未完成事项"
-      });
-    }
-
-    function openObsidian() {
-      return api("open-obsidian");
-    }
-
-    function openInteractionGuide() {
-      window.open("/assets/gui/interaction-guide.html", "_blank", "noopener");
-      return api("open-interaction-guide");
+      const paragraph = $("workbenchResult").querySelector("p");
+      if (paragraph) paragraph.textContent = "prompt 已复制。把它粘到 AI 对话里，就能带着已整理上下文继续。";
     }
 
     function toggleOutput() {

@@ -1,45 +1,28 @@
 # Project Principles
 
-This project is a local-first Obsidian AI organizing workspace, not a cloud file cleaner. It turns local files, Obsidian notes, AI conversations, and manual input into records that are actionable, reviewable, traceable, and reusable as future AI context.
+This project is a local knowledge organizer for Obsidian and AI workflows. It is not a cloud file cleaner and not a general automation bot.
 
-## Core Positioning
+## Principles
 
-- knowledge action assistant: the product helps users turn messy inputs into Obsidian actions, cards, reviews, archives, and context prompts.
-- local-first: user files, reports, and Obsidian notes stay on the local machine by default.
-- private local configuration: machine-specific paths and secrets belong in `config.local.json`, which is ignored by git.
-- optional integrations: notification hooks are optional delivery channels, not the core open-source promise.
-- AI 对话归档: existing AI conversations become traceable archive notes.
-- AI 上下文取用: already-organized knowledge becomes copyable context for new AI conversations.
+- local-first / 本地优先：files, reports, and Obsidian notes stay on the local machine by default.
+- safe-by-default：默认不删除、不移动、不重命名、不重写源文件。
+- private local configuration：machine-specific paths and secrets belong in `config.local.json`, which is ignored by Git.
+- local knowledge organizer：产品名称统一为本地知识整理助手。
+- four core actions：主线统一为整理 / 回顾 / 提取 / 提醒，对应 organize / review / extract / remind。
+- obsidian workflow：所有沉淀结果优先写成 Obsidian 新笔记，保留来源和下一步。
+- human-readable GUI：成熟个人知识工作台风格，默认不展示黑色 JSON，GUI 输出必须让人能直接理解。
+- portable bootstrap：`scripts/init-assistant.ps1` 提供 demo mode 和一键初始化，新机器 clone 后可跑通。
+- cloud backup boundary：GitHub 备份项目本体；个人 Obsidian 内容不进公开仓库。
+- closed loop：每轮改动必须有 acceptance checks，包括单测、GUI E2E、harness 和可复核截图。
+- lightweight daily triage：每天 9 点只生成 1-3 个重点，不做定时整理。
+- life / study / work：整理时保留生活 / 学习 / 工作判断，但不强制复杂分类。
+- thin gui：GUI 只负责展示和调用，业务分发下沉到 `knowledge_assistant.py`。
+- validation harness：`scripts/verify-harness.ps1` 是主验证入口。
+- legacy compatibility：旧 action 保留兼容，但只放在高级/诊断里。
 
-## Four-Layer Architecture
+## Non Goals
 
-The four-layer architecture is the public mental model:
-
-```text
-输入层：本地文件 / Obsidian 笔记 / AI 对话记录 / 手动输入
-判断层：生活 / 学习 / 工作 + Action / Card / Time / X-AI
-执行层：文件雷达 / Obsidian 体检 / 收件箱归位 / 任务记录 / 知识卡沉淀 / 时间复盘 / AI 对话归档 / AI 上下文取用
-输出层：本地报告 / Obsidian 笔记 / GUI 操作入口 / AI 上下文 prompt / 可选通知
-```
-
-## Workflow Rules
-
-- ACT workflow: Action / Card / Time / X-AI is the default output model.
-- Obsidian workflow: `00 收件箱`, `01 今日日志`, projects, routine work, templates, and archive stay simple and readable.
-- life / study / work: every routing decision starts with 生活 / 学习 / 工作 before choosing a folder or template.
-- lightweight daily triage: 今日轻量规则 means 1-3 daily priorities only; 不要每天处理全部归档候选.
-- scenario-based workflow: GUI and docs start from user phrases such as “今天先干什么” and “这段内容放哪”.
-- closed loop: every scenario has outputs, acceptance checks, and a next action.
-- archive versus retrieval: archiving saves what happened; retrieval extracts useful context for what happens next.
-
-## Safety Rules
-
-- report-only safety: scans and audits are read-only by default.
-- The assistant does not delete, move, rename, or rewrite source files unless a future explicit execution mode adds a whitelist and confirmation boundary.
-- Existing source notes and files keep their original context; new records preserve source paths.
-
-## Implementation Rules
-
-- thin gui: the GUI is a thin entry layer over the same underlying modules, not a separate product fork.
-- validation harness: `scripts/verify-harness.ps1` and the Python test suite are the release gate.
-- closed loop evidence matters more than optimistic claims: reports, written notes, and tests are the proof.
+- 不做源文件搬迁。
+- 不做语义向量库。
+- 不做外部通知作为核心功能。
+- 不把个人 vault 上传到公开仓库。

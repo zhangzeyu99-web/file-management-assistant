@@ -1,49 +1,27 @@
 # Closed Loop Usage
 
-Closed loop means every user-facing scenario has a user phrase, actual action, safety boundary, output path or generated content, next action, and acceptance checks.
+本项目的闭环不是“自动帮你做完所有整理”，而是让每次操作都留下可回顾、可提取、可验证的结果。
 
-## Loop 1: Today
+## 操作闭环
 
-1. User says: `今天先干什么`.
-2. Assistant reads latest file radar and Obsidian health reports.
-3. Assistant returns 1-3 priorities only.
-4. Assistant separates 生活 / 学习 / 工作.
-5. Assistant keeps archive candidates for weekly or monthly review.
-6. Acceptance: no source files are deleted, moved, renamed, or rewritten.
+1. 输入资料、路径、问题或当前任务。
+2. 点击整理资料、回顾知识、提取上下文或今日提醒。
+3. 结果卡显示 summary、sources、artifacts、next_actions。
+4. 需要继续问 AI 时，复制 AI 上下文包。
+5. 需要长期保留时，打开 Obsidian 新笔记。
 
-## Loop 2: Capture
+## 验收标准
 
-1. User says: `这段内容放哪`.
-2. Assistant preserves source text.
-3. Assistant suggests inbox, daily, project, routine, or archive.
-4. Assistant writes a new note only when explicitly requested.
-5. Acceptance: source and next step are visible.
+- 页面只显示四个主入口。
+- 默认不展示黑色 JSON。
+- 点击后必须显示做了什么、来源是什么、产物在哪、下一步能点什么。
+- 默认不删除、不移动、不重命名、不重写源文件。
+- Playwright 必须覆盖首页截图和点击后状态。
 
-## Loop 3: ACT Note
+## 验证命令
 
-1. User says: `记录一个任务` or `这个以后会复用`.
-2. Assistant chooses Action or Card.
-3. Assistant writes source, next step, and acceptance criteria.
-4. Acceptance: note is usable without rereading the whole conversation.
-
-## Loop 4: Review
-
-1. User says: `复盘今天`.
-2. Assistant writes a lightweight Time note.
-3. Weekly review handles inbox and archive backlog.
-4. Monthly review considers structure changes.
-5. Acceptance: daily review does not become a burden.
-
-## Loop 5: AI Conversation Archive
-
-1. User says: `归档这段 AI 对话`.
-2. Assistant writes a new archive note with source, task background, key conclusions, output paths, and open items.
-3. The note records what already happened; it does not pretend to prepare a new AI conversation.
-4. Acceptance: the archive note is traceable and does not rewrite the original conversation or source files.
-
-## Loop 6: AI Context Retrieval
-
-1. User says: `给 AI 补上下文`.
-2. Assistant scans already-organized Obsidian notes, knowledge cards, project records, and reports.
-3. Assistant returns source paths, why they match, compressed context, a next request, and a copyable prompt.
-4. Acceptance: the new prompt can be pasted into an AI conversation and cites local source paths.
+```powershell
+python -m unittest discover -s tests -v
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -StrictUx
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1 -AllowDirty -SkipRemoteSync
+```

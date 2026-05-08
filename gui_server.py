@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 
 import file_assistant
 import assistant_evolution
+import knowledge_assistant
 import obsidian_assistant
 import obsidian_manager
 import scenario_playbook
@@ -39,7 +40,7 @@ def build_status(config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     config = load_config(config_path)
     return {
         "ok": True,
-        "product": scenario_playbook.PRODUCT,
+        "product": knowledge_assistant.PRODUCT,
         "config": str(config_path),
         "vault": str(scenario_playbook.obsidian_vault(config)),
         "runtime_root": str(scenario_playbook.runtime_root(config)),
@@ -303,6 +304,9 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
     payload = payload or {}
     config = load_config(config_path)
 
+    if action in {"organize", "review", "extract", "remind", "legacy-index"}:
+        return knowledge_assistant.run_action(action, payload, config_path)
+
     if action == "today":
         today = next(item for item in scenario_playbook.build_scenario_catalog(config) if item["id"] == "today")
         return {
@@ -479,7 +483,7 @@ LEGACY_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Obsidian AI 整理工作台</title>
+  <title>本地知识整理助手</title>
   <style>
     :root {
       --bg: #f5f7fb;
@@ -1074,7 +1078,7 @@ LEGACY_HTML = r"""<!doctype html>
               <polygon points="16 29 21 68 44 45" fill="#5d69ae"/>
               <polygon points="21 68 42 84 44 45" fill="#252f64"/>
             </svg>
-            <h1>Obsidian AI 整理工作台</h1>
+            <h1>本地知识整理助手</h1>
           </div>
           <p class="hero-subtitle">把本地文件、Obsidian 笔记、AI 对话整理成可归档、可复盘、可继续调用的上下文资产</p>
           <div class="safe-pill"><svg class="icon"><use href="#i-shield"/></svg>只读建议，不删除、不移动、不重命名、不重写源文件</div>
@@ -1141,7 +1145,7 @@ LEGACY_HTML = r"""<!doctype html>
 
       <section class="work-row">
         <div class="panel work-card">
-          <h2 class="section-title"><svg class="icon"><use href="#i-sparkle"/></svg>今日操作台</h2>
+          <h2 class="section-title"><svg class="icon"><use href="#i-sparkle"/></svg>四功能操作区</h2>
           <textarea id="freeText" placeholder="把你现在要处理的内容贴进来"></textarea>
           <div class="quick-actions">
             <button class="quick-button primary" onclick="ask()"><svg class="icon"><use href="#i-question"/></svg>问怎么用</button>
@@ -1228,7 +1232,7 @@ LEGACY_HTML = r"""<!doctype html>
           </div>
         </div>
         <div class="divider"></div>
-        <div class="result-head"><h2>执行结果</h2><button onclick="toggleOutput()">查看全部</button></div>
+        <div class="result-head"><h2>结果摘要</h2><button onclick="toggleOutput()">查看全部</button></div>
         <div class="result-list" id="resultList">
           <div class="result-item">
             <div class="result-icon"><svg class="icon"><use href="#i-shield"/></svg></div>

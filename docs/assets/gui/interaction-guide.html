@@ -3,20 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" href="data:," />
-  <title>Obsidian AI 整理工作台交互说明</title>
+  <title>本地知识整理助手交互说明</title>
   <style>
     :root {
-      --bg: #f5f7fb;
+      --bg: #f4f7fb;
       --panel: #ffffff;
-      --line: #e4eaf3;
-      --ink: #121826;
-      --muted: #667085;
+      --line: #dfe7f2;
+      --ink: #162033;
+      --muted: #617086;
       --blue: #2f6ecb;
-      --green: #26875a;
-      --violet: #6b5cf6;
-      --shadow: 0 18px 55px rgba(16, 24, 40, .08);
+      --green: #2d865f;
       --radius: 18px;
+      --shadow: 0 18px 48px rgba(22, 32, 51, .08);
       --font: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
     }
     * { box-sizing: border-box; }
@@ -24,168 +22,67 @@
       margin: 0;
       color: var(--ink);
       font-family: var(--font);
-      background:
-        radial-gradient(circle at 10% 0%, rgba(107, 92, 246, .08), transparent 32rem),
-        radial-gradient(circle at 90% 12%, rgba(47, 110, 203, .08), transparent 30rem),
-        var(--bg);
+      background: radial-gradient(circle at 14% 0%, rgba(47,110,203,.10), transparent 34rem), var(--bg);
     }
-    .page {
-      width: min(1180px, calc(100vw - 32px));
-      margin: 0 auto;
-      padding: 34px 0 56px;
-    }
-    .hero, .card {
-      background: rgba(255,255,255,.94);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-    }
-    .hero {
-      padding: 30px 34px;
-      margin-bottom: 16px;
-    }
-    h1 {
-      margin: 0;
-      font-size: clamp(34px, 4vw, 54px);
-      line-height: 1.05;
-      letter-spacing: -.04em;
-    }
-    .subtitle {
-      margin: 14px 0 0;
-      color: #344054;
-      font-size: 17px;
-      line-height: 1.8;
-    }
-    .safe {
-      display: inline-flex;
-      margin-top: 20px;
-      padding: 10px 18px;
-      border-radius: 999px;
-      background: #eef7f1;
-      color: #174a34;
-      border: 1px solid #d7eadc;
-      font-weight: 800;
-    }
-    .image-card {
-      padding: 14px;
-      margin-bottom: 16px;
-    }
-    .image-card img {
-      display: block;
-      width: 100%;
-      border-radius: 14px;
-      border: 1px solid #eef2f7;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-      margin-bottom: 16px;
-    }
+    main { max-width: 1180px; margin: 0 auto; padding: 42px 24px 64px; }
+    .hero, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .hero { padding: 42px; margin-bottom: 24px; }
+    .eyebrow { color: var(--blue); font-weight: 800; letter-spacing: .08em; font-size: 13px; }
+    h1 { margin: 12px 0 14px; font-size: clamp(34px, 5vw, 58px); letter-spacing: -.04em; }
+    .subtitle { margin: 0; max-width: 760px; color: var(--muted); font-size: 18px; line-height: 1.8; }
+    .safe { display: inline-flex; margin-top: 22px; padding: 10px 14px; border-radius: 999px; color: #174a34; background: #eef7f1; border: 1px solid #cfe8d8; font-weight: 700; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
     .card { padding: 22px; }
-    .card h2 {
-      margin: 0 0 12px;
-      font-size: 20px;
-    }
-    .card p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.75;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      overflow: hidden;
-      border-radius: 14px;
-      background: white;
-      box-shadow: var(--shadow);
-    }
-    th, td {
-      padding: 13px 14px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-      font-size: 14px;
-      line-height: 1.55;
-    }
-    th {
-      color: #253044;
-      background: #f8fbff;
-      font-size: 13px;
-    }
-    tr:last-child td { border-bottom: 0; }
-    .tag {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: #eaf2ff;
-      color: var(--blue);
-      font-size: 12px;
-      font-weight: 800;
-      white-space: nowrap;
-    }
-    .tag.write { background: #f0ebff; color: var(--violet); }
-    .tag.safe { background: #eef7f1; color: var(--green); }
-    @media (max-width: 840px) {
-      .grid { grid-template-columns: 1fr; }
-      th:nth-child(3), td:nth-child(3) { display: none; }
-    }
+    .card h2 { margin: 0 0 10px; font-size: 20px; }
+    .card p { margin: 0; color: var(--muted); line-height: 1.7; }
+    .panel { padding: 28px; margin: 18px 0; }
+    img { width: 100%; border: 1px solid var(--line); border-radius: 16px; background: white; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 13px 10px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 13px; }
+    code { background: #eef3fb; padding: 2px 6px; border-radius: 6px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
-  <main class="page">
+  <main>
     <section class="hero">
-      <h1>GUI 是可视化上下文入口</h1>
-      <p class="subtitle">它不是替代 Codex 的控制台。它把本地文件、Obsidian、历史报告和 AI 对话归档整理成 Codex 接手包，让 Codex 接手时少读上下文。</p>
-      <div class="safe">默认只读：不删除、不移动、不重命名、不重写源文件</div>
-    </section>
-
-    <section class="card image-card">
-      <img src="./interaction-map.png" alt="Obsidian AI 整理工作台上下文入口总览" />
-    </section>
-
-    <section class="card image-card">
-      <img src="./interaction-states.png" alt="Obsidian AI 整理工作台 Codex 接手包状态变化" />
+      <div class="eyebrow">GUI FLOW</div>
+      <h1>本地知识整理助手</h1>
+      <p class="subtitle">页面只保留四条主线：整理资料、回顾知识、提取上下文、今日提醒。每次点击后都要说清做了什么、来源是什么、产物在哪、下一步能点什么。</p>
+      <div class="safe">默认不删除、不移动、不重命名、不重写源文件</div>
     </section>
 
     <section class="grid">
-      <article class="card">
-        <h2>1. 先看上下文来源</h2>
-        <p>右侧概览展示文件雷达、Obsidian 笔记数、历史报告和最近上下文素材。本地文件 / 目录目标可以先点检查本地目标。</p>
-      </article>
-      <article class="card">
-        <h2>2. 生成 Codex 接手包</h2>
-        <p>写下要交给 Codex 的任务，系统会提取来源路径、相关原因、压缩摘要和边界。</p>
-      </article>
-      <article class="card">
-        <h2>3. 复制给 Codex</h2>
-        <p>把 prompt 交给 Codex，它就能基于真实本地路径继续处理，不需要你重复解释。</p>
-      </article>
+      <article class="panel card"><h2>整理资料</h2><p>文本 / 文件目录 / AI 对话进入 Obsidian 新整理记录。</p></article>
+      <article class="panel card"><h2>回顾知识</h2><p>关键词检索已整理内容，返回答案和来源。</p></article>
+      <article class="panel card"><h2>提取上下文</h2><p>生成 AI 上下文包，输出 prompt 和 Markdown。</p></article>
+      <article class="panel card"><h2>今日提醒</h2><p>每天 9 点只生成 1-3 个重点，不定时整理。</p></article>
     </section>
 
-    <table>
-      <thead>
-        <tr>
-          <th>想做什么</th>
-          <th>点击入口</th>
-          <th>点击后结果</th>
-          <th>文件影响</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td>让 Codex 接手一个任务</td><td>生成 Codex 接手包</td><td>返回来源、摘要、边界和下一步 prompt</td><td><span class="tag safe">只读</span></td></tr>
-        <tr><td>让新 AI 对话获得上下文</td><td>提取 AI 上下文 / 复制上下文 prompt</td><td>生成可复制给 Codex 的上下文 prompt</td><td><span class="tag safe">只读</span></td></tr>
-        <tr><td>保存已有 AI 对话</td><td>归档 AI 对话</td><td>新建 AI 对话归档笔记</td><td><span class="tag write">写新笔记</span></td></tr>
-        <tr><td>确认本地路径能否扫描</td><td>检查本地目标</td><td>返回路径是否存在、文件/目录类型和预览数量</td><td><span class="tag safe">只读</span></td></tr>
-        <tr><td>想看本地文件情况</td><td>查看文件雷达</td><td>返回本地文件报告、候选、大文件</td><td><span class="tag safe">报告</span></td></tr>
-        <tr><td>想检查 Obsidian 是否混乱</td><td>检查知识库</td><td>返回收件箱、断链、空壳笔记等结果</td><td><span class="tag safe">报告</span></td></tr>
-        <tr><td>不知道一段内容放哪</td><td>这段内容放哪</td><td>返回生活/学习/工作和放置建议</td><td><span class="tag safe">只读</span></td></tr>
-        <tr><td>记录一个具体任务</td><td>记录一个任务</td><td>新建 Action 任务笔记</td><td><span class="tag write">写新笔记</span></td></tr>
-        <tr><td>沉淀可复用经验</td><td>沉淀知识卡</td><td>新建 Card 知识卡</td><td><span class="tag write">写新笔记</span></td></tr>
-        <tr><td>做轻量日复盘</td><td>复盘今天</td><td>新建 Time 复盘笔记</td><td><span class="tag write">写新笔记</span></td></tr>
-        <tr><td>进入真实知识库</td><td>打开 Obsidian</td><td>打开本地 vault 路径</td><td><span class="tag safe">不改源文件</span></td></tr>
-      </tbody>
-    </table>
+    <section class="panel">
+      <h2>交互总览</h2>
+      <img src="./interaction-map.png" alt="本地知识整理助手交互总览" />
+    </section>
+
+    <section class="panel">
+      <h2>点击后状态</h2>
+      <img src="./interaction-states.png" alt="本地知识整理助手点击状态" />
+    </section>
+
+    <section class="panel">
+      <h2>按钮行为</h2>
+      <table>
+        <thead><tr><th>按钮</th><th>实际 action</th><th>结果</th><th>安全边界</th></tr></thead>
+        <tbody>
+          <tr><td>整理资料</td><td><code>organize</code></td><td>写入新的 Obsidian 整理记录</td><td>只写新笔记</td></tr>
+          <tr><td>回顾知识</td><td><code>review</code></td><td>返回本地摘要和来源路径</td><td>只读</td></tr>
+          <tr><td>提取上下文</td><td><code>extract</code></td><td>生成 AI 上下文包</td><td>写新上下文包</td></tr>
+          <tr><td>今日提醒</td><td><code>remind</code></td><td>生成 1-3 个今日重点</td><td>不自动整理</td></tr>
+          <tr><td>检查本地目标</td><td><code>inspect-local-targets</code></td><td>检查粘贴路径是否存在</td><td>只读</td></tr>
+        </tbody>
+      </table>
+    </section>
   </main>
 </body>
 </html>
