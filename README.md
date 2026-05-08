@@ -36,6 +36,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
 
 旧能力如文件雷达、知识库体检、记录任务进入 `高级/诊断`，保留兼容但不再作为主线。
 
+## 界面产品化原则
+
+首页按成熟文件工具的稳定经验收敛：一个统一入口接收文本、路径和 AI 对话；用快速场景降低上手成本；用搜索/筛选心智做回顾和提取；结果卡固定展示“做了什么 / 来源是什么 / 产物在哪 / 下一步”。详见 [Product UI Research](docs/PRODUCT_UI_RESEARCH.md)。
+
 ## 命令行入口
 
 ```powershell

@@ -126,6 +126,25 @@
       font-size: 13px;
       font-weight: 900;
     }
+    .hero-principles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 16px;
+    }
+    .principle-pill {
+      min-height: 31px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: #40504c;
+      font-size: 13px;
+      font-weight: 820;
+    }
     .core-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -195,6 +214,60 @@
       color: var(--muted);
       font-size: 14px;
       line-height: 1.6;
+    }
+    .work-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr);
+      gap: 12px;
+      margin-bottom: 14px;
+      padding: 14px;
+      border-radius: 17px;
+      background: linear-gradient(180deg, #fbfdff, #f5f8f7);
+      border: 1px solid var(--line);
+    }
+    .toolbar-text strong {
+      display: block;
+      color: #172522;
+      font-size: 14px;
+      font-weight: 900;
+    }
+    .toolbar-text span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .quick-presets {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .preset-button {
+      min-height: 34px;
+      padding: 0 11px;
+      border-radius: 11px;
+      border: 1px solid #dbe5f1;
+      background: #fff;
+      color: #2b3d39;
+      font-size: 12px;
+      font-weight: 850;
+      text-align: left;
+    }
+    .preset-button:hover { border-color: #aac4e9; background: #f9fbff; }
+    .search-note {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .search-note strong {
+      color: var(--teal);
+      font-weight: 900;
     }
     .kind-tabs {
       display: flex;
@@ -347,6 +420,31 @@
     .result-card h3 { margin: 0; font-size: 18px; line-height: 1.35; }
     .result-card p { margin: 9px 0 0; color: #475467; font-size: 13px; line-height: 1.6; }
     .result-meta { display: grid; gap: 7px; margin-top: 12px; color: #667085; font-size: 12px; }
+    .result-sections {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .result-section {
+      min-height: 86px;
+      padding: 12px;
+      border-radius: 13px;
+      border: 1px solid #e1eaf4;
+      background: rgba(255,255,255,.82);
+    }
+    .result-label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .result-detail {
+      color: #475467;
+      font-size: 12px;
+      line-height: 1.55;
+    }
     .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
     .result-button {
       min-height: 33px;
@@ -385,6 +483,21 @@
       font-size: 12px;
       font-weight: 900;
     }
+    .product-notes {
+      display: grid;
+      gap: 9px;
+      margin-top: 2px;
+    }
+    .product-note {
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fff;
+      color: #52635f;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .product-note strong { color: #20312e; }
     .advanced-card summary {
       cursor: pointer;
       color: #20312e;
@@ -519,7 +632,7 @@
       .status-panel { min-height: auto; }
     }
     @media (max-width: 900px) {
-      .core-grid, .workspace, .input-grid, .primary-actions, .advanced-grid, .metrics { grid-template-columns: 1fr; }
+      .core-grid, .workspace, .input-grid, .primary-actions, .advanced-grid, .metrics, .work-toolbar, .quick-presets, .result-sections { grid-template-columns: 1fr; }
       .hero, .work-card, .flow-card, .advanced-card, .status-panel { padding: 22px; }
     }
   </style>
@@ -532,6 +645,12 @@
         <h1>本地知识整理助手</h1>
         <p class="hero-subtitle">把本地文件、Obsidian 笔记和 AI 对话整理成可归档、可回顾、可提取给 AI 续用、可定时提醒的个人知识系统。</p>
         <div class="safe-line"><span class="safe-dot">✓</span>默认只读，不删除、不移动、不重命名、不重写源文件</div>
+        <div class="hero-principles" aria-label="产品化原则">
+          <span class="principle-pill">统一入口</span>
+          <span class="principle-pill">搜索/筛选</span>
+          <span class="principle-pill">来源可追溯</span>
+          <span class="principle-pill">最近来源</span>
+        </div>
       </header>
 
       <section class="core-grid" aria-label="四功能主线">
@@ -561,6 +680,19 @@
         <div class="panel work-card">
           <h2 class="section-title"><span class="title-mark">✦</span><span id="workTitle">整理资料</span></h2>
           <p class="intro" id="workIntro">把资料放进来，助手会保留来源、判断领域、写入新的 Obsidian 整理记录。</p>
+          <div class="work-toolbar">
+            <div class="toolbar-text">
+              <strong>统一入口</strong>
+              <span>输入问题、关键词、文件路径或 AI 对话；再选择整理、回顾、提取或提醒。</span>
+            </div>
+            <div class="quick-presets" aria-label="快速场景">
+              <button class="preset-button" onclick="applyPreset('organize-inbox')">快速场景：整理放进来的资料</button>
+              <button class="preset-button" onclick="applyPreset('review-topic')">快速场景：按关键词回顾</button>
+              <button class="preset-button" onclick="applyPreset('extract-context')">快速场景：打包给 AI</button>
+              <button class="preset-button" onclick="applyPreset('daily-remind')">快速场景：今日 1-3 个重点</button>
+            </div>
+          </div>
+          <div class="search-note"><strong>搜索/筛选</strong><span>先用关键词或任务缩小范围，再看来源、产物和下一步；不把全部归档候选变成今日任务。</span></div>
           <div class="kind-tabs" aria-label="整理资料类型">
             <button class="kind-tab active" data-kind="text" onclick="setInputKind('text')">文本</button>
             <button class="kind-tab" data-kind="file" onclick="setInputKind('file')">文件目录</button>
@@ -592,6 +724,12 @@
             <div class="result-eyebrow">结果预览</div>
             <h3>等待操作</h3>
             <p>点击四个主入口后，这里会显示做了什么、来源是什么、产物在哪、下一步能点什么。默认不展示黑色 JSON。</p>
+            <div class="result-sections">
+              <div class="result-section"><span class="result-label">做了什么</span><div class="result-detail">等待你选择一个核心动作。</div></div>
+              <div class="result-section"><span class="result-label">来源是什么</span><div class="result-detail">文本、路径、Obsidian、报告或 AI 对话都会保留来源。</div></div>
+              <div class="result-section"><span class="result-label">产物在哪</span><div class="result-detail">完成后显示可打开的 Obsidian 笔记、报告或 AI 上下文包。</div></div>
+              <div class="result-section"><span class="result-label">下一步</span><div class="result-detail">优先给 1-3 个可执行动作，避免淹没在候选列表里。</div></div>
+            </div>
           </section>
           <pre id="out" class="advanced-output">等待操作。</pre>
         </div>
@@ -603,6 +741,10 @@
             <div class="flow-step"><span class="step-num">2</span><span>整理成 Obsidian 新记录，旧文件不动。</span></div>
             <div class="flow-step"><span class="step-num">3</span><span>需要时回顾知识，查看答案和来源。</span></div>
             <div class="flow-step"><span class="step-num">4</span><span>继续问 AI 前，提取 AI 上下文包。</span></div>
+          </div>
+          <div class="product-notes">
+            <div class="product-note"><strong>文件工具经验：</strong>固定入口、最近来源、搜索/筛选和详情面板比堆按钮更稳定。</div>
+            <div class="product-note"><strong>当前边界：</strong>这里只做整理、回顾、提取、提醒；高级能力折叠保留，不抢主线。</div>
           </div>
         </div>
       </section>
@@ -654,7 +796,7 @@
           </div>
         </div>
         <div class="divider"></div>
-        <div class="result-head"><h2>最近动作</h2><button onclick="toggleOutput()">查看高级 JSON</button></div>
+        <div class="result-head"><h2>最近来源 / 最近动作</h2><button onclick="toggleOutput()">查看高级 JSON</button></div>
         <div class="result-list" id="resultList">
           <div class="result-item">
             <div class="result-icon card-icon"></div>
@@ -685,6 +827,29 @@
       remind: ["今日提醒", "生成今天 1-3 个重点。计划任务每天 9 点运行；整理仍需要手动触发。"]
     };
 
+    const presets = {
+      "organize-inbox": {
+        action: "organize",
+        kind: "text",
+        text: "整理我放进来的资料：先判断生活 / 学习 / 工作，再建议归档位置，保留来源，不移动源文件。"
+      },
+      "review-topic": {
+        action: "review",
+        kind: "text",
+        text: "回顾 Obsidian 教程、AI 上下文包和最近整理记录，给我答案和来源路径。"
+      },
+      "extract-context": {
+        action: "extract",
+        kind: "text",
+        text: "根据当前任务提取 AI 上下文包：包含来源路径、压缩摘要、安全边界和下一步请求。"
+      },
+      "daily-remind": {
+        action: "remind",
+        kind: "text",
+        text: "今天只给 1-3 个重点，不处理全部归档候选。"
+      }
+    };
+
     function text() {
       return $("freeText").value.trim();
     }
@@ -703,6 +868,16 @@
     function setInputKind(kind) {
       currentKind = kind;
       document.querySelectorAll("[data-kind]").forEach((tab) => tab.classList.toggle("active", tab.dataset.kind === kind));
+    }
+
+    function applyPreset(id) {
+      const preset = presets[id];
+      if (!preset) return;
+      setCoreMode(preset.action);
+      setInputKind(preset.kind || "text");
+      $("freeText").value = preset.text || "";
+      updateTargetSummary();
+      $("freeText").focus();
     }
 
     function readLocalTargets() {
@@ -819,6 +994,29 @@
       return result;
     }
 
+    function sourceSummary(data, sourceCount) {
+      const sources = Array.isArray(data?.sources) ? data.sources : [];
+      if (sources.length > 0) {
+        const first = sources[0];
+        const label = first.path || first.title || first.source || first.reason || "已整理来源";
+        return `${sourceCount} 条来源；最近来源：${compact(label, 92)}`;
+      }
+      if (data?.scan_targets?.summary?.existing_count) {
+        return `本地目标 ${data.scan_targets.summary.existing_count} 个；来源可追溯到粘贴路径。`;
+      }
+      return "本次没有匹配来源时，会提示先整理资料；不会编造当前状态。";
+    }
+
+    function artifactSummary(data, artifactCount) {
+      const artifacts = Array.isArray(data?.artifacts) ? data.artifacts : [];
+      if (artifacts.length > 0) {
+        const first = artifacts[0];
+        return `${artifactCount} 个产物；${compact(first.path || first.label || first.type || "已生成", 92)}`;
+      }
+      const fallback = data?.obsidian_note || data?.note || data?.markdown_report || data?.html_report || data?.summary_json;
+      return fallback ? `产物路径：${compact(fallback, 96)}` : "如需落盘，优先写入新的 Obsidian 记录或本地报告。";
+    }
+
     function actionLabel(action) {
       const map = {
         organize: "整理资料",
@@ -848,20 +1046,36 @@
       const ok = Boolean(data?.ok);
       const sourceCount = Array.isArray(data?.sources) ? data.sources.length : 0;
       const artifactCount = Array.isArray(data?.artifacts) ? data.artifacts.length : 0;
+      const nextActions = (data?.next_actions || []).slice(0, 3);
       const pathButtons = lastResultPaths.slice(0, 5).map((item, index) =>
         `<button class="result-button" onclick="openResultPath(${index})">${escapeHtml(item.label)}</button>`
       ).join("");
       const promptButton = lastPrompt ? `<button class="result-button primary" onclick="copyPromptFromLast()">复制 prompt</button>` : "";
-      const nextItems = (data?.next_actions || []).slice(0, 3).map((item) => `<div>${escapeHtml(compact(item, 130))}</div>`).join("");
+      const nextItems = nextActions.length
+        ? nextActions.map((item) => `<div>${escapeHtml(compact(item, 130))}</div>`).join("")
+        : "<div>没有强制下一步；可以继续补充资料、回顾关键词或复制上下文给 AI。</div>";
       $("workbenchResult").classList.remove("waiting");
       $("workbenchResult").innerHTML = `
         <div class="result-eyebrow">结果预览 · ${escapeHtml(label)}</div>
         <h3>${ok ? "操作完成" : "操作失败"}</h3>
         <p>${escapeHtml(compact(data?.summary || data?.error || "没有返回摘要。", 240))}</p>
-        <div class="result-meta">
-          <div>来源：${sourceCount} 条</div>
-          <div>产物：${artifactCount} 个</div>
-          ${nextItems}
+        <div class="result-sections">
+          <div class="result-section">
+            <span class="result-label">做了什么</span>
+            <div class="result-detail">${escapeHtml(ok ? `${label} 已完成。` : compact(data?.error || "动作没有完成。", 120))}</div>
+          </div>
+          <div class="result-section">
+            <span class="result-label">来源是什么</span>
+            <div class="result-detail">${escapeHtml(sourceSummary(data, sourceCount))}</div>
+          </div>
+          <div class="result-section">
+            <span class="result-label">产物在哪</span>
+            <div class="result-detail">${escapeHtml(artifactSummary(data, artifactCount))}</div>
+          </div>
+          <div class="result-section">
+            <span class="result-label">下一步</span>
+            <div class="result-detail">${nextItems}</div>
+          </div>
         </div>
         <div class="result-actions">
           ${pathButtons}

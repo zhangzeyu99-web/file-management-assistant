@@ -267,6 +267,20 @@ class GuiServerTests(unittest.TestCase):
             "readLocalTargets()",
         ]:
             self.assertIn(required, html)
+        for productized in [
+            "统一入口",
+            "快速场景",
+            "搜索/筛选",
+            "来源可追溯",
+            "最近来源",
+            "做了什么",
+            "来源是什么",
+            "产物在哪",
+            "下一步",
+            "result-sections",
+            "applyPreset",
+        ]:
+            self.assertIn(productized, html)
         self.assertIn("renderOutput(data, {show: false})", html)
         self.assertIn("renderWorkbenchResult(action, data)", html)
         self.assertNotIn("<symbol", html)

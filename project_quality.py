@@ -18,6 +18,7 @@ REQUIRED_DOCS = [
     "docs/OBSIDIAN_WORKFLOW_TUTORIAL.md",
     "docs/GUI_INTERACTION_GUIDE.md",
     "docs/GUI_E2E_TESTING.md",
+    "docs/PRODUCT_UI_RESEARCH.md",
     "docs/PRODUCTIZATION_TEST_RETRO.md",
     "docs/USER_SCENARIOS.md",
     "docs/CLOSED_LOOP_USAGE.md",
