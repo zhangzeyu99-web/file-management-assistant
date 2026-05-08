@@ -10,12 +10,19 @@ async page => {
     skipped: [],
     actions: [],
   };
-  const includeOpeners = /[?&]includeOpeners=1(?:&|$)/.test(page.url());
-  const readOnly = /[?&]readOnly=1(?:&|$)/.test(page.url());
+  const includeOpeners = /[?&#;]includeOpeners=1(?:[&;#]|$)/.test(page.url());
+  const readOnly = /[?&#;]readOnly=1(?:[&;#]|$)/.test(page.url());
+  function queryParam(name) {
+    const match = page.url().match(new RegExp(`[?&]${name}=([^&#]*)`));
+    return match ? decodeURIComponent(match[1].replace(/\+/g, " ")) : "";
+  }
+  const e2eLocalPath = queryParam("e2eLocalPath");
   report.include_openers = includeOpeners;
   report.read_only = readOnly;
+  report.e2e_local_path = e2eLocalPath;
 
   const textInput = page.locator("#freeText");
+  const localPathInput = page.locator("#localPaths");
   const output = page.locator("#out");
 
   function addFailure(message, data = {}) {
@@ -128,11 +135,21 @@ async page => {
 
   const bodyText = await page.locator("body").innerText();
   const fileInputCount = await page.locator("input[type=file]").count();
-  const hasFileDropText = /拖放|选择文件|选择目录|选择文件夹|本地路径|扫描范围/.test(bodyText);
-  if (fileInputCount === 0 && !hasFileDropText) {
-    addIssue("missing-file-input", "file scanning has no file picker, directory picker, drag-drop area, or explicit local path input");
+  const localPathInputCount = await page.locator("#localPaths").count();
+  const dropZoneCount = await page.locator("#fileDropZone").count();
+  const hasFileDropText = /拖放|选择文件|选择目录|本地路径|本地文件 \/ 目录目标/.test(bodyText);
+  if (fileInputCount === 0 || localPathInputCount === 0 || dropZoneCount === 0 || !hasFileDropText) {
+    addIssue("missing-file-target-workbench", "file scanning has no complete local target workbench with path input, file picker, and drop zone");
+  }
+  if (e2eLocalPath && localPathInputCount > 0) {
+    await localPathInput.fill(e2eLocalPath);
   }
 
+  await clickAndCapture({
+    label: "检查本地目标",
+    expectedAction: "inspect-local-targets",
+    input: "",
+  });
   await clickAndCapture({
     label: "问怎么用",
     expectedAction: "ask",
@@ -228,7 +245,22 @@ async page => {
   });
 
   const fileRadar = report.actions.find(item => item.expected_action === "file-radar");
+  const localTargetInspect = report.actions.find(item => item.expected_action === "inspect-local-targets");
+  if (e2eLocalPath && localTargetInspect && localTargetInspect.response_ok) {
+    if (localTargetInspect.response.mode !== "custom-local-paths" || !localTargetInspect.response.summary || localTargetInspect.response.summary.existing_count < 1) {
+      addIssue("local-target-not-recognized", "local target inspection did not recognize the E2E path", {
+        action: "inspect-local-targets",
+        e2eLocalPath,
+      });
+    }
+  }
   if (fileRadar && fileRadar.response_ok) {
+    if (e2eLocalPath && fileRadar.response.target_mode !== "custom-local-paths") {
+      addIssue("file-radar-did-not-use-local-targets", "file radar did not use pasted local paths as scan targets", {
+        action: "file-radar",
+        target_mode: fileRadar.response.target_mode,
+      });
+    }
     const resultText = `${fileRadar.result_text}\n${await visibleText("#out")}`;
     if (!/打开|报告|路径|继续|复制/.test(resultText)) {
       addIssue("missing-next-action-buttons", "file radar result does not expose clear next action buttons in the main workbench", {

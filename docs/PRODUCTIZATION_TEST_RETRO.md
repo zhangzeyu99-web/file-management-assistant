@@ -91,3 +91,13 @@ Before calling the GUI product-ready, these checks must pass:
 3. Split the workbench into content mode and local-file mode.
 4. Add E2E assertions for the new result cards and file input.
 5. Re-run strict UX gate and update this retro with the before/after result.
+
+## 2026-05-08 Follow-up
+
+The GUI now has a dedicated `本地文件 / 目录目标` workbench:
+
+- Users can paste Windows paths into `#localPaths`.
+- Users can drag/drop files or choose files/folders; browser file selection is used as context metadata, while real scanning uses pasted paths because browsers do not expose trusted full local paths.
+- `检查本地目标` calls `inspect-local-targets` and returns a read-only target summary.
+- `查看文件雷达` uses `custom-local-paths` when a pasted path exists; otherwise it falls back to configured watch roots.
+- The Playwright harness now injects `e2eLocalPath`, verifies the local target workbench, clicks `检查本地目标`, and fails strict UX if file radar ignores pasted local paths.

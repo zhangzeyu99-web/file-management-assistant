@@ -42,7 +42,7 @@
         radial-gradient(circle at 92% 16%, rgba(29, 155, 178, .07), transparent 28rem),
         var(--bg);
     }
-    button, textarea { font: inherit; }
+    button, textarea, input { font: inherit; }
     button {
       border: 0;
       cursor: pointer;
@@ -272,7 +272,7 @@
       gap: 14px;
       align-items: stretch;
     }
-    .path-box {
+    .file-target-panel {
       min-height: 92px;
       padding: 15px 16px;
       border-radius: 10px;
@@ -280,17 +280,79 @@
       background: linear-gradient(180deg, #fbfdff, #f3f7fc);
       color: #344054;
     }
-    .path-box strong {
+    .file-target-panel strong {
       display: block;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
       color: #172033;
       font-size: 14px;
     }
-    .path-box p {
+    .file-target-panel p {
       margin: 0;
       color: var(--muted);
       font-size: 12px;
       line-height: 1.55;
+    }
+    .target-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .target-head span {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .local-paths {
+      height: 54px;
+      min-height: 54px;
+      padding: 10px 12px;
+      border-color: #d3e0ef;
+      font-size: 12px;
+      line-height: 1.45;
+      box-shadow: none;
+    }
+    .drop-zone {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border: 1px dashed #b9cce5;
+      border-radius: 9px;
+      background: rgba(255,255,255,.72);
+      color: #475467;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .drop-zone.dragging {
+      border-color: var(--blue);
+      background: var(--blue-soft);
+      color: var(--blue-dark);
+    }
+    .file-input {
+      display: none;
+    }
+    .path-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 8px;
+    }
+    .mini-button {
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 7px;
+      border: 1px solid #dbe5f1;
+      background: #fff;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .target-summary {
+      margin-top: 8px;
+      color: #667085;
+      font-size: 12px;
+      line-height: 1.45;
     }
     .mode-strip {
       display: grid;
@@ -763,9 +825,18 @@
           <p class="work-intro">这里不是聊天窗口，也不是替代 Codex。写下你准备交给 Codex 的任务，页面会从本地文件、Obsidian 和历史报告中提取可复制的上下文。</p>
           <div class="input-grid">
             <textarea id="freeText" placeholder="写要交给 Codex 的任务，例如：继续优化 Obsidian 知识库结构"></textarea>
-            <div class="path-box">
-              <strong>上下文来源 / 配置扫描范围</strong>
-              <p>本地路径来自 config.json 的配置目录；接手包会引用本地文件报告、Obsidian 笔记和历史报告路径，不靠粘贴一大段原文。</p>
+            <div class="file-target-panel">
+              <div class="target-head"><strong>本地文件 / 目录目标</strong><span>默认只读</span></div>
+              <textarea id="localPaths" class="local-paths" placeholder="粘贴本地路径，例如 D:\Downloads 或 D:\Work\report.md"></textarea>
+              <div id="fileDropZone" class="drop-zone">上下文来源：拖放文件到这里，或选择文件/目录；要真实扫描本机目录，请粘贴完整路径。</div>
+              <input id="filePicker" class="file-input" type="file" multiple onchange="handleFileSelect(event)" />
+              <input id="folderPicker" class="file-input" type="file" webkitdirectory directory multiple onchange="handleFileSelect(event)" />
+              <div class="path-actions">
+                <button class="mini-button" onclick="$('filePicker').click()">选择文件</button>
+                <button class="mini-button" onclick="$('folderPicker').click()">选择目录</button>
+                <button class="mini-button" onclick="inspectLocalTargets()">检查本地目标</button>
+              </div>
+              <div id="targetSummary" class="target-summary">未选择路径时，文件雷达使用配置文件里的默认扫描范围。</div>
             </div>
           </div>
           <div class="mode-strip">
@@ -774,9 +845,9 @@
           </div>
           <div class="quick-actions">
             <button class="quick-button primary" onclick="runAction('build-ai-context')">生成 Codex 接手包</button>
+            <button class="quick-button" onclick="runFileRadar()"><span class="sprite icon-sm doc"></span>查看文件雷达</button>
             <button class="quick-button" onclick="ask()">？ 问怎么用</button>
             <button class="quick-button" onclick="runAction('inbox-route')"><span class="sprite icon-sm folder"></span>判断放哪</button>
-            <button class="quick-button" onclick="copyAiContextPrompt()">▣ 复制上下文</button>
           </div>
           <section id="workbenchResult" class="workbench-result waiting">
             <div class="workbench-eyebrow">接手包预览</div>
@@ -812,7 +883,7 @@
           <div class="action-column">
             <div class="column-title"><span class="sprite icon-sm folder"></span>整理</div>
             <div class="action-list">
-              <button class="action-item" onclick="runAction('file-radar')"><span class="sprite icon-sm doc"></span><span>查看文件雷达</span><span class="chevron">›</span></button>
+              <button class="action-item" onclick="runFileRadar()"><span class="sprite icon-sm doc"></span><span>查看文件雷达</span><span class="chevron">›</span></button>
               <button class="action-item" onclick="runAction('inbox-route')"><span class="sprite icon-sm folder"></span><span>这段内容放哪</span><span class="chevron">›</span></button>
               <button class="action-item" onclick="runAction('obsidian-health')"><span class="sprite icon-sm card-icon"></span><span>检查知识库</span><span class="chevron">›</span></button>
             </div>
@@ -886,9 +957,61 @@
   <script>
     const $ = (id) => document.getElementById(id);
     let lastStatus = null;
+    let selectedLocalFiles = [];
 
     function text() {
       return $("freeText").value.trim();
+    }
+
+    function readLocalTargets() {
+      return {
+        local_paths: $("localPaths") ? $("localPaths").value.trim() : "",
+        selected_files: selectedLocalFiles
+      };
+    }
+
+    function updateTargetSummary() {
+      const targets = readLocalTargets();
+      const pathCount = targets.local_paths ? targets.local_paths.split(/\r?\n|;/).filter((item) => item.trim()).length : 0;
+      const fileCount = selectedLocalFiles.length;
+      const summary = $("targetSummary");
+      if (!summary) return;
+      if (pathCount || fileCount) {
+        summary.textContent = `本次目标：${pathCount} 个粘贴路径，${fileCount} 个选择/拖放文件。文件雷达会优先使用粘贴路径；文件选择用于上下文提示。`;
+      } else {
+        summary.textContent = "未选择路径时，文件雷达使用配置文件里的默认扫描范围。";
+      }
+    }
+
+    function fileMeta(file) {
+      return {
+        name: file.name,
+        size: file.size || 0,
+        type: file.type || "",
+        relative_path: file.webkitRelativePath || ""
+      };
+    }
+
+    function handleFileSelect(event) {
+      selectedLocalFiles = Array.from(event.target.files || []).slice(0, 50).map(fileMeta);
+      updateTargetSummary();
+    }
+
+    function installDropZone() {
+      const zone = $("fileDropZone");
+      if (!zone) return;
+      zone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        zone.classList.add("dragging");
+      });
+      zone.addEventListener("dragleave", () => zone.classList.remove("dragging"));
+      zone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        zone.classList.remove("dragging");
+        selectedLocalFiles = Array.from(event.dataTransfer?.files || []).slice(0, 50).map(fileMeta);
+        updateTargetSummary();
+      });
+      $("localPaths")?.addEventListener("input", updateTargetSummary);
     }
 
     function nowTime() {
@@ -956,6 +1079,7 @@
         ["html_report", "打开 HTML 报告"],
         ["markdown_report", "打开 Markdown 报告"],
         ["summary_json", "打开摘要 JSON"],
+        ["obsidian_note", "打开 Obsidian 记录"],
         ["note", "打开笔记"],
         ["daily", "打开日记"],
         ["opened", "打开位置"],
@@ -991,7 +1115,17 @@
         "file-radar": {
           title: "文件雷达已返回报告",
           body: `报告已生成：扫描 ${formatNumber(summary.total_files)} 个文件，归档候选 ${formatNumber(counts.archive_candidates)} 个。`,
-          meta: ["执行方式：本地 Python 服务", `报告路径：${data.html_report || "暂无"}`]
+          meta: [
+            data.target_mode === "custom-local-paths" ? `扫描目标：${formatNumber(data.scan_targets?.summary?.existing_count)} 个粘贴路径` : "扫描目标：配置文件默认目录",
+            `报告路径：${data.html_report || "暂无"}`
+          ]
+        },
+        "inspect-local-targets": {
+          title: "本地目标已识别",
+          body: data.mode === "custom-local-paths"
+            ? `识别 ${formatNumber(summary.existing_count)} 个存在的路径。下一步可以点击“查看文件雷达”生成报告。`
+            : "未粘贴路径，将使用配置文件里的默认扫描目录。",
+          meta: ["执行方式：只读检查", data.safety || "不删除、不移动、不重命名"]
         },
         "obsidian-health": {
           title: "知识库体检已完成",
@@ -1131,6 +1265,7 @@
         "open-guidebook": "打开教程 PDF",
         "open-interaction-guide": "查看交互说明",
         "file-radar": "查看文件雷达",
+        "inspect-local-targets": "检查本地目标",
         "inbox-route": "这段内容放哪",
         "obsidian-health": "检查知识库",
         "build-ai-context": "生成 Codex 接手包",
@@ -1145,7 +1280,15 @@
 
     function runAction(action) {
       const value = text();
-      return api(action, {text: value, body: value, query: value, request: value});
+      return api(action, {text: value, body: value, query: value, request: value, ...readLocalTargets()});
+    }
+
+    function inspectLocalTargets() {
+      return api("inspect-local-targets", readLocalTargets());
+    }
+
+    function runFileRadar() {
+      return api("file-radar", {...readLocalTargets(), text: text()});
     }
 
     function ask() {
@@ -1169,7 +1312,7 @@
 
     async function copyAiContextPrompt() {
       const value = text() || "当前任务";
-      const data = await api("build-ai-context", {query: value, request: value});
+      const data = await api("build-ai-context", {query: value, request: value, ...readLocalTargets()});
       if (data.prompt && navigator.clipboard) {
         await navigator.clipboard.writeText(data.prompt).catch(() => null);
         renderWorkbenchResult("build-ai-context", {...data, next_request: "已复制 prompt。把它粘到 Codex，就能带着已整理上下文继续。"});
@@ -1225,6 +1368,8 @@
       }
     }
 
+    installDropZone();
+    updateTargetSummary();
     refreshStatus().catch((error) => {
       const data = {ok: false, error: String(error)};
       renderOutput(data, {show: false});

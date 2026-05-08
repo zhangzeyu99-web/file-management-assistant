@@ -14,6 +14,18 @@ $RunDir = Join-Path $Repo "output\gui-e2e\$Stamp"
 $ConfigPath = Join-Path $RunDir "config.gui-e2e.json"
 $ServerProcess = $null
 $Session = "gui-e2e-$Stamp"
+$LocalPathForE2E = ""
+
+function Add-QueryParam {
+    param(
+        [string]$Url,
+        [string]$Name,
+        [string]$Value
+    )
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $Url }
+    $separator = if ($Url.Contains("?")) { "&" } else { "?" }
+    return "$Url$separator$Name=$([uri]::EscapeDataString($Value))"
+}
 
 function New-FixtureConfig {
     New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
@@ -77,6 +89,7 @@ function New-FixtureConfig {
         review_keywords = @("todo", "review", "report", "tutorial")
     }
     $config | ConvertTo-Json -Depth 8 | Set-Content -Path $ConfigPath -Encoding UTF8
+    $script:LocalPathForE2E = $fixture
 }
 
 function Stop-PortServer {
@@ -149,17 +162,21 @@ try {
         Wait-HttpOk -Url $BaseUrl
     } else {
         New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
+        $script:LocalPathForE2E = $Repo
         Wait-HttpOk -Url $BaseUrl
     }
 
     $TestUrl = $BaseUrl
+    $TestUrl = Add-QueryParam -Url $TestUrl -Name "e2eLocalPath" -Value $LocalPathForE2E
+    $UrlFlags = @()
     if ($IncludeOpeners) {
-        $separator = if ($TestUrl.Contains("?")) { "&" } else { "?" }
-        $TestUrl = "$TestUrl${separator}includeOpeners=1"
+        $UrlFlags += "includeOpeners=1"
     }
     if ($ReadOnly) {
-        $separator = if ($TestUrl.Contains("?")) { "&" } else { "?" }
-        $TestUrl = "$TestUrl${separator}readOnly=1"
+        $UrlFlags += "readOnly=1"
+    }
+    if ($UrlFlags.Count -gt 0) {
+        $TestUrl = "$TestUrl#$($UrlFlags -join ';')"
     }
 
     $openArgs = @("--package", "@playwright/cli", "playwright-cli", "-s=$Session", "open", $TestUrl)
@@ -177,6 +194,9 @@ try {
         throw "Playwright did not return JSON. Raw output saved to $rawPath"
     }
     $result = $rawText.Substring($jsonStart, $jsonEnd - $jsonStart + 1) | ConvertFrom-Json
+    if ($ReadOnly -and -not $result.read_only) {
+        throw "read-only flag did not reach browser; refusing to continue because live smoke could write files"
+    }
 
     $screenshot = Join-Path $RunDir "final-page.png"
     & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" screenshot --filename $screenshot | Out-Null

@@ -52,10 +52,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -S
 
 ## Current UX checks
 
-The E2E audit currently flags these issues:
+The E2E audit now verifies these product-level behaviors:
 
-- action results default to a black JSON/code box
-- file scanning has no file picker, directory picker, drag-drop area, or explicit local path input
-- file radar results do not expose clear next-action buttons in the main workbench
+- action results do not default to a black JSON/code box
+- the GUI exposes a local target workbench with `#localPaths`, file picker, folder picker, and drag/drop zone
+- the harness fills `e2eLocalPath`, clicks `检查本地目标`, and verifies `inspect-local-targets`
+- in full isolated mode, file radar must use `custom-local-paths` when a local path is provided
+- file radar results expose visible next-action buttons in the main workbench
 
 These are product UX failures, not backend mechanics failures. The script separates them so we can prove real operations work while still tracking what must be fixed before the GUI feels usable.
+
+## Harness contract
+
+- `scripts/run-gui-e2e.ps1` creates an isolated fixture folder and passes it to the browser as `e2eLocalPath`.
+- `scripts/gui-e2e-playwright.js` writes that path into the local target input before clicking buttons.
+- Read-only live smoke tests still click `检查本地目标`, but skip write-producing actions.
+- Strict mode fails on `missing-file-target-workbench`, `local-target-not-recognized`, `file-radar-did-not-use-local-targets`, raw JSON default output, or missing next-action buttons.

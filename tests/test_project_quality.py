@@ -123,6 +123,8 @@ class ProjectQualityTests(unittest.TestCase):
             "Obsidian",
             "历史报告",
             "不是替代 Codex",
+            "本地文件 / 目录目标",
+            "检查本地目标",
         ]:
             self.assertIn(phrase, public_text)
         for obsolete in [
@@ -132,6 +134,22 @@ class ProjectQualityTests(unittest.TestCase):
             "伪控制台",
         ]:
             self.assertNotIn(obsolete, public_text)
+
+    def test_gui_harness_verifies_local_target_workbench(self) -> None:
+        script = (self.repo / "scripts" / "gui-e2e-playwright.js").read_text(encoding="utf-8-sig")
+        runner = (self.repo / "scripts" / "run-gui-e2e.ps1").read_text(encoding="utf-8-sig")
+
+        for phrase in [
+            "#localPaths",
+            "#fileDropZone",
+            "inspect-local-targets",
+            "custom-local-paths",
+            "missing-file-target-workbench",
+        ]:
+            self.assertIn(phrase, script)
+        self.assertIn("e2eLocalPath", runner)
+        self.assertIn("LocalPathForE2E", runner)
+        self.assertIn("read-only flag did not reach browser", runner)
 
 
 if __name__ == "__main__":

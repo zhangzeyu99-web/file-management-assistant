@@ -102,6 +102,203 @@ def build_codex_prompt(user_request: str, config: dict[str, Any]) -> str:
 """
 
 
+def split_local_paths(value: Any) -> list[str]:
+    if isinstance(value, list):
+        raw_items = value
+    elif value is None:
+        raw_items = []
+    else:
+        raw_items = str(value).replace(";", "\n").splitlines()
+    paths: list[str] = []
+    for item in raw_items:
+        cleaned = str(item).strip().strip('"').strip("'")
+        if cleaned:
+            paths.append(cleaned)
+    return list(dict.fromkeys(paths))
+
+
+def extract_local_target_paths(payload: dict[str, Any]) -> list[str]:
+    paths: list[str] = []
+    for key in ("local_paths", "target_paths", "paths", "path_text", "target_path"):
+        paths.extend(split_local_paths(payload.get(key)))
+    return list(dict.fromkeys(paths))
+
+
+def selected_file_metadata(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    selected = payload.get("selected_files") or []
+    if not isinstance(selected, list):
+        return []
+    files: list[dict[str, Any]] = []
+    for item in selected[:50]:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        files.append(
+            {
+                "name": name,
+                "size": int(item.get("size") or 0),
+                "type": str(item.get("type") or ""),
+                "relative_path": str(item.get("relative_path") or ""),
+            }
+        )
+    return files
+
+
+def inspect_local_targets(config: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    paths = extract_local_target_paths(payload)
+    selected_files = selected_file_metadata(payload)
+    if not paths:
+        defaults = [
+            {
+                "name": str(root.get("name") or Path(str(root.get("path") or "")).name),
+                "path": str(root.get("path") or ""),
+                "max_depth": int(root.get("max_depth", 2)),
+                "max_files": int(root.get("max_files", 2000)),
+            }
+            for root in config.get("watch_roots", [])
+        ]
+        return {
+            "ok": True,
+            "action": "inspect-local-targets",
+            "mode": "configured-defaults",
+            "summary": {
+                "target_count": len(defaults),
+                "existing_count": sum(1 for item in defaults if Path(item["path"]).exists()),
+                "selected_file_count": len(selected_files),
+            },
+            "targets": defaults,
+            "selected_files": selected_files,
+            "safety": "默认只读；未粘贴路径时使用 config.json / config.local.json 的扫描目录。",
+        }
+
+    targets: list[dict[str, Any]] = []
+    for raw_path in paths:
+        target = Path(raw_path).expanduser()
+        exists = target.exists()
+        is_dir = target.is_dir() if exists else False
+        is_file = target.is_file() if exists else False
+        item: dict[str, Any] = {
+            "path": str(target),
+            "exists": exists,
+            "is_dir": is_dir,
+            "is_file": is_file,
+            "kind": "directory" if is_dir else "file" if is_file else "missing",
+        }
+        if is_file:
+            stat = target.stat()
+            item.update({"size_bytes": int(stat.st_size), "extension": file_assistant.normalize_extension(target)})
+        elif is_dir:
+            files = file_assistant.iter_files(
+                target,
+                max_depth=int(payload.get("max_depth") or 2),
+                max_files=int(payload.get("max_files") or 100),
+                excluded_dirs={str(name).lower() for name in config.get("exclude_dir_names", [])},
+            )
+            item.update({"preview_file_count": len(files), "preview_files": [str(path) for path in files[:8]]})
+        targets.append(item)
+
+    return {
+        "ok": True,
+        "action": "inspect-local-targets",
+        "mode": "custom-local-paths",
+        "summary": {
+            "target_count": len(targets),
+            "existing_count": sum(1 for item in targets if item["exists"]),
+            "directory_count": sum(1 for item in targets if item["is_dir"]),
+            "file_count": sum(1 for item in targets if item["is_file"]),
+            "selected_file_count": len(selected_files),
+        },
+        "targets": targets,
+        "selected_files": selected_files,
+        "safety": "只读检查；不会删除、移动、重命名或重写源文件。",
+    }
+
+
+def make_file_record(root_name: str, path: Path, reference: Any) -> file_assistant.FileRecord | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    modified = file_assistant.dt.datetime.fromtimestamp(stat.st_mtime, tz=reference.tzinfo)
+    age_days = max(0.0, (reference - modified).total_seconds() / 86400)
+    return file_assistant.FileRecord(
+        root_name=root_name,
+        path=str(path),
+        extension=file_assistant.normalize_extension(path),
+        size_bytes=int(stat.st_size),
+        modified_at=modified.strftime("%Y-%m-%d %H:%M:%S %z"),
+        age_days=round(age_days, 2),
+    )
+
+
+def build_target_records(config: dict[str, Any], payload: dict[str, Any], reference: Any) -> tuple[list[file_assistant.FileRecord], list[str]]:
+    excluded = {str(item).lower() for item in config.get("exclude_dir_names", [])}
+    records: list[file_assistant.FileRecord] = []
+    warnings: list[str] = []
+    for raw_path in extract_local_target_paths(payload):
+        target = Path(raw_path).expanduser()
+        if not target.exists():
+            warnings.append(f"路径不存在：{target}")
+            continue
+        if target.is_file():
+            record = make_file_record(target.parent.name or "SelectedFile", target, reference)
+            if record:
+                records.append(record)
+            continue
+        if target.is_dir():
+            root_name = target.name or str(target)
+            files = file_assistant.iter_files(
+                target,
+                max_depth=int(payload.get("max_depth") or 3),
+                max_files=int(payload.get("max_files") or 2000),
+                excluded_dirs=excluded,
+            )
+            for file_path in files:
+                record = make_file_record(root_name, file_path, reference)
+                if record:
+                    records.append(record)
+            continue
+        warnings.append(f"暂不支持的路径类型：{target}")
+    return records, warnings
+
+
+def run_target_file_radar(config_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    config = load_config(config_path)
+    generated_at = file_assistant.now_local()
+    run_dir = (
+        Path(config["runtime_root"])
+        / "runs"
+        / generated_at.strftime("%Y-%m-%d")
+        / f"{generated_at.strftime('%H%M%S')}-gui-targets"
+    )
+    records, warnings = build_target_records(config, payload, generated_at)
+    classifications = file_assistant.classify_records(records, config)
+    duplicates = file_assistant.detect_duplicates(records, config)
+    summary = file_assistant.build_summary(config, records, warnings, classifications, duplicates, "GUI", run_dir, generated_at)
+    scan_targets = inspect_local_targets(config, payload)
+    summary.update({"target_mode": scan_targets["mode"], "scan_targets": scan_targets})
+
+    summary_json = run_dir / "summary.json"
+    markdown_report = run_dir / "report.md"
+    html_report = run_dir / "report.html"
+    file_assistant.write_json(summary_json, summary)
+    file_assistant.write_text(markdown_report, file_assistant.render_markdown(summary))
+    file_assistant.write_text(html_report, file_assistant.render_html(summary))
+    obsidian_note = file_assistant.write_obsidian_run_note(config, summary, markdown_report, html_report)
+    summary.update(
+        {
+            "summary_json": str(summary_json),
+            "markdown_report": str(markdown_report),
+            "html_report": str(html_report),
+            "obsidian_note": str(obsidian_note),
+        }
+    )
+    file_assistant.write_json(summary_json, summary)
+    return summary
+
+
 def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     payload = payload or {}
     config = load_config(config_path)
@@ -115,7 +312,13 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
             "scenario": today,
         }
 
+    if action == "inspect-local-targets":
+        return inspect_local_targets(config, payload)
+
     if action in {"file-radar", "file-scan"}:
+        if extract_local_target_paths(payload):
+            report = run_target_file_radar(config_path, payload)
+            return {"ok": True, "action": action, **report}
         report = latest_file_report(config)
         if report is None:
             report = file_assistant.run(config_path, "GUI")

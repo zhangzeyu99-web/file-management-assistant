@@ -95,6 +95,36 @@ class GuiServerTests(unittest.TestCase):
         self.assertTrue(health["ok"], health)
         self.assertIn("markdown_report", health)
 
+    def test_local_target_input_is_inspected_and_used_by_file_radar(self) -> None:
+        manual_dir = self.root / "manual-target"
+        manual_dir.mkdir()
+        manual_file = manual_dir / "manual-report.md"
+        manual_file.write_text("# manual report\n\nGUI should scan this pasted path only.", encoding="utf-8")
+
+        inspect = gui_server.run_gui_action(
+            "inspect-local-targets",
+            {"local_paths": str(manual_file), "selected_files": [{"name": "manual-report.md", "size": 42}]},
+            self.config_path,
+        )
+        radar = gui_server.run_gui_action("file-radar", {"local_paths": str(manual_file)}, self.config_path)
+
+        self.assertTrue(inspect["ok"], inspect)
+        self.assertEqual("inspect-local-targets", inspect["action"])
+        self.assertEqual("custom-local-paths", inspect["mode"])
+        self.assertEqual(1, inspect["summary"]["target_count"])
+        self.assertEqual(1, inspect["summary"]["existing_count"])
+        self.assertEqual(1, inspect["summary"]["selected_file_count"])
+        self.assertEqual(str(manual_file), inspect["targets"][0]["path"])
+        self.assertTrue(inspect["targets"][0]["is_file"])
+
+        self.assertTrue(radar["ok"], radar)
+        self.assertEqual("file-radar", radar["action"])
+        self.assertEqual("custom-local-paths", radar["target_mode"])
+        self.assertEqual(1, radar["total_files"])
+        self.assertEqual(1, radar["scan_targets"]["summary"]["existing_count"])
+        self.assertTrue(Path(radar["html_report"]).exists())
+        self.assertTrue(Path(radar["summary_json"]).exists())
+
     def test_capture_daily_and_act_actions_write_to_vault(self) -> None:
         capture = gui_server.run_gui_action(
             "capture",
@@ -202,6 +232,10 @@ class GuiServerTests(unittest.TestCase):
             "生成 Codex 接手包",
             "查看高级 JSON",
             "接手包预览",
+            "本地文件 / 目录目标",
+            "粘贴本地路径",
+            "拖放文件到这里",
+            "检查本地目标",
         ]:
             self.assertIn(label, html)
         for required in [
@@ -220,6 +254,12 @@ class GuiServerTests(unittest.TestCase):
             "hero-illustration.png",
             "feature-icons.png",
             "interaction-guide.html",
+            'id="localPaths"',
+            'id="fileDropZone"',
+            'type="file"',
+            "inspect-local-targets",
+            "readLocalTargets()",
+            "runFileRadar()",
         ]:
             self.assertIn(required, html)
         self.assertIn("renderOutput(data, {show: false})", html)
