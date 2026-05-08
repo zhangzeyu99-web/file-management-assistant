@@ -72,104 +72,50 @@
       box-shadow: var(--shadow);
     }
     .hero {
-      min-height: 258px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 455px;
-      gap: 18px;
-      padding: 32px 18px 24px 34px;
+      padding: 26px 32px 24px;
       overflow: hidden;
-    }
-    .hero-kicker {
-      width: max-content;
-      max-width: 100%;
-      margin-bottom: 14px;
-      padding: 7px 12px;
-      border-radius: 999px;
-      background: #eef4ff;
-      color: var(--blue-dark);
-      border: 1px solid #d8e6fb;
-      font-size: 13px;
-      font-weight: 850;
-      letter-spacing: .02em;
     }
     h1 {
       margin: 0;
-      font-size: clamp(40px, 4.1vw, 58px);
+      font-size: clamp(34px, 3.1vw, 48px);
       line-height: 1.04;
-      letter-spacing: -.045em;
+      letter-spacing: -.035em;
       font-weight: 900;
     }
     .hero-subtitle {
-      margin: 18px 0 0;
-      max-width: 760px;
+      margin: 12px 0 0;
+      max-width: 850px;
       color: #344054;
-      font-size: 17px;
-      line-height: 1.72;
+      font-size: 16px;
+      line-height: 1.64;
       letter-spacing: -.01em;
-    }
-    .boundary-grid {
-      max-width: 780px;
-      margin-top: 18px;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .boundary-card {
-      min-height: 74px;
-      padding: 13px 15px;
-      border-radius: 14px;
-      background: rgba(255,255,255,.78);
-      border: 1px solid #dde7f3;
-      box-shadow: 0 4px 16px rgba(16, 24, 40, .04);
-    }
-    .boundary-card strong {
-      display: block;
-      margin-bottom: 5px;
-      color: #1d2939;
-      font-size: 14px;
-    }
-    .boundary-card span {
-      display: block;
-      color: #667085;
-      font-size: 12px;
-      line-height: 1.5;
     }
     .safe-pill {
       width: max-content;
       max-width: 100%;
-      margin-top: 28px;
+      margin-top: 16px;
       display: inline-flex;
       align-items: center;
-      gap: 12px;
-      padding: 11px 24px;
+      gap: 10px;
+      padding: 9px 16px;
       border-radius: 999px;
       background: var(--green-soft);
       color: #174a34;
       border: 1px solid #d7eadc;
-      font-size: 18px;
+      font-size: 15px;
       font-weight: 750;
       box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
     }
     .shield-dot {
-      width: 26px;
-      height: 26px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       display: grid;
       place-items: center;
       background: var(--green);
       color: white;
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 900;
-    }
-    .hero-art {
-      align-self: stretch;
-      width: 100%;
-      height: 210px;
-      object-fit: cover;
-      object-position: center;
-      border-radius: 16px;
-      mix-blend-mode: multiply;
-      opacity: .96;
     }
     .feature-grid {
       display: grid;
@@ -177,11 +123,11 @@
       gap: 12px;
     }
     .feature-card {
-      min-height: 132px;
-      padding: 22px 24px;
+      min-height: 104px;
+      padding: 18px 20px;
       display: grid;
-      grid-template-columns: 64px minmax(0, 1fr);
-      gap: 18px;
+      grid-template-columns: 54px minmax(0, 1fr);
+      gap: 14px;
       align-items: center;
     }
     .sprite {
@@ -192,9 +138,9 @@
       flex: 0 0 auto;
     }
     .feature-icon {
-      width: 58px;
-      height: 58px;
-      border-radius: 16px;
+      width: 50px;
+      height: 50px;
+      border-radius: 14px;
     }
     .icon-sm {
       width: 22px;
@@ -207,15 +153,15 @@
     .card-icon { background-position: 100% 100%; }
     .feature-card h2 {
       margin: 0 0 8px;
-      font-size: 18px;
+      font-size: 16px;
       line-height: 1.25;
       letter-spacing: -.02em;
     }
     .feature-card p {
       margin: 0;
       color: #475467;
-      font-size: 14px;
-      line-height: 1.58;
+      font-size: 13px;
+      line-height: 1.5;
     }
     .work-row {
       display: grid;
@@ -354,32 +300,11 @@
       font-size: 12px;
       line-height: 1.45;
     }
-    .mode-strip {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 14px;
-    }
-    .mode-pill {
-      padding: 11px 13px;
-      border-radius: 10px;
-      border: 1px solid #e1e8f2;
-      background: #fff;
-      color: #475467;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .mode-pill strong {
-      display: block;
-      margin-bottom: 3px;
-      color: #172033;
-      font-size: 14px;
-    }
     .quick-actions {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 18px;
+      gap: 12px;
+      margin-top: 14px;
     }
     .quick-button {
       min-height: 44px;
@@ -765,8 +690,6 @@
       .app { grid-template-columns: 1fr; }
       .side { position: static; }
       .status-panel { min-height: auto; }
-      .hero { grid-template-columns: 1fr; padding-right: 34px; }
-      .hero-art { height: 220px; }
       .action-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .action-column:nth-child(2) { border-right: 0; padding-right: 0; }
     }
@@ -774,7 +697,7 @@
       .app { width: min(100vw - 20px, 1648px); }
       .hero { padding: 24px; }
       .safe-pill { font-size: 14px; }
-      .feature-grid, .work-row, .action-columns, .metrics, .quick-actions, .boundary-grid, .input-grid, .mode-strip { grid-template-columns: 1fr; }
+      .feature-grid, .work-row, .action-columns, .metrics, .quick-actions, .input-grid { grid-template-columns: 1fr; }
       .feature-card { grid-template-columns: 54px minmax(0, 1fr); padding: 18px; }
       .feature-icon { width: 48px; height: 48px; }
       .action-column { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 18px; }
@@ -787,42 +710,34 @@
   <main class="app">
     <section class="main">
       <header class="panel hero">
-        <div>
-          <div class="hero-kicker">可视化上下文入口 / 这不是 Codex 本体</div>
-          <h1>Obsidian AI 整理工作台</h1>
-          <p class="hero-subtitle">GUI 不是替代 Codex，而是把本地文件、Obsidian 和历史报告整理成接手上下文，让 Codex 接手时少读上下文。</p>
-          <div class="boundary-grid">
-            <div class="boundary-card"><strong>上下文入口</strong><span>集中展示来源、路径、报告和 Obsidian 状态，减少来回找文件。</span></div>
-            <div class="boundary-card"><strong>Codex 接手包</strong><span>从已整理内容提取来源摘要，复制给 Codex 继续处理。</span></div>
-          </div>
-          <div class="safe-pill"><span class="shield-dot">✓</span>只读建议，不删除、不移动、不重命名、不重写源文件</div>
-        </div>
-        <img class="hero-art" src="/assets/gui/hero-illustration.png" alt="Obsidian AI 上下文资产工作流主视觉" />
+        <h1>Obsidian AI 整理工作台</h1>
+        <p class="hero-subtitle">把本地文件、Obsidian 笔记、历史报告和 AI 对话整理成可复制给 Codex 的上下文。</p>
+        <div class="safe-pill"><span class="shield-dot">✓</span>默认只读，不删除、不移动、不重命名、不重写源文件</div>
       </header>
 
       <section class="feature-grid">
         <article class="panel feature-card">
           <span class="sprite feature-icon folder"></span>
-          <div><h2>本地文件</h2><p>本地文件扫描使用配置目录，形成文件雷达和可追溯报告。</p></div>
+          <div><h2>本地文件</h2><p>扫描目录，生成文件雷达和可追溯报告。</p></div>
         </article>
         <article class="panel feature-card">
           <span class="sprite feature-icon chat"></span>
-          <div><h2>Obsidian 笔记</h2><p>查看 vault、收件箱、知识卡和项目记录的当前结构。</p></div>
+          <div><h2>Obsidian 笔记</h2><p>查看收件箱、知识卡和项目记录。</p></div>
         </article>
         <article class="panel feature-card">
           <span class="sprite feature-icon doc"></span>
-          <div><h2>历史报告</h2><p>聚合文件雷达、知识库体检和历史运行结果，作为接手证据。</p></div>
+          <div><h2>历史报告</h2><p>复用文件雷达、体检和运行结果。</p></div>
         </article>
         <article class="panel feature-card">
           <span class="sprite feature-icon card-icon"></span>
-          <div><h2>AI 对话归档</h2><p>把已有对话保存成记录，再按任务生成可复用上下文。</p></div>
+          <div><h2>AI 对话归档</h2><p>保存已有对话，后续提取上下文。</p></div>
         </article>
       </section>
 
       <section class="work-row">
         <div class="panel work-card">
           <h2 class="section-title"><span class="title-mark">✦</span>Codex 接手包</h2>
-          <p class="work-intro">这里不是聊天窗口，也不是替代 Codex。写下你准备交给 Codex 的任务，页面会从本地文件、Obsidian 和历史报告中提取可复制的上下文。</p>
+          <p class="work-intro">写下要交给 Codex 的任务；需要扫描文件时，在右侧粘贴本地路径。</p>
           <div class="input-grid">
             <textarea id="freeText" placeholder="写要交给 Codex 的任务，例如：继续优化 Obsidian 知识库结构"></textarea>
             <div class="file-target-panel">
@@ -838,10 +753,6 @@
               </div>
               <div id="targetSummary" class="target-summary">未选择路径时，文件雷达使用配置文件里的默认扫描范围。</div>
             </div>
-          </div>
-          <div class="mode-strip">
-            <div class="mode-pill"><strong>可视化入口</strong>先看已有报告、笔记数量、来源路径和最近上下文素材。</div>
-            <div class="mode-pill"><strong>接手给 Codex</strong>生成压缩 prompt，告诉 Codex 该读什么、为什么相关、下一步做什么。</div>
           </div>
           <div class="quick-actions">
             <button class="quick-button primary" onclick="runAction('build-ai-context')">生成 Codex 接手包</button>
