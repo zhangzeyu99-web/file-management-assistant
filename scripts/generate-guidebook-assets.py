@@ -42,10 +42,13 @@ FONTS = {
 
 COLORS = {
     "bg": "#f5f7fb",
+    "hero": "#071426",
+    "hero_2": "#0d2d3d",
     "panel": "#ffffff",
     "ink": "#121826",
     "muted": "#667085",
     "blue": "#2f6ecb",
+    "cyan": "#26c3d8",
     "blue_soft": "#eaf2ff",
     "green": "#26875a",
     "green_soft": "#eef7f1",
@@ -107,6 +110,18 @@ def make_canvas() -> tuple[Image.Image, ImageDraw.ImageDraw]:
     return image, draw
 
 
+def make_dark_canvas() -> tuple[Image.Image, ImageDraw.ImageDraw]:
+    image = Image.new("RGB", (WIDTH, HEIGHT), COLORS["hero"])
+    draw = ImageDraw.Draw(image)
+    for offset in range(0, WIDTH, 44):
+        draw.line((offset, 0, offset, HEIGHT), fill="#0e2237", width=1)
+    for offset in range(0, HEIGHT, 44):
+        draw.line((0, offset, WIDTH, offset), fill="#0e2237", width=1)
+    draw.ellipse((-260, -240, 620, 520), fill="#0b2850")
+    draw.ellipse((1060, -200, 1840, 520), fill="#0b3b4a")
+    return image, draw
+
+
 def title_block(draw: ImageDraw.ImageDraw, kicker: str, title: str, subtitle: str) -> int:
     draw.rounded_rectangle((70, 54, 380, 102), radius=24, fill=COLORS["blue_soft"], outline="#d8e6fb")
     draw.text((96, 64), kicker, font=FONTS["kicker"], fill=COLORS["blue"])
@@ -137,34 +152,25 @@ def save(image: Image.Image, path: Path) -> None:
 
 
 def generate_interaction_map() -> None:
-    image, draw = make_canvas()
-    y = title_block(
-        draw,
-        "GUI FLOW",
-        "本地知识整理助手",
-        "GUI 只保留整理资料、回顾知识、提取上下文、今日提醒四条主线。",
-    )
-    top = max(330, y + 20)
+    image, draw = make_dark_canvas()
+    draw.rounded_rectangle((70, 58, 330, 106), radius=24, fill="#14293d", outline="#27405f")
+    draw.text((96, 67), "使用路径", font=FONTS["kicker"], fill="#91dfff")
+    draw.text((70, 142), "本地知识整理助手", font=FONTS["title"], fill="#f8fbff")
+    multiline(draw, (74, 244), "先浏览最近整理的内容；需要处理时，只选择添加资料、搜索回顾或生成 AI 上下文包。", FONTS["subtitle"], "#dbeafe", 980, 14)
     cards = [
-        ("本地文件", "扫描目录，输出报告、候选和路径。", COLORS["blue"]),
-        ("Obsidian", "读取 vault、知识卡、项目记录。", COLORS["green"]),
-        ("历史报告", "复用文件雷达、体检和复盘报告。", COLORS["violet"]),
-        ("AI 对话归档", "保存对话来源、背景、结论和待办。", COLORS["amber"]),
+        ("先看最近内容", "查看已整理笔记、AI 对话和报告。", COLORS["blue"]),
+        ("整理新资料", "把文本、文件路径或 AI 对话写入 Obsidian。", COLORS["cyan"]),
+        ("回顾旧内容", "按关键词找到答案和来源路径。", COLORS["violet"]),
+        ("提取给 AI", "把相关内容打包成可复制的上下文。", COLORS["green"]),
     ]
+    top = 390
     for index, (title, body, color) in enumerate(cards):
-        row = index // 2
-        col = index % 2
-        draw_card(draw, (70 + col * 390, top + row * 205, 430 + col * 390, top + 178 + row * 205), title, body, color, str(index + 1))
-
-    rounded(draw, (860, top + 72, 1145, top + 330), "#ffffff", "#c9d9f3", 36)
-    draw.text((900, top + 110), "AI", font=FONTS["h2"], fill=COLORS["blue"])
-    draw.text((900, top + 156), "上下文包", font=FONTS["title"], fill=COLORS["ink"])
-    multiline(draw, (896, top + 256), "来源路径 + 相关原因 + 压缩摘要 + 安全边界 + 下一步请求", FONTS["small"], COLORS["muted"], 220, 8)
-    draw.line((835, top + 200, 860, top + 200), fill="#93add4", width=5)
-    draw.polygon([(860, top + 200), (835, top + 186), (835, top + 214)], fill="#93add4")
-    draw.line((1145, top + 200, 1180, top + 200), fill="#93add4", width=5)
-    draw.polygon([(1180, top + 200), (1154, top + 186), (1154, top + 214)], fill="#93add4")
-    draw_card(draw, (1190, top + 72, 1530, top + 330), "AI 续用", "复制上下文包，基于真实来源继续处理。", COLORS["green"])
+        x = 70 + index * 382
+        rounded(draw, (x, top, x + 330, top + 270), "#ffffff", "#dfe7f2", 32)
+        draw.rounded_rectangle((x + 28, top + 30, x + 76, top + 78), radius=15, fill=color)
+        draw.text((x + 42, top + 36), str(index + 1), font=FONTS["small"], fill="white")
+        draw.text((x + 30, top + 104), title, font=FONTS["h2"], fill=COLORS["ink"])
+        multiline(draw, (x + 30, top + 164), body, FONTS["body"], COLORS["muted"], 270, 10)
     save(image, GUI_DIR / "interaction-map.png")
 
 
@@ -172,15 +178,15 @@ def generate_interaction_states() -> None:
     image, draw = make_canvas()
     title_block(
         draw,
-        "STATES",
-        "点击后状态变化",
-        "页面只负责展示输入、来源、产物和下一步。高级 JSON 只用于调试，不是默认体验。",
+        "使用状态",
+        "点击后会发生什么",
+        "操作后会看到完成情况、参考来源、保存位置和下一步建议。",
     )
     states = [
-        ("打开页面", "看到本地上下文概览和四类来源。"),
-        ("整理资料", "写入新的 Obsidian 记录"),
-        ("回顾知识", "展示匹配来源和摘要"),
-        ("提取上下文", "生成 AI 上下文包"),
+        ("打开首页", "先看用途、四入口和知识流。"),
+        ("点击卡片", "只展开详情和来源，不写入。"),
+        ("使用入口", "添加资料、搜索回顾、生成 AI 上下文包。"),
+        ("查看结果", "结果卡展示来源、保存位置和下一步建议。"),
     ]
     start_x = 86
     for index, (title, body) in enumerate(states):
@@ -190,7 +196,7 @@ def generate_interaction_states() -> None:
             draw.line((x + 324, 490, x + 360, 490), fill="#93add4", width=5)
             draw.polygon([(x + 360, 490), (x + 340, 478), (x + 340, 502)], fill="#93add4")
     rounded(draw, (110, 690, 1490, 800), COLORS["green_soft"], "#d7eadc", 30)
-    multiline(draw, (148, 718), "安全边界：默认只读，不删除、不移动、不重命名、不重写源文件。记录类入口只写新的 Obsidian 笔记。", FONTS["body"], "#174a34", 1280, 8)
+    multiline(draw, (148, 718), "安全边界：只生成建议和新记录，不改动你的源文件。", FONTS["body"], "#174a34", 1280, 8)
     save(image, GUI_DIR / "interaction-states.png")
 
 
@@ -204,8 +210,14 @@ def bullet_section(draw: ImageDraw.ImageDraw, x: int, y: int, title: str, bullet
 
 
 def generate_slide(index: int, title: str, subtitle: str, sections: list[tuple[str, list[str]]]) -> Path:
-    image, draw = make_canvas()
-    y = title_block(draw, f"PAGE {index:02d}", title, subtitle)
+    image, draw = make_dark_canvas() if index == 1 else make_canvas()
+    if index == 1:
+        draw.rounded_rectangle((70, 54, 380, 102), radius=24, fill="#14293d", outline="#27405f")
+        draw.text((96, 64), f"PAGE {index:02d}", font=FONTS["kicker"], fill="#91dfff")
+        draw.text((70, 132), title, font=FONTS["title"], fill="#f8fbff")
+        y = multiline(draw, (74, 232), subtitle, FONTS["subtitle"], "#dbeafe", 1020, 13)
+    else:
+        y = title_block(draw, f"PAGE {index:02d}", title, subtitle)
     columns = len(sections)
     gap = 28
     left = 72
@@ -215,8 +227,9 @@ def generate_slide(index: int, title: str, subtitle: str, sections: list[tuple[s
         x = left + column * (width + gap)
         rounded(draw, (x, top, x + width, 760), COLORS["panel"])
         bullet_section(draw, x + 34, top + 34, section_title, bullets, width - 68)
-    draw.text((70, 816), "本地知识整理助手 | 整理 / 回顾 / 提取 / 提醒 | 默认只读", font=FONTS["tiny"], fill=COLORS["muted"])
-    draw.text((1456, 816), f"{index}/7", font=FONTS["tiny"], fill=COLORS["muted"])
+    footer_color = "#cbd5e1" if index == 1 else COLORS["muted"]
+    draw.text((70, 816), "本地知识整理助手 | 添加资料 / 搜索回顾 / 生成 AI 上下文包 | 不改动源文件", font=FONTS["tiny"], fill=footer_color)
+    draw.text((1456, 816), f"{index}/7", font=FONTS["tiny"], fill=footer_color)
     path = SLIDES_DIR / f"page-{index:02d}.png"
     save(image, path)
     return path
@@ -225,59 +238,59 @@ def generate_slide(index: int, title: str, subtitle: str, sections: list[tuple[s
 def generate_guidebook() -> list[Path]:
     slides = [
         (
-            "它是做什么的",
-            "本地知识整理助手把资料、Obsidian 笔记和 AI 对话整理成可复用的个人知识系统。",
+            "本地知识整理助手",
+            "把资料、Obsidian 笔记和 AI 对话沉淀成可回顾、可复用的知识系统。",
             [
-                ("新定位", ["本地知识整理助手", "四个入口：整理、回顾、提取、提醒", "核心产物是 AI 上下文包"]),
-                ("不做什么", ["不做云端文件清理", "不把网页做成临时控制台页", "不自动删除、移动或改名源文件"]),
+                ("第一眼", ["这是添加资料、搜索回顾和生成 AI 上下文包的本地知识站", "只生成建议和新记录，不改动源文件", "两个按钮：向下看知识流 / 添加资料"]),
+                ("核心价值", ["把资料变成可归档记录", "把旧知识找回来", "把上下文反向打包给 AI", "每天只保留最多 3 条行动建议"]),
             ],
         ),
         (
-            "四个主入口",
-            "首页只保留四张卡，避免新用户被十几个按钮淹没。",
+            "首页怎么走",
+            "三张主卡是导航，不是后台按钮。点击后跳到同页锚点区。",
             [
-                ("主线", ["整理资料：写新记录", "回顾知识：返回答案和来源", "提取上下文：生成 AI 上下文包"]),
-                ("提醒", ["每天 9 点", "只列 1-3 个重点", "不做定时整理"]),
+                ("三个锚点", ["#organize 添加资料", "#review 搜索回顾", "#extract 生成 AI 上下文包"]),
+                ("工具维护页", ["文件雷达", "知识库体检", "旧资料索引", "只放独立子页面"]),
             ],
         ),
         (
-            "整理资料",
-            "把文本、文件目录或 AI 对话放进来，先留下可追溯记录。",
+            "知识流怎么用",
+            "下滑看到的卡片来自已整理内容，会随着 Obsidian 笔记和报告持续更新。",
             [
-                ("输入", ["文本", "本地路径", "AI 对话"]),
+                ("卡片内容", ["标题", "描述", "类型", "来源路径", "更新时间"]),
+                ("点击行为", ["展开详情", "查看来源路径", "复制路径", "不自动写入、不自动提取"]),
+            ],
+        ),
+        (
+            "添加资料",
+            "把文本、本地路径或 AI 对话放进整理区，先留下可追溯记录。",
+            [
+                ("输入", ["资料正文", "本地路径", "拖放/选择文件作为来源提示"]),
                 ("输出", ["Obsidian 新笔记", "来源", "生活 / 学习 / 工作判断", "下一步"]),
             ],
         ),
         (
-            "回顾知识",
-            "需要想起旧资料时，用关键词或问题查已经整理过的内容。",
+            "回顾与提取",
+            "先回顾，后提取。不要让 AI 从零猜上下文。",
             [
-                ("返回", ["本地摘要", "匹配来源路径", "为什么相关"]),
-                ("适合", ["查教程", "查项目记录", "查旧 AI 会话", "查历史报告"]),
+                ("搜索回顾", ["输入关键词或问题", "返回答案 + 来源", "适合找旧教程、项目记录和历史报告"]),
+                ("生成 AI 上下文包", ["输入当前任务", "生成 AI 上下文包", "包含来源路径、摘要、安全边界和下一步请求"]),
             ],
         ),
         (
-            "提取 AI 上下文包",
-            "继续问 AI 之前，把已整理知识反向打包成 prompt 和 Markdown。",
+            "安全边界与高级工具",
+            "首页不再放今日行动按钮；计划任务仍可在后台生成轻量行动建议。",
             [
-                ("必须包含", ["来源路径", "压缩摘要", "安全边界", "下一步请求"]),
-                ("使用", ["复制 prompt 给 AI", "打开 Markdown", "缺来源时先整理资料"]),
+                ("每天", ["需要提醒时使用计划任务", "不要处理全部归档候选", "需要继续问 AI 时先生成上下文包"]),
+                ("每周", ["处理收件箱 backlog", "复盘 Action 和 Card", "再优化 Obsidian 结构"]),
             ],
         ),
         (
             "安全边界",
-            "默认先看、先建议、先生成上下文，不碰源文件。",
+            "这不是源文件搬迁工具，默认先看、先建议、先生成上下文。",
             [
-                ("默认只读", ["文件雷达只生成报告", "Obsidian 体检只生成报告", "回顾知识只读取已整理内容"]),
-                ("允许写入", ["只写新的 Obsidian 笔记", "追加到明确位置", "保留来源和路径"]),
-            ],
-        ),
-        (
-            "一周使用节奏",
-            "每天不要整理太重。四个入口用于维持轻量闭环。",
-            [
-                ("每天", ["先看今日提醒", "只处理 1-3 个重点", "需要继续问 AI 时提取上下文"]),
-                ("每周", ["处理归档 backlog", "复盘 Action 和 Card", "优化 Obsidian 结构"]),
+                ("不会做", ["不删除", "不移动", "不重命名", "不重写源文件"]),
+                ("允许做", ["写新的 Obsidian 笔记", "生成本地报告", "生成 AI 上下文包", "保留来源和路径"]),
             ],
         ),
     ]

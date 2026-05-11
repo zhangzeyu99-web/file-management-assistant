@@ -1,7 +1,9 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
+import re
 import subprocess
 import sys
 import webbrowser
@@ -27,6 +29,22 @@ from config_loader import load_config
 DEFAULT_CONFIG = ROOT / "config.json"
 ASSET_ROOT = ROOT / "docs" / "assets"
 
+PUBLIC_COPY_REPLACEMENTS = {
+    "默认只读": "安全检查",
+    "不删除、不移动、不重命名、不重写源文件": "源文件保持原样",
+    "站点式知识库": "知识整理首页",
+    "首屏极简": "首页聚焦",
+    "首页不再堆功能": "首页聚焦三项操作",
+    "每次点击后": "操作完成后",
+}
+
+
+def sanitize_public_copy(value: Any) -> str:
+    text = str(value or "")
+    for old, new in PUBLIC_COPY_REPLACEMENTS.items():
+        text = text.replace(old, new)
+    return text
+
 
 def latest_file_report(config: dict[str, Any]) -> dict[str, Any] | None:
     return scenario_playbook.latest_file_report(config)
@@ -34,6 +52,457 @@ def latest_file_report(config: dict[str, Any]) -> dict[str, Any] | None:
 
 def latest_obsidian_report(config: dict[str, Any]) -> dict[str, Any] | None:
     return scenario_playbook.latest_obsidian_report(config)
+
+
+def clean_feed_description(summary: Any, fallback: str, title: str = "") -> str:
+    text = sanitize_public_copy(summary)
+    for marker in ["## 来源清单", "## 本次结果", "## 报告路径", "## Obsidian 概览", "## 按目录统计"]:
+        if marker in text:
+            text = text.split(marker, 1)[0]
+    text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    if title:
+        text = text.replace(title, " ", 1)
+    text = text.replace(fallback, " ", 1)
+    text = re.sub(r"#{1,6}\s*", " ", text)
+    text = re.sub(r"\b[A-Za-z]:\\[^\s，。；、]+", "本地来源", text)
+    text = re.sub(r"(生成时间|创建时间)：`?\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s*[+]\d{4}`?", " ", text)
+    text = re.sub(r"(类型|用途|来源|Obsidian 库|报告路径|Markdown|HTML|JSON)：[^。；#\n]{0,100}", " ", text)
+    text = re.sub(r"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s*[+]\d{4}", " ", text)
+    text = re.sub(r"\s*[|]\s*", " ", text)
+    text = re.sub(r"\s+-\s+", "；", text)
+    text = re.sub(r"\s+", " ", text).strip(" -，。；：")
+    if "待提炼结论" in text and "AI 对话归档" in title:
+        text = fallback
+    if not text:
+        text = fallback
+    return knowledge_assistant.compact_text(sanitize_public_copy(text), 118)
+
+
+def strip_frontmatter(text: str) -> str:
+    if text.startswith("---"):
+        parts = text.split("---", 2)
+        if len(parts) == 3:
+            return parts[2].strip()
+    return text.strip()
+
+
+def markdown_sections(text: str) -> dict[str, str]:
+    body = strip_frontmatter(text)
+    sections: dict[str, list[str]] = {}
+    current = "正文"
+    for raw in body.splitlines():
+        match = re.match(r"^##\s+(.+?)\s*$", raw)
+        if match:
+            current = match.group(1).strip()
+            sections.setdefault(current, [])
+            continue
+        if raw.startswith("# "):
+            continue
+        sections.setdefault(current, []).append(raw)
+    return {key: "\n".join(value).strip() for key, value in sections.items()}
+
+
+def section_value(sections: dict[str, str], names: list[str]) -> str:
+    for name in names:
+        if name in sections and sections[name].strip():
+            return sections[name].strip()
+    return ""
+
+
+def markdown_list_items(text: str, limit: int = 5) -> list[str]:
+    items: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        match = re.match(r"^(?:[-*]|\d+[.、])\s+(.+)$", line)
+        if match:
+            item = re.sub(r"`([^`]+)`", r"\1", match.group(1)).strip()
+            if item:
+                items.append(item)
+        if len(items) >= limit:
+            break
+    if items:
+        return items
+    paragraphs = [re.sub(r"\s+", " ", item).strip() for item in re.split(r"\n\s*\n", text) if item.strip()]
+    return paragraphs[:limit]
+
+
+def section_summary(text: str, fallback: str, limit: int = 180) -> str:
+    items = markdown_list_items(text, limit=3) if text else []
+    if items:
+        cleaned = "；".join(items)
+    else:
+        cleaned = str(text or fallback)
+    cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -，。；：")
+    return knowledge_assistant.compact_text(sanitize_public_copy(cleaned or fallback), limit)
+
+
+def source_items_from_markdown(text: str, fallback_path: str) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for raw in text.splitlines():
+        line = raw.strip().lstrip("-* ").strip()
+        if not line:
+            continue
+        path_match = re.search(r"`([^`]+)`", line)
+        path = path_match.group(1).strip() if path_match else ""
+        if not path:
+            windows_match = re.search(r"[A-Za-z]:\\[^\s，。；、]+", line)
+            path = windows_match.group(0) if windows_match else ""
+        label = line.split(":", 1)[0].strip() if ":" in line else "来源"
+        if path:
+            items.append({"label": label[:40], "path": path})
+        if len(items) >= 4:
+            break
+    if not items and fallback_path:
+        items.append({"label": "当前笔记", "path": fallback_path})
+    return items
+
+
+def detail_section(title: str, items: list[str] | None = None, body: str = "") -> dict[str, Any]:
+    clean_items = [
+        knowledge_assistant.compact_text(sanitize_public_copy(item), 150)
+        for item in (items or [])
+        if str(item).strip()
+    ]
+    return {
+        "title": title,
+        "items": clean_items[:4],
+        "body": knowledge_assistant.compact_text(sanitize_public_copy(body), 220) if body else "",
+    }
+
+
+def thinking_prompts_for(item_type: str, title: str) -> list[str]:
+    if item_type == "session-index" or "会话标题索引" in title:
+        return [
+            "哪些近期会话值得沉淀成知识卡？",
+            "哪个原始会话路径应该交给 Codex 继续读取？",
+            "有没有重复问题可以合并成一条复用规则？",
+        ]
+    if item_type == "knowledge-card":
+        return [
+            "这条规则能复用到哪个当前任务？",
+            "是否需要补充反例、边界或来源？",
+            "是否应该加入下一次 AI 上下文包？",
+        ]
+    return [
+        "这条记录应该升级为知识卡还是保留为归档？",
+        "它和哪些项目、会话或报告有关？",
+        "下一步应该补来源、补结论还是生成上下文包？",
+    ]
+
+
+def build_detail_sections(
+    item_type: str,
+    title: str,
+    sections: dict[str, str],
+    scenario: str,
+    conclusions: list[str],
+    next_steps: list[str],
+    fallback: str,
+) -> tuple[str, list[dict[str, Any]]]:
+    if item_type == "session-index" or "会话标题索引" in title:
+        usage = markdown_list_items(section_value(sections, ["用法"]), limit=4)
+        return (
+            "session-index",
+            [
+                detail_section("怎么使用这个索引", usage, scenario or fallback),
+                detail_section("主题分布", conclusions, "当前索引还没有主题统计。"),
+                detail_section("近期会话入口", next_steps, "当前索引还没有近期会话入口。"),
+            ],
+        )
+    if item_type == "knowledge-card":
+        return (
+            "knowledge-card",
+            [
+                detail_section("适用场景", markdown_list_items(scenario, limit=4), scenario or fallback),
+                detail_section("关键结论", conclusions, "这张卡还没有提炼出关键结论。"),
+                detail_section("下次怎么用", next_steps, "打开来源补充下次用法。"),
+            ],
+        )
+    return (
+        "note",
+        [
+            detail_section("阅读摘要", markdown_list_items(scenario, limit=4), scenario or fallback),
+            detail_section("关键信息", conclusions, fallback),
+            detail_section("下一步", next_steps, "打开来源补充下一步。"),
+        ],
+    )
+
+
+def structured_feed_summary(text: str, fallback: str, title: str, source_path: str, item_type: str = "") -> dict[str, Any]:
+    sections = markdown_sections(text)
+    scenario = section_value(sections, ["适用场景", "使用场景", "场景", "用法", "背景", "目标", "正文"])
+    explicit_conclusions_text = section_value(sections, ["关键结论", "结论"])
+    overview_text = section_value(sections, ["主题概览"])
+    conclusions_text = explicit_conclusions_text or overview_text
+    next_text = section_value(sections, ["下次怎么用", "下一步", "行动建议", "近期标题速览"])
+    sources_text = section_value(sections, ["来源", "来源路径", "证据"])
+
+    conclusions = [sanitize_public_copy(item) for item in markdown_list_items(conclusions_text, limit=4)] if conclusions_text else []
+    next_steps = [sanitize_public_copy(item) for item in markdown_list_items(next_text, limit=4)] if next_text else []
+    source_items = source_items_from_markdown(sources_text, source_path)
+
+    cleaned = clean_feed_description(strip_frontmatter(text), fallback, title)
+    if "会话标题索引" in title:
+        takeaway = "Codex 会话已按主题和近期标题建立索引，可按标题回到原始会话。"
+    elif explicit_conclusions_text and conclusions:
+        takeaway = conclusions[0]
+    else:
+        takeaway = cleaned
+    takeaway = sanitize_public_copy(takeaway)
+    scenario_summary = section_summary(scenario, fallback)
+    if scenario_summary and takeaway:
+        description = knowledge_assistant.compact_text(sanitize_public_copy(f"{takeaway} 适用：{scenario_summary}"), 118)
+    else:
+        description = sanitize_public_copy(cleaned)
+    detail_kind, detail_sections = build_detail_sections(item_type, title, sections, scenario, conclusions, next_steps, fallback)
+
+    return {
+        "description": description,
+        "takeaway": knowledge_assistant.compact_text(takeaway, 120),
+        "scenario": scenario_summary,
+        "conclusions": conclusions,
+        "next_steps": next_steps,
+        "source_items": source_items,
+        "detail_kind": detail_kind,
+        "detail_sections": detail_sections,
+        "thinking_prompts": thinking_prompts_for(item_type, title),
+    }
+
+
+def feed_fallback(title: str, item_type: str) -> str:
+    if "Obsidian 管理" in title:
+        return "知识库体检结果已记录，可查看收件箱、空壳笔记、低连接笔记和断链状态。"
+    if "文件雷达" in title or "文件管理助手复盘" in title:
+        return "本地文件扫描结果已记录，可查看近期复盘、归档候选、大文件和重复文件。"
+    if "AI 对话归档" in title:
+        return "AI 对话已归档，保留任务背景、关键结论、产出路径和未完成事项。"
+    if item_type == "legacy-codex":
+        return "历史项目上下文已收录，可作为后续 AI 对话和知识回顾的来源。"
+    return f"{title} 已记录，可点击查看摘要、来源和下一步。"
+
+
+def compact_feed_time(value: Any) -> str:
+    text = str(value or "").strip()
+    match = re.search(r"(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})", text)
+    if match:
+        return f"{match.group(1)} {match.group(2)}"
+    return text[:16] if text else "最近更新"
+
+
+def feed_dedupe_key(title: str, description: str) -> str:
+    normalized_title = re.sub(r"\s+", " ", title).strip().lower()
+    normalized_title = re.sub(r"[\-_/\\]+", " ", normalized_title)
+    normalized_description = re.sub(r"\s+", " ", description).strip().lower()[:48]
+    return normalized_title or normalized_description
+
+
+TOPIC_RULES: list[tuple[str, str, tuple[str, ...]]] = [
+    ("codex-session", "Codex 会话", ("codex", "会话", "session", "jsonl")),
+    ("ai-context", "AI 上下文", ("上下文", "prompt", "ai 对话", "ai上下文", "context")),
+    ("obsidian", "Obsidian 知识库", ("obsidian", "vault", "笔记", "知识库", "双链")),
+    ("local-file", "本地文件", ("本地文件", "文件", "目录", "路径", "扫描", "大文件")),
+    ("knowledge-card", "知识卡片", ("知识卡", "卡片", "card", "规则", "复用")),
+    ("workflow", "整理工作流", ("工作流", "流程", "闭环", "归档", "复盘", "行动建议")),
+    ("learning", "学习资料", ("学习", "教程", "notebooklm", "课程", "指南")),
+    ("translation", "本地化翻译", ("翻译", "术语", "本地化", "glossary", "excel")),
+    ("life", "生活资料", ("生活", "证件", "收纳", "日用品", "衣柜")),
+]
+
+
+def feed_relation_text(item: dict[str, Any]) -> str:
+    text = " ".join(
+        str(item.get(key) or "")
+        for key in ["title", "description", "takeaway", "scenario", "source_path", "action_hint"]
+    )
+    text += " " + " ".join(str(tag) for tag in item.get("tags") or [])
+    text += " " + " ".join(str(value) for value in item.get("conclusions") or [])
+    text += " " + " ".join(str(value) for value in item.get("next_steps") or [])
+    return text
+
+
+def feed_topic_keys(item: dict[str, Any]) -> set[str]:
+    topic_text = " ".join(
+        str(item.get(key) or "")
+        for key in ["title", "description", "takeaway", "scenario", "action_hint"]
+    )
+    topic_text += " " + " ".join(str(value) for value in item.get("conclusions") or [])
+    topic_text += " " + " ".join(str(value) for value in item.get("next_steps") or [])
+    lowered = topic_text.lower()
+    topics = {key for key, _label, needles in TOPIC_RULES if any(needle.lower() in lowered for needle in needles)}
+    if not topics:
+        topics.add("general-note")
+    return topics
+
+
+def topic_label(key: str) -> str:
+    for candidate, label, _needles in TOPIC_RULES:
+        if candidate == key:
+            return label
+    return "通用笔记"
+
+
+def feed_relation_terms(item: dict[str, Any]) -> set[str]:
+    text = feed_relation_text(item)
+    terms: set[str] = set()
+    curated_terms = [
+        "codex",
+        "obsidian",
+        "ai",
+        "上下文",
+        "会话",
+        "知识",
+        "卡片",
+        "索引",
+        "报告",
+        "文件",
+        "归档",
+        "整理",
+        "搜索",
+        "提取",
+        "复盘",
+    ]
+    lowered = text.lower()
+    for term in curated_terms:
+        if term in lowered:
+            terms.add(term)
+    for token in re.findall(r"[A-Za-z][A-Za-z0-9_-]{1,}", lowered):
+        if len(token) >= 3:
+            terms.add(token)
+    return terms
+
+
+def attach_related_feed_items(feed: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    topic_cache = [feed_topic_keys(item) for item in feed]
+    term_cache = [feed_relation_terms(item) for item in feed]
+    for index, item in enumerate(feed):
+        item["topic_keys"] = sorted(topic_cache[index])
+        scored: list[tuple[int, list[str], list[str], dict[str, Any]]] = []
+        for other_index, other in enumerate(feed):
+            if index == other_index:
+                continue
+            topic_overlap = sorted((topic_cache[index] & topic_cache[other_index]) - {"general-note"})
+            overlap = sorted(term_cache[index] & term_cache[other_index])
+            if topic_overlap:
+                scored.append((100 + len(topic_overlap) * 10 + len(overlap), topic_overlap, overlap, other))
+        scored.sort(key=lambda value: (-value[0], str(value[3].get("title") or "")))
+        item["related_items"] = [
+            {
+                "title": str(other.get("title") or "未命名知识"),
+                "type": str(other.get("type") or "笔记"),
+                "source_path": str(other.get("source_path") or ""),
+                "why": (
+                    f"同属主题：{'、'.join(topic_label(key) for key in topic_overlap[:3])}"
+                    if topic_overlap
+                    else f"相关线索：{'、'.join(overlap[:3])}"
+                ),
+            }
+            for _, topic_overlap, overlap, other in scored[:3]
+        ]
+    return feed
+
+
+def is_home_feed_noise(title: str) -> bool:
+    text = re.sub(r"\s+", " ", title).strip()
+    transitional_terms = ["文件管理助手", "Codex 文件管理小助手", "今日" + "操作台", "伪控制台", "Codex 接手包"]
+    demoted_actions = {"今天先干什么", "判断放哪", "记录一个任务", "沉淀知识卡", "复盘今天", "快速初始化"}
+    return any(term in text for term in transitional_terms) or text in demoted_actions
+
+
+def project_codex_feed_items(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Prioritize curated Codex project notes before noisy runtime reports."""
+    vault = knowledge_assistant.vault_path(config)
+    codex_dir = vault / "02 项目" / "Codex"
+    candidates: list[tuple[Path, str]] = [
+        (codex_dir / "13 Codex 会话标题索引.md", "session-index"),
+    ]
+    cards_dir = codex_dir / "知识卡片"
+    if cards_dir.exists():
+        candidates.extend((path, "knowledge-card") for path in sorted(cards_dir.glob("*.md"), key=lambda item: item.stat().st_mtime, reverse=True))
+
+    items: list[dict[str, Any]] = []
+    for path, item_type in candidates:
+        if not path.exists() or not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8-sig", errors="ignore")
+            modified_at = path.stat().st_mtime
+        except OSError:
+            continue
+        items.append(
+            {
+                "title": knowledge_assistant.markdown_title(text, path.stem),
+                "path": str(path),
+                "summary": knowledge_assistant.compact_text(text, 260),
+                "raw_markdown": text,
+                "type": item_type,
+                "modified_at": dt.datetime.fromtimestamp(modified_at).astimezone().strftime("%Y-%m-%d %H:%M:%S %z"),
+            }
+        )
+    return items
+
+
+def build_knowledge_feed(config: dict[str, Any], limit: int = 8) -> list[dict[str, Any]]:
+    type_labels = {
+        "organize": "整理",
+        "extract": "提取",
+        "remind": "今日行动",
+        "legacy-codex": "历史",
+        "knowledge-card": "知识卡片",
+        "session-index": "会话索引",
+        "note": "笔记",
+    }
+    action_hints = {
+        "organize": "可继续回顾或提取为 AI 上下文包",
+        "extract": "可复制给新的 AI 对话继续使用",
+        "remind": "可作为今日行动建议参考",
+        "legacy-codex": "可作为历史项目上下文",
+        "knowledge-card": "可作为下次任务的复用规则",
+        "session-index": "可按标题回到原始 Codex 会话",
+        "note": "可打开来源继续阅读",
+    }
+    feed: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    source_items = project_codex_feed_items(config)
+    source_items.extend(knowledge_assistant.build_review_index(config, limit=max(limit * 6, limit)))
+    for item in source_items:
+        item_type = str(item.get("type") or "note")
+        title = str(item.get("title") or "未命名知识")
+        if is_home_feed_noise(title):
+            continue
+        fallback = feed_fallback(title, item_type)
+        raw_text = str(item.get("raw_markdown") or item.get("summary") or "")
+        structured = structured_feed_summary(raw_text, fallback, title, str(item.get("path") or ""), item_type)
+        description = structured["description"]
+        key = feed_dedupe_key(title, description)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        feed.append(
+            {
+                "title": title,
+                "description": description,
+                "type": type_labels.get(item_type, item_type),
+                "source_path": str(item.get("path") or ""),
+                "updated_at": compact_feed_time(item.get("modified_at")),
+                "tags": [type_labels.get(item_type, item_type), "来源可追溯"],
+                "action_hint": action_hints.get(item_type, "可打开来源继续阅读"),
+                "takeaway": structured["takeaway"],
+                "scenario": structured["scenario"],
+                "conclusions": structured["conclusions"],
+                "next_steps": structured["next_steps"],
+                "source_items": structured["source_items"],
+                "detail_kind": structured["detail_kind"],
+                "detail_sections": structured["detail_sections"],
+                "thinking_prompts": structured["thinking_prompts"],
+                "topic_keys": [],
+                "related_items": [],
+            }
+        )
+        if len(feed) >= limit:
+            break
+    return attach_related_feed_items(feed)
 
 
 def build_status(config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
@@ -46,6 +515,7 @@ def build_status(config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
         "runtime_root": str(scenario_playbook.runtime_root(config)),
         "file_report": latest_file_report(config),
         "obsidian_report": latest_obsidian_report(config),
+        "knowledge_feed": build_knowledge_feed(config),
         "scenarios": scenario_playbook.build_scenario_catalog(config),
         "guidebook": assistant_evolution.build_guidebook_catalog(ROOT),
         "safety": scenario_playbook.SAFETY_TEXT,
@@ -89,10 +559,10 @@ def build_codex_prompt(user_request: str, config: dict[str, Any]) -> str:
 判断规则：
 - 先按生活 / 学习 / 工作分流。
 - 再按 Action / Card / Time / X-AI 判断产物类型。
-- 今天只给 1-3 个今日重点，不要把全部归档候选变成今日任务。
+- 今日行动只给最多 3 条建议，不要把全部归档候选变成今日任务。
 
 安全边界：
-- 不删除、不移动、不重命名、不重写源文件。
+- 不删除源文件；源文件保持原样，只在明确位置写新笔记或追加内容。
 - 先读真实文件和报告，再执行。
 - 需要写入时写新笔记或追加明确位置，并保留来源。
 
@@ -171,7 +641,7 @@ def inspect_local_targets(config: dict[str, Any], payload: dict[str, Any]) -> di
             },
             "targets": defaults,
             "selected_files": selected_files,
-            "safety": "默认只读；未粘贴路径时使用 config.json / config.local.json 的扫描目录。",
+            "safety": "安全检查：未粘贴路径时使用 config.json / config.local.json 的扫描目录；不改动源文件。",
         }
 
     targets: list[dict[str, Any]] = []
@@ -312,7 +782,7 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
         return {
             "ok": True,
             "action": action,
-            "summary": "今日轻量规则：只给 1-3 个今日重点，不要每天处理全部归档候选。",
+            "summary": "今日行动规则：只给最多 3 条建议，不要每天处理全部归档候选。",
             "scenario": today,
         }
 
@@ -478,940 +948,6 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
     return {"ok": False, "error": f"unsupported action: {action}"}
 
 
-LEGACY_HTML = r"""<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>本地知识整理助手</title>
-  <style>
-    :root {
-      --bg: #f5f7fb;
-      --panel: #ffffff;
-      --panel-soft: #f8fafd;
-      --line: #e5eaf2;
-      --line-strong: #d8e0eb;
-      --ink: #121826;
-      --muted: #667085;
-      --muted-2: #98a2b3;
-      --blue: #2f6ecb;
-      --blue-2: #eaf2ff;
-      --cyan: #1d9bb2;
-      --violet: #6b5cf6;
-      --green: #26875a;
-      --green-soft: #eef7f1;
-      --amber: #f5a524;
-      --shadow: 0 18px 55px rgba(16, 24, 40, .08);
-      --shadow-soft: 0 8px 24px rgba(16, 24, 40, .06);
-      --radius-xl: 18px;
-      --radius-lg: 14px;
-      --radius-md: 10px;
-      --font: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
-      --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      color: var(--ink);
-      font-family: var(--font);
-      background:
-        radial-gradient(circle at 16% 0%, rgba(92, 135, 246, .08), transparent 36rem),
-        radial-gradient(circle at 90% 12%, rgba(29, 155, 178, .07), transparent 28rem),
-        var(--bg);
-    }
-    svg { display: block; }
-    button, textarea { font: inherit; }
-    button {
-      border: 0;
-      cursor: pointer;
-      background: none;
-      color: inherit;
-      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
-    }
-    button:hover { transform: translateY(-1px); }
-    button:disabled { cursor: wait; opacity: .58; transform: none; }
-    .icon {
-      width: 24px;
-      height: 24px;
-      stroke: currentColor;
-      fill: none;
-      stroke-width: 1.8;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      flex: 0 0 auto;
-    }
-    .app {
-      width: min(1648px, calc(100vw - 32px));
-      margin: 0 auto;
-      padding: 16px 0;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 414px;
-      gap: 14px;
-    }
-    .main {
-      display: grid;
-      gap: 14px;
-      min-width: 0;
-    }
-    .panel {
-      background: rgba(255,255,255,.92);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow);
-    }
-    .hero {
-      min-height: 258px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 430px;
-      gap: 26px;
-      padding: 32px 32px 26px;
-      overflow: hidden;
-      position: relative;
-    }
-    .hero::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background: linear-gradient(135deg, transparent 58%, rgba(47, 110, 203, .05));
-    }
-    .brand-row {
-      display: flex;
-      align-items: center;
-      gap: 22px;
-      position: relative;
-      z-index: 1;
-    }
-    .brand-mark {
-      width: 82px;
-      height: 82px;
-      filter: drop-shadow(0 12px 18px rgba(52, 64, 153, .18));
-      flex: 0 0 auto;
-    }
-    h1 {
-      margin: 0;
-      font-size: clamp(40px, 4.1vw, 58px);
-      line-height: 1.04;
-      letter-spacing: -.045em;
-      font-weight: 900;
-    }
-    .hero-copy {
-      position: relative;
-      z-index: 1;
-    }
-    .hero-subtitle {
-      margin: 18px 0 0 104px;
-      color: #344054;
-      font-size: 17px;
-      line-height: 1.72;
-      letter-spacing: -.01em;
-    }
-    .safe-pill {
-      width: max-content;
-      max-width: calc(100% - 104px);
-      margin: 26px 0 0 104px;
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      padding: 11px 24px;
-      border-radius: 999px;
-      background: var(--green-soft);
-      color: #174a34;
-      border: 1px solid #d7eadc;
-      font-size: 18px;
-      font-weight: 700;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
-    }
-    .hero-art {
-      position: relative;
-      z-index: 1;
-      min-height: 204px;
-      align-self: stretch;
-    }
-    .hero-art svg {
-      width: 100%;
-      height: 100%;
-    }
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-    }
-    .feature-card {
-      min-height: 132px;
-      padding: 22px 24px;
-      display: grid;
-      grid-template-columns: 64px minmax(0, 1fr);
-      gap: 18px;
-      align-items: center;
-    }
-    .feature-icon {
-      width: 58px;
-      height: 58px;
-      display: grid;
-      place-items: center;
-      color: var(--blue);
-    }
-    .feature-card:nth-child(2) .feature-icon { color: var(--cyan); }
-    .feature-card:nth-child(3) .feature-icon { color: var(--blue); }
-    .feature-card:nth-child(4) .feature-icon { color: var(--green); }
-    .feature-card h2 {
-      margin: 0 0 8px;
-      font-size: 18px;
-      line-height: 1.25;
-      letter-spacing: -.02em;
-    }
-    .feature-card p {
-      margin: 0;
-      color: #475467;
-      font-size: 14px;
-      line-height: 1.58;
-    }
-    .work-row {
-      display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
-      gap: 14px;
-    }
-    .work-card, .tutorial-card {
-      padding: 22px 32px;
-      min-height: 232px;
-    }
-    .section-title {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 0 0 14px;
-      color: #172033;
-      font-size: 22px;
-      font-weight: 850;
-      letter-spacing: -.02em;
-    }
-    .section-title .icon { width: 22px; height: 22px; color: var(--blue); }
-    textarea {
-      width: 100%;
-      height: 92px;
-      resize: vertical;
-      border: 1px solid #97b7ea;
-      border-radius: 8px;
-      padding: 18px;
-      outline: none;
-      background: #fff;
-      color: var(--ink);
-      font-size: 16px;
-      line-height: 1.6;
-      box-shadow: 0 0 0 3px rgba(47, 110, 203, .04);
-    }
-    textarea::placeholder { color: #98a2b3; }
-    textarea:focus {
-      border-color: var(--blue);
-      box-shadow: 0 0 0 4px rgba(47, 110, 203, .10);
-    }
-    .quick-actions {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 18px;
-    }
-    .quick-button {
-      min-height: 44px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      background: #f2f5f9;
-      border: 1px solid #e3e8f0;
-      color: #344054;
-      font-size: 16px;
-      font-weight: 760;
-      box-shadow: var(--shadow-soft);
-    }
-    .quick-button.primary {
-      background: linear-gradient(180deg, #3478d7, #2360b2);
-      color: #fff;
-      border-color: #2360b2;
-      box-shadow: 0 12px 26px rgba(47, 110, 203, .24);
-    }
-    .quick-button:hover { border-color: #b8c5d8; }
-    .tutorial-card {
-      display: grid;
-      align-content: start;
-      gap: 12px;
-    }
-    .steps {
-      display: grid;
-      gap: 10px;
-      position: relative;
-      padding-left: 34px;
-    }
-    .steps::before {
-      content: "";
-      position: absolute;
-      left: 13px;
-      top: 16px;
-      bottom: 16px;
-      width: 1px;
-      background: linear-gradient(#c9d9f3, #dce7f7);
-    }
-    .step {
-      min-height: 42px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      position: relative;
-      padding: 0 14px;
-      border-radius: 8px;
-      background: linear-gradient(90deg, #f2f5f9, #f8fafc);
-      color: #344054;
-      font-size: 15px;
-      font-weight: 600;
-    }
-    .step-num {
-      position: absolute;
-      left: -34px;
-      width: 24px;
-      height: 24px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      background: #4380d7;
-      color: white;
-      font-size: 12px;
-      font-weight: 800;
-      box-shadow: 0 4px 10px rgba(67, 128, 215, .24);
-    }
-    .action-board {
-      padding: 20px 32px 24px;
-    }
-    .action-columns {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 28px;
-    }
-    .action-column {
-      min-width: 0;
-      padding-right: 18px;
-      border-right: 1px solid var(--line);
-    }
-    .action-column:last-child { border-right: 0; padding-right: 0; }
-    .column-title {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
-      font-weight: 850;
-      color: var(--green);
-      font-size: 17px;
-    }
-    .action-column:nth-child(2) .column-title { color: var(--blue); }
-    .action-column:nth-child(3) .column-title { color: var(--violet); }
-    .action-column:nth-child(4) .column-title { color: var(--cyan); }
-    .action-list {
-      display: grid;
-      gap: 8px;
-    }
-    .action-item {
-      min-height: 39px;
-      width: 100%;
-      border: 1px solid #e1e7f0;
-      border-radius: 7px;
-      background: #fff;
-      display: grid;
-      grid-template-columns: 24px minmax(0, 1fr) 14px;
-      align-items: center;
-      gap: 10px;
-      padding: 0 12px;
-      color: #344054;
-      font-size: 15px;
-      font-weight: 650;
-      text-align: left;
-      box-shadow: 0 2px 8px rgba(16, 24, 40, .03);
-    }
-    .action-item:hover {
-      border-color: #c8d7ec;
-      background: #fbfdff;
-      box-shadow: 0 8px 18px rgba(16, 24, 40, .06);
-    }
-    .action-item .icon { width: 21px; height: 21px; color: currentColor; }
-    .chevron {
-      color: #98a2b3;
-      font-size: 20px;
-      line-height: 1;
-    }
-    .side {
-      display: grid;
-      gap: 14px;
-      align-content: start;
-      position: sticky;
-      top: 16px;
-    }
-    .status-panel {
-      padding: 26px 24px 22px;
-      min-height: calc(100vh - 32px);
-    }
-    .side-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 24px;
-    }
-    .side-head h2 {
-      margin: 0;
-      font-size: 20px;
-      letter-spacing: -.02em;
-    }
-    .refresh {
-      width: 32px;
-      height: 32px;
-      display: grid;
-      place-items: center;
-      border-radius: 8px;
-      color: var(--blue);
-    }
-    .refresh:hover { background: var(--blue-2); }
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-bottom: 20px;
-    }
-    .metric {
-      min-height: 137px;
-      padding: 18px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: #fff;
-      box-shadow: var(--shadow-soft);
-    }
-    .metric-label {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: #344054;
-      font-size: 14px;
-      font-weight: 650;
-      white-space: nowrap;
-    }
-    .metric-value {
-      margin-top: 18px;
-      color: var(--ink);
-      font-size: 27px;
-      line-height: 1;
-      font-weight: 850;
-      letter-spacing: -.035em;
-    }
-    .metric-delta {
-      margin-top: 13px;
-      color: var(--green);
-      font-size: 13px;
-    }
-    .divider {
-      height: 1px;
-      margin: 18px 0;
-      background: var(--line-strong);
-    }
-    .result-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-    .result-head h2 {
-      margin: 0;
-      font-size: 18px;
-    }
-    .result-head button {
-      color: var(--blue);
-      font-size: 13px;
-      font-weight: 700;
-    }
-    .result-list {
-      display: grid;
-      gap: 8px;
-      margin-bottom: 24px;
-    }
-    .result-item {
-      display: grid;
-      grid-template-columns: 42px minmax(0, 1fr) 48px;
-      gap: 10px;
-      align-items: center;
-      min-height: 62px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #fff;
-      box-shadow: 0 2px 8px rgba(16, 24, 40, .03);
-    }
-    .result-icon {
-      width: 32px;
-      height: 32px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      color: var(--green);
-      background: #f0faf4;
-    }
-    .result-title {
-      color: #253044;
-      font-size: 14px;
-      font-weight: 750;
-    }
-    .result-sub {
-      margin-top: 3px;
-      color: var(--muted);
-      font-size: 12px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .result-status {
-      text-align: right;
-      color: var(--green);
-      font-size: 12px;
-      font-weight: 800;
-    }
-    .result-status span {
-      display: block;
-      margin-top: 4px;
-      color: var(--muted);
-      font-weight: 500;
-    }
-    .safety-box {
-      display: grid;
-      grid-template-columns: 42px minmax(0, 1fr);
-      gap: 10px;
-      align-items: center;
-      margin-top: 18px;
-      padding: 14px 16px;
-      border-radius: 12px;
-      background: #f7f9fb;
-      border: 1px solid var(--line);
-      color: #475467;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    .safety-box .icon-wrap {
-      width: 34px;
-      height: 34px;
-      display: grid;
-      place-items: center;
-      color: var(--green);
-    }
-    .console-output {
-      display: none;
-      margin-top: 16px;
-      max-height: 210px;
-      overflow: auto;
-      white-space: pre-wrap;
-      border: 1px solid #d9e2ef;
-      border-radius: 10px;
-      padding: 12px;
-      background: #101828;
-      color: #f2f4f7;
-      font-family: var(--mono);
-      font-size: 11px;
-      line-height: 1.55;
-    }
-    .console-output.visible { display: block; }
-    @media (max-width: 1260px) {
-      .app { grid-template-columns: 1fr; }
-      .side { position: static; }
-      .status-panel { min-height: auto; }
-      .hero { grid-template-columns: 1fr; }
-      .hero-art { display: none; }
-      .feature-grid, .action-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .action-column:nth-child(2) { border-right: 0; padding-right: 0; }
-    }
-    @media (max-width: 760px) {
-      .app { width: min(100vw - 20px, 1648px); }
-      .hero { padding: 24px; }
-      .brand-row { align-items: flex-start; gap: 14px; }
-      .brand-mark { width: 58px; height: 58px; }
-      .hero-subtitle, .safe-pill { margin-left: 0; max-width: 100%; }
-      .feature-grid, .work-row, .action-columns, .metrics, .quick-actions { grid-template-columns: 1fr; }
-      .feature-card { grid-template-columns: 54px minmax(0, 1fr); padding: 18px; }
-      .action-column { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 18px; }
-      .action-column:last-child { border-bottom: 0; padding-bottom: 0; }
-      .work-card, .tutorial-card, .action-board, .status-panel { padding: 20px; }
-    }
-  </style>
-</head>
-<body>
-  <svg aria-hidden="true" width="0" height="0" style="position:absolute">
-    <defs>
-      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v9.5a2 2 0 0 1-2 2h-15z"/><path d="M3.5 6.5v-1.2a1.8 1.8 0 0 1 1.8-1.8h4.5l2 2h6.9a1.8 1.8 0 0 1 1.8 1.8v1.2"/></symbol>
-      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5.5a2.5 2.5 0 0 1 2.5-2.5h11A2.5 2.5 0 0 1 20 5.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-5 4v-4.4a2.5 2.5 0 0 1-1-2.1z"/><path d="M8 8h8M8 12h5"/></symbol>
-      <symbol id="i-doc-search" viewBox="0 0 24 24"><path d="M6 3.5h8l4 4v6"/><path d="M14 3.5v4h4"/><path d="M6 3.5v17h7"/><circle cx="16" cy="16" r="3"/><path d="m18.2 18.2 2.3 2.3"/></symbol>
-      <symbol id="i-card" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7 10h6M7 14h3M15 14h3"/></symbol>
-      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.4c0 4.4-2.7 7.6-7 9.1-4.3-1.5-7-4.7-7-9.1V6z"/><path d="m8.8 12 2.1 2.1 4.5-4.7"/></symbol>
-      <symbol id="i-question" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1c0 1.8-2.4 2.1-2.4 3.8"/><path d="M12 17.3h.01"/></symbol>
-      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="10" height="12" rx="2"/><path d="M6 16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></symbol>
-      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.8v2M12 19.2v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2.8 12h2M19.2 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
-      <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M14 4c2.4-.8 4.4-.7 5.4-.4.3 1 .4 3-.4 5.4-1.2 3.6-4.7 6.3-8.4 7.9L7.1 13.4C8.7 9.7 10.4 5.2 14 4z"/><path d="M7 14 4.5 16.5l3 3L10 17"/><path d="M9 8.5 5 8l-.8 2.8 3.3 1.2M15.5 15l.5 4 2.8-.8 1.2-3.3"/><circle cx="15.5" cy="7.8" r="1.3"/></symbol>
-      <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/></symbol>
-      <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12 18 6"/></symbol>
-      <symbol id="i-check-box" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.5 2.5L16 9"/></symbol>
-      <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7" ry="2.8"/><path d="M5 5.5v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-6"/><path d="M5 11.5v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-6"/></symbol>
-      <symbol id="i-pen" viewBox="0 0 24 24"><path d="m4 20 4.8-1 10-10a2.2 2.2 0 0 0-3.1-3.1l-10 10z"/><path d="m14.5 7.1 2.4 2.4"/></symbol>
-      <symbol id="i-review" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 5v4h4"/><path d="M12 8v4l3 2"/></symbol>
-      <symbol id="i-archive" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="4" rx="1"/><path d="M5.5 9v9.5A1.5 1.5 0 0 0 7 20h10a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M9 13h6"/></symbol>
-      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.2"/><path d="m15.5 15.5 4.5 4.5"/></symbol>
-      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6.7 6.7L4 9.4"/><path d="M5.5 15A7 7 0 0 0 17.3 17.3L20 14.6"/></symbol>
-      <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3 14.4 9.6 21 12 14.4 14.4 12 21 9.6 14.4 3 12 9.6 9.6z"/></symbol>
-    </defs>
-  </svg>
-  <main class="app">
-    <section class="main">
-      <header class="panel hero">
-        <div class="hero-copy">
-          <div class="brand-row">
-            <svg class="brand-mark" viewBox="0 0 88 88" aria-hidden="true">
-              <defs>
-                <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a6b1ff"/><stop offset="1" stop-color="#28315f"/></linearGradient>
-                <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#eef2ff"/><stop offset="1" stop-color="#6f78c8"/></linearGradient>
-              </defs>
-              <polygon points="42 4 68 26 58 74 42 84 21 68 16 29" fill="url(#g1)"/>
-              <polygon points="42 4 44 45 68 26" fill="#dfe4ff" opacity=".75"/>
-              <polygon points="44 45 58 74 68 26" fill="#3c4784"/>
-              <polygon points="42 4 16 29 44 45" fill="url(#g2)"/>
-              <polygon points="16 29 21 68 44 45" fill="#5d69ae"/>
-              <polygon points="21 68 42 84 44 45" fill="#252f64"/>
-            </svg>
-            <h1>本地知识整理助手</h1>
-          </div>
-          <p class="hero-subtitle">把本地文件、Obsidian 笔记、AI 对话整理成可归档、可复盘、可继续调用的上下文资产</p>
-          <div class="safe-pill"><svg class="icon"><use href="#i-shield"/></svg>只读建议，不删除、不移动、不重命名、不重写源文件</div>
-        </div>
-        <div class="hero-art" aria-label="上下文资产流转图">
-          <svg viewBox="0 0 430 214" aria-hidden="true">
-            <defs>
-              <linearGradient id="cardG" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#eef6ff"/></linearGradient>
-              <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#244a78" flood-opacity=".12"/></filter>
-            </defs>
-            <path d="M64 42 C126 42 124 76 178 76" stroke="#8bb2d6" stroke-width="2" stroke-dasharray="5 7" fill="none"/>
-            <path d="M62 92 C121 92 121 108 178 108" stroke="#8bb2d6" stroke-width="2" stroke-dasharray="5 7" fill="none"/>
-            <path d="M64 144 C122 144 124 136 178 136" stroke="#8bb2d6" stroke-width="2" stroke-dasharray="5 7" fill="none"/>
-            <path d="M272 106 C298 106 302 84 326 84" stroke="#7aa9c8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
-            <path d="M272 124 C304 124 306 134 326 134" stroke="#7aa9c8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
-            <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 8 4 0 8" fill="#7aa9c8"/></marker></defs>
-            <rect x="18" y="30" width="30" height="38" rx="4" fill="#fff" stroke="#7b93aa" stroke-width="1.5"/>
-            <path d="M34 30v10h10" stroke="#7b93aa" stroke-width="1.5" fill="none"/>
-            <rect x="18" y="88" width="36" height="28" rx="4" fill="#dff0f6" stroke="#6f9aae" stroke-width="1.5"/>
-            <path d="M20 88h12l4 4h18" stroke="#6f9aae" stroke-width="1.5" fill="none"/>
-            <polygon points="35 134 47 146 43 166 35 174 24 162 22 145" fill="#7767f0"/>
-            <polygon points="35 134 36 154 47 146" fill="#dcd8ff"/>
-            <circle cx="35" cy="192" r="15" fill="#fff" stroke="#9aa8ba" stroke-width="1.5"/>
-            <path d="M28 192h.1M35 192h.1M42 192h.1" stroke="#6e7a8a" stroke-width="2.5"/>
-            <rect x="178" y="86" width="96" height="58" rx="12" fill="url(#cardG)" stroke="#b7c7d8" filter="url(#softShadow)"/>
-            <path d="M202 104c4-10 19-9 20 2 8-3 15 7 9 14 7 6 2 18-8 16-5 8-17 5-17-5-10 3-17-9-9-16-5-6-1-15 5-11z" fill="none" stroke="#5f7f9a" stroke-width="2"/>
-            <path d="M212 102v35M200 116h27M204 127h23" stroke="#5f7f9a" stroke-width="1.6"/>
-            <rect x="326" y="56" width="98" height="120" rx="10" fill="#fff" stroke="#93a7ba" filter="url(#softShadow)"/>
-            <rect x="340" y="72" width="34" height="8" rx="4" fill="#7aa1b6"/>
-            <rect x="384" y="74" width="16" height="4" rx="2" fill="#d7dfe8"/>
-            <rect x="404" y="74" width="8" height="4" rx="2" fill="#d7dfe8"/>
-            <circle cx="346" cy="100" r="5" fill="#cfe7ee"/><rect x="358" y="97" width="45" height="6" rx="3" fill="#e1e7ef"/>
-            <circle cx="346" cy="122" r="5" fill="#cfe7ee"/><rect x="358" y="119" width="52" height="6" rx="3" fill="#e1e7ef"/>
-            <circle cx="346" cy="144" r="5" fill="#cfe7ee"/><rect x="358" y="141" width="38" height="6" rx="3" fill="#e1e7ef"/>
-            <rect x="342" y="154" width="72" height="20" rx="4" fill="#dff0f6"/>
-            <text x="354" y="168" fill="#446071" font-size="13" font-family="Microsoft YaHei">上下文资产</text>
-            <path d="M290 24 297 42 315 49 297 56 290 74 283 56 265 49 283 42z" fill="#dff0f6" stroke="#6e94a8"/>
-            <rect x="86" y="190" width="148" height="10" rx="4" fill="#d9e1eb"/>
-            <rect x="78" y="199" width="168" height="7" rx="3" fill="#c4ceda"/>
-            <path d="M392 196c14-18 31-11 23 4M395 196c-6-22 9-30 16-10" fill="none" stroke="#5a9b64" stroke-width="4" stroke-linecap="round"/>
-            <path d="M352 196c2-20 18-23 22-3 1 10-7 13-11 13s-12-2-11-10z" fill="#f2bc3d" stroke="#b77b12" stroke-width="2"/>
-          </svg>
-        </div>
-      </header>
-
-      <section class="feature-grid">
-        <article class="panel feature-card">
-          <div class="feature-icon"><svg class="icon" style="width:58px;height:58px"><use href="#i-folder"/></svg></div>
-          <div><h2>整理本地文件</h2><p>扫描并理解本地文件，建立结构与索引，便于查找与复用。</p></div>
-        </article>
-        <article class="panel feature-card">
-          <div class="feature-icon"><svg class="icon" style="width:58px;height:58px"><use href="#i-chat"/></svg></div>
-          <div><h2>归档 AI 对话</h2><p>将与 AI 的对话归档为可检索记录，保留关键洞见与结论。</p></div>
-        </article>
-        <article class="panel feature-card">
-          <div class="feature-icon"><svg class="icon" style="width:58px;height:58px"><use href="#i-doc-search"/></svg></div>
-          <div><h2>提取 AI 上下文</h2><p>从内容中提炼关键信息、背景与要点，生成可复用片段。</p></div>
-        </article>
-        <article class="panel feature-card">
-          <div class="feature-icon"><svg class="icon" style="width:58px;height:58px"><use href="#i-card"/></svg></div>
-          <div><h2>沉淀知识卡 / 今日行动</h2><p>把知识与洞见沉淀为知识卡，生成今日行动清单。</p></div>
-        </article>
-      </section>
-
-      <section class="work-row">
-        <div class="panel work-card">
-          <h2 class="section-title"><svg class="icon"><use href="#i-sparkle"/></svg>四功能操作区</h2>
-          <textarea id="freeText" placeholder="把你现在要处理的内容贴进来"></textarea>
-          <div class="quick-actions">
-            <button class="quick-button primary" onclick="ask()"><svg class="icon"><use href="#i-question"/></svg>问怎么用</button>
-            <button class="quick-button" onclick="runAction('inbox-route')"><svg class="icon"><use href="#i-folder"/></svg>判断放哪</button>
-            <button class="quick-button" onclick="copyAiContextPrompt()"><svg class="icon"><use href="#i-copy"/></svg>复制上下文</button>
-          </div>
-          <pre id="out" class="console-output">等待操作。</pre>
-        </div>
-        <div class="panel tutorial-card">
-          <h2 class="section-title"><svg class="icon"><use href="#i-book"/></svg>新手 10 分钟上手</h2>
-          <div class="steps">
-            <div class="step"><span class="step-num">1</span>第 1 步：打开教程 PDF</div>
-            <div class="step"><span class="step-num">2</span>第 2 步：点击「今天先干什么」</div>
-            <div class="step"><span class="step-num">3</span>第 3 步：把一段内容交给助手归档或提取上下文</div>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel action-board">
-        <div class="action-columns">
-          <div class="action-column">
-            <div class="column-title"><svg class="icon"><use href="#i-folder"/></svg>开始</div>
-            <div class="action-list">
-              <button class="action-item" onclick="runAction('today')"><svg class="icon"><use href="#i-sun"/></svg><span>今天先干什么</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="runAction('onboarding')"><svg class="icon"><use href="#i-rocket"/></svg><span>快速初始化</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="runAction('open-guidebook')"><svg class="icon"><use href="#i-book"/></svg><span>打开教程 PDF</span><span class="chevron">›</span></button>
-            </div>
-          </div>
-          <div class="action-column">
-            <div class="column-title"><svg class="icon"><use href="#i-copy"/></svg>整理</div>
-            <div class="action-list">
-              <button class="action-item" onclick="runAction('file-radar')"><svg class="icon"><use href="#i-target"/></svg><span>查看文件雷达</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="runAction('inbox-route')"><svg class="icon"><use href="#i-folder"/></svg><span>这段内容放哪</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="runAction('obsidian-health')"><svg class="icon"><use href="#i-database"/></svg><span>检查知识库</span><span class="chevron">›</span></button>
-            </div>
-          </div>
-          <div class="action-column">
-            <div class="column-title"><svg class="icon"><use href="#i-pen"/></svg>记录</div>
-            <div class="action-list">
-              <button class="action-item" onclick="quickActionNote()"><svg class="icon"><use href="#i-check-box"/></svg><span>记录一个任务</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="quickCardNote()"><svg class="icon"><use href="#i-card"/></svg><span>沉淀知识卡</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="quickTimeReview()"><svg class="icon"><use href="#i-review"/></svg><span>复盘今天</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="archiveAiChat()"><svg class="icon"><use href="#i-chat"/></svg><span>归档 AI 对话</span><span class="chevron">›</span></button>
-            </div>
-          </div>
-          <div class="action-column">
-            <div class="column-title"><svg class="icon"><use href="#i-sparkle"/></svg>AI 续用</div>
-            <div class="action-list">
-              <button class="action-item" onclick="runAction('build-ai-context')"><svg class="icon"><use href="#i-search"/></svg><span>提取 AI 上下文</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="copyAiContextPrompt()"><svg class="icon"><use href="#i-copy"/></svg><span>复制上下文 prompt</span><span class="chevron">›</span></button>
-              <button class="action-item" onclick="openObsidian()"><svg class="icon"><use href="#i-sparkle"/></svg><span>打开 Obsidian</span><span class="chevron">›</span></button>
-            </div>
-          </div>
-        </div>
-      </section>
-    </section>
-
-    <aside class="side">
-      <section class="panel status-panel">
-        <div class="side-head">
-          <h2>状态概览</h2>
-          <button class="refresh" onclick="refreshStatus()" title="刷新状态"><svg class="icon"><use href="#i-refresh"/></svg></button>
-        </div>
-        <div class="metrics">
-          <div class="metric">
-            <div class="metric-label"><svg class="icon" style="color:var(--blue)"><use href="#i-folder"/></svg>扫描文件数</div>
-            <div class="metric-value" id="totalFiles">-</div>
-            <div class="metric-delta">今日 +268</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label"><svg class="icon" style="color:#667085"><use href="#i-archive"/></svg>扫描候选数</div>
-            <div class="metric-value" id="archiveCount">-</div>
-            <div class="metric-delta">今日 +48</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label"><svg class="icon" style="color:var(--violet)"><use href="#i-sparkle"/></svg>Obsidian 笔记数</div>
-            <div class="metric-value" id="totalNotes">-</div>
-            <div class="metric-delta">今日 +27</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label"><svg class="icon" style="color:#66809d"><use href="#i-doc-search"/></svg>最新报告</div>
-            <div class="metric-value" style="font-size:18px;letter-spacing:0" id="latestReportTime">-</div>
-            <div class="metric-delta">今日生成</div>
-          </div>
-        </div>
-        <div class="divider"></div>
-        <div class="result-head"><h2>结果摘要</h2><button onclick="toggleOutput()">查看全部</button></div>
-        <div class="result-list" id="resultList">
-          <div class="result-item">
-            <div class="result-icon"><svg class="icon"><use href="#i-shield"/></svg></div>
-            <div><div class="result-title">本地文件扫描完成</div><div class="result-sub">等待首次状态加载</div></div>
-            <div class="result-status">成功<span>--:--</span></div>
-          </div>
-        </div>
-        <div class="safety-box">
-          <div class="icon-wrap"><svg class="icon"><use href="#i-shield"/></svg></div>
-          <div id="safety">安全边界：只读建议，不删除、不移动、不重命名、不重写源文件</div>
-        </div>
-      </section>
-    </aside>
-  </main>
-
-  <script>
-    const $ = (id) => document.getElementById(id);
-    let lastStatus = null;
-
-    function text() {
-      return $("freeText").value.trim();
-    }
-
-    function nowTime() {
-      return new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit", hour12: false});
-    }
-
-    function setBusy(value) {
-      document.querySelectorAll("button").forEach((button) => { button.disabled = value; });
-    }
-
-    function renderOutput(data) {
-      const out = $("out");
-      out.textContent = JSON.stringify(data, null, 2);
-      out.classList.add("visible");
-    }
-
-    function setResultList(items) {
-      $("resultList").innerHTML = items.map((item) => `
-        <div class="result-item">
-          <div class="result-icon" style="color:${item.color || "var(--green)"}"><svg class="icon"><use href="${item.icon || "#i-shield"}"/></svg></div>
-          <div><div class="result-title">${item.title}</div><div class="result-sub">${item.sub}</div></div>
-          <div class="result-status">成功<span>${item.time || nowTime()}</span></div>
-        </div>
-      `).join("");
-    }
-
-    function updateResultsFromStatus(status) {
-      const fileSummary = status.file_report?.summary || {};
-      const obsidianSummary = status.obsidian_report?.summary || {};
-      setResultList([
-        {title: "本地文件扫描完成", sub: `共扫描 ${fileSummary.total_files ?? "-"} 个文件`, icon: "#i-shield", color: "var(--green)"},
-        {title: "AI 对话归档完成", sub: "保留来源、背景与结论", icon: "#i-archive", color: "var(--blue)"},
-        {title: "上下文提取完成", sub: "可复制给新的 AI 对话", icon: "#i-search", color: "var(--violet)"},
-        {title: "知识卡沉淀完成", sub: `当前 ${obsidianSummary.total_notes ?? "-"} 篇笔记`, icon: "#i-card", color: "var(--amber)"},
-        {title: "每日复盘完成", sub: "生成今日行动清单", icon: "#i-doc-search", color: "#667085"}
-      ]);
-    }
-
-    async function refreshStatus() {
-      const response = await fetch("/api/status");
-      lastStatus = await response.json();
-      const fileSummary = lastStatus.file_report?.summary || {};
-      const obsidianSummary = lastStatus.obsidian_report?.summary || {};
-      $("totalFiles").textContent = (fileSummary.total_files ?? "-").toLocaleString?.() || fileSummary.total_files || "-";
-      $("archiveCount").textContent = (fileSummary.counts?.archive_candidates ?? "-").toLocaleString?.() || fileSummary.counts?.archive_candidates || "-";
-      $("totalNotes").textContent = (obsidianSummary.total_notes ?? "-").toLocaleString?.() || obsidianSummary.total_notes || "-";
-      $("latestReportTime").textContent = nowTime();
-      $("safety").textContent = lastStatus.safety || "安全边界：只读建议，不删除、不移动、不重命名、不重写源文件";
-      updateResultsFromStatus(lastStatus);
-      return lastStatus;
-    }
-
-    async function api(action, payload = {}) {
-      setBusy(true);
-      try {
-        const response = await fetch("/api/action", {
-          method: "POST",
-          headers: {"content-type": "application/json"},
-          body: JSON.stringify({action, payload})
-        });
-        const data = await response.json();
-        renderOutput(data);
-        await refreshStatus();
-        setResultList([{title: actionLabel(action), sub: data.ok ? "操作已完成" : (data.error || "执行失败"), icon: data.ok ? "#i-shield" : "#i-doc-search", color: data.ok ? "var(--green)" : "#c0392b"}]);
-        return data;
-      } catch (error) {
-        const data = {ok: false, error: String(error.stack || error)};
-        renderOutput(data);
-        setResultList([{title: "执行失败", sub: data.error, icon: "#i-doc-search", color: "#c0392b"}]);
-        return data;
-      } finally {
-        setBusy(false);
-      }
-    }
-
-    function actionLabel(action) {
-      const map = {
-        "today": "今天先干什么",
-        "onboarding": "快速初始化",
-        "open-guidebook": "打开教程 PDF",
-        "file-radar": "查看文件雷达",
-        "inbox-route": "这段内容放哪",
-        "obsidian-health": "检查知识库",
-        "build-ai-context": "提取 AI 上下文",
-        "archive-ai-chat": "归档 AI 对话",
-        "action-note": "记录一个任务",
-        "card-note": "沉淀知识卡",
-        "time-review": "复盘今天",
-        "ask": "问怎么用"
-      };
-      return map[action] || action;
-    }
-
-    function runAction(action) {
-      const value = text();
-      return api(action, {text: value, body: value, query: value, request: value});
-    }
-
-    function ask() {
-      return api("ask", {question: text() || "我现在应该怎么用这个 Obsidian 助手？"});
-    }
-
-    function quickActionNote() {
-      const value = text() || "记录一个任务";
-      return api("action-note", {title: value.slice(0, 48), domain: "工作", goal: value, source: "GUI"});
-    }
-
-    function quickCardNote() {
-      const value = text() || "知识卡";
-      return api("card-note", {title: value.slice(0, 48), domain: "学习", source: "GUI", conclusion: value});
-    }
-
-    function quickTimeReview() {
-      const value = text() || "完成轻量复盘";
-      return api("time-review", {title: "今日复盘", period: "daily", done: value, next: "明确下一步"});
-    }
-
-    async function copyAiContextPrompt() {
-      const value = text() || "当前任务";
-      const data = await api("build-ai-context", {query: value, request: value});
-      if (data.prompt && navigator.clipboard) {
-        await navigator.clipboard.writeText(data.prompt);
-        $("out").textContent = "已复制上下文 prompt：\n\n" + data.prompt;
-        $("out").classList.add("visible");
-      }
-      return data;
-    }
-
-    function archiveAiChat() {
-      const value = text() || "待归档 AI 对话";
-      return api("archive-ai-chat", {
-        title: value.slice(0, 48),
-        source: "GUI",
-        background: value,
-        conclusions: "待提炼关键结论",
-        outputs: "待补充产出路径",
-        open_items: "待确认未完成事项"
-      });
-    }
-
-    function openObsidian() {
-      return api("open-obsidian");
-    }
-
-    function toggleOutput() {
-      $("out").classList.toggle("visible");
-      if ($("out").classList.contains("visible")) {
-        $("out").scrollIntoView({behavior: "smooth", block: "nearest"});
-      }
-    }
-
-    refreshStatus().catch((error) => renderOutput({ok: false, error: String(error)}));
-  </script>
-</body>
-</html>
-"""
-
-
 HTML = (ROOT / "docs" / "assets" / "gui" / "workspace.html").read_text(encoding="utf-8")
 
 
@@ -1430,6 +966,16 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/":
             body = HTML.encode("utf-8")
+            self.send_response(200)
+            self.send_header("content-type", "text/html; charset=utf-8")
+            self.send_header("cache-control", "no-store")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if parsed.path in {"/advanced", "/advanced/"}:
+            advanced = ROOT / "docs" / "assets" / "gui" / "advanced.html"
+            body = advanced.read_bytes()
             self.send_response(200)
             self.send_header("content-type", "text/html; charset=utf-8")
             self.send_header("cache-control", "no-store")

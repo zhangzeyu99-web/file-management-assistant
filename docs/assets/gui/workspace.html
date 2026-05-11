@@ -7,43 +7,43 @@
   <title>本地知识整理助手</title>
   <style>
     :root {
-      --bg: #f4f7f6;
-      --paper: #fffdf8;
-      --panel: #ffffff;
-      --panel-soft: #f8fbfa;
-      --ink: #14211f;
-      --muted: #61706c;
-      --subtle: #8b9995;
-      --line: #dfe8e4;
-      --line-strong: #cddbd6;
-      --blue: #2f6ecb;
-      --blue-soft: #ebf3ff;
-      --green: #2c7a58;
-      --green-soft: #edf7f1;
-      --amber: #c77b22;
-      --amber-soft: #fff5e8;
-      --teal: #16818d;
-      --violet: #6157d8;
-      --shadow: 0 18px 52px rgba(28, 43, 39, .09);
-      --shadow-soft: 0 8px 24px rgba(28, 43, 39, .06);
-      --radius-xl: 24px;
-      --radius-lg: 18px;
-      --radius-md: 12px;
+      --hero-bg: #071426;
+      --hero-bg-2: #0d2d3d;
+      --page: #f5f7fb;
+      --paper: #ffffff;
+      --paper-soft: #f8fafc;
+      --ink: #102033;
+      --muted: #657386;
+      --subtle: #91a0b4;
+      --line: #e0e7f0;
+      --line-strong: #cad6e5;
+      --blue: #2f72e7;
+      --cyan: #26c3d8;
+      --green: #2d8a5f;
+      --mint: #16c784;
+      --mint-soft: #ecfdf5;
+      --mint-line: #bbf7d0;
+      --amber: #c9771d;
+      --violet: #6f65e8;
+      --shadow: 0 22px 70px rgba(25, 42, 62, .10);
+      --shadow-soft: 0 10px 32px rgba(25, 42, 62, .08);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
       --font: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
       --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      min-height: 100vh;
       color: var(--ink);
       font-family: var(--font);
-      background:
-        radial-gradient(circle at 8% 4%, rgba(47, 110, 203, .08), transparent 32rem),
-        radial-gradient(circle at 88% 0%, rgba(22, 129, 141, .09), transparent 30rem),
-        linear-gradient(180deg, #f7faf8 0%, #edf2f0 100%);
+      background: linear-gradient(180deg, #eef3f8 0%, #f8fafc 38%, #f3f6fa 100%);
     }
-    button, textarea, input, select { font: inherit; }
+    button, textarea, input { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    a { color: inherit; text-decoration: none; }
     button {
       border: 0;
       cursor: pointer;
@@ -51,69 +51,139 @@
       background: none;
       transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
     }
-    button:hover { transform: translateY(-1px); }
+    button:hover, a:hover { transform: translateY(-1px); }
     button:disabled { opacity: .58; cursor: wait; transform: none; }
-    .app {
-      width: min(1600px, calc(100vw - 34px));
-      margin: 0 auto;
-      padding: 18px 0;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 390px;
-      gap: 16px;
+    .site {
+      min-height: 100vh;
+      overflow: hidden;
     }
-    .main { display: grid; gap: 16px; min-width: 0; }
-    .panel {
-      background: rgba(255,255,255,.95);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow);
-    }
-    .hero {
-      padding: 30px 34px 28px;
+    .hero-shell {
+      color: #fff;
       background:
-        linear-gradient(120deg, rgba(255,255,255,.98), rgba(255,253,248,.94)),
-        var(--panel);
+        radial-gradient(circle at 16% 14%, rgba(47, 114, 231, .36), transparent 24rem),
+        radial-gradient(circle at 84% 18%, rgba(38, 195, 216, .20), transparent 26rem),
+        linear-gradient(135deg, var(--hero-bg) 0%, #07182a 48%, var(--hero-bg-2) 100%);
+      position: relative;
     }
-    .eyebrow {
-      display: inline-flex;
+    .hero-shell:before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: .18;
+      background-image:
+        linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
+      pointer-events: none;
+    }
+    .site-nav, .site-hero, .feature-strip, .content, .site-footer {
+      width: min(1180px, calc(100vw - 36px));
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+    .site-nav {
+      min-height: 64px;
+      display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 7px 12px;
-      border-radius: 999px;
-      background: var(--green-soft);
-      color: #1f6044;
-      border: 1px solid #d7eadc;
-      font-size: 13px;
-      font-weight: 800;
+      justify-content: space-between;
+      gap: 18px;
+      color: rgba(255,255,255,.82);
     }
-    h1 {
-      margin: 16px 0 0;
-      font-size: clamp(36px, 3.5vw, 56px);
-      line-height: 1.04;
-      letter-spacing: -.04em;
-      font-weight: 900;
-    }
-    .hero-subtitle {
-      max-width: 840px;
-      margin: 14px 0 0;
-      color: #31413d;
-      font-size: 17px;
-      line-height: 1.66;
-    }
-    .safe-line {
-      width: max-content;
-      max-width: 100%;
-      margin-top: 18px;
+    .brand {
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      padding: 9px 15px;
-      border-radius: 999px;
-      background: #f7fbf8;
-      border: 1px solid #d8eadf;
-      color: #174a34;
+      font-weight: 900;
+      letter-spacing: -.02em;
+    }
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 10px;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.9), rgba(255,255,255,.18)),
+        linear-gradient(135deg, var(--blue), var(--cyan));
+      box-shadow: 0 10px 28px rgba(47, 114, 231, .35);
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 18px;
       font-size: 14px;
       font-weight: 800;
+    }
+    .nav-links a {
+      color: rgba(255,255,255,.72);
+      transition: color .16s ease, transform .16s ease;
+    }
+    .nav-links a:hover { color: #fff; }
+    .site-hero {
+      min-height: 520px;
+      display: grid;
+      align-content: center;
+      padding: 50px 0 88px;
+      text-align: center;
+    }
+    .hero-badge {
+      width: max-content;
+      max-width: 100%;
+      margin: 0 auto 18px;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 13px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+      color: rgba(255,255,255,.80);
+      font-size: 13px;
+      font-weight: 850;
+      backdrop-filter: blur(14px);
+    }
+    .hero-badge span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #40e09a;
+      box-shadow: 0 0 0 5px rgba(64, 224, 154, .12);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(46px, 7vw, 86px);
+      line-height: .98;
+      letter-spacing: -.065em;
+      font-weight: 950;
+    }
+    .hero-gradient {
+      display: inline-block;
+      color: transparent;
+      background: linear-gradient(90deg, #fff 0%, #88dfff 62%, #b9c9ff 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+    .hero-copy {
+      max-width: 760px;
+      margin: 22px auto 0;
+      color: rgba(238, 246, 255, .84);
+      font-size: clamp(17px, 2vw, 21px);
+      line-height: 1.7;
+    }
+    .safe-pill {
+      width: max-content;
+      max-width: 100%;
+      margin: 20px auto 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      color: #dff9ec;
+      background: rgba(45, 138, 95, .17);
+      border: 1px solid rgba(130, 231, 180, .28);
+      font-size: 14px;
+      font-weight: 900;
     }
     .safe-dot {
       width: 22px;
@@ -121,51 +191,86 @@
       border-radius: 50%;
       display: grid;
       place-items: center;
-      background: var(--green);
-      color: #fff;
+      color: #0e2c20;
+      background: #86efac;
       font-size: 13px;
-      font-weight: 900;
     }
-    .hero-principles {
+    .hero-actions {
       display: flex;
+      justify-content: center;
       flex-wrap: wrap;
-      gap: 9px;
-      margin-top: 16px;
+      gap: 12px;
+      margin-top: 28px;
     }
-    .principle-pill {
-      min-height: 31px;
+    .hero-button {
+      min-height: 46px;
       display: inline-flex;
       align-items: center;
-      gap: 7px;
-      padding: 0 12px;
-      border-radius: 999px;
-      background: #fff;
-      border: 1px solid var(--line);
-      color: #40504c;
-      font-size: 13px;
-      font-weight: 820;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 18px;
+      border-radius: 14px;
+      font-weight: 900;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.09);
+      color: #fff;
+      box-shadow: 0 16px 40px rgba(0,0,0,.15);
+      transition: transform .16s ease, background .16s ease;
     }
-    .core-grid {
+    .hero-button.primary {
+      background: linear-gradient(135deg, #2f72e7, #28b9d0);
+      border-color: rgba(255,255,255,.18);
+    }
+    .hero-metrics {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 14px;
+      max-width: 760px;
+      margin: 34px auto 0;
     }
-    .core-card {
-      min-height: 148px;
+    .hero-metric {
+      padding: 16px 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 18px;
+      background: rgba(255,255,255,.07);
+      backdrop-filter: blur(12px);
+    }
+    .metric-value {
+      display: block;
+      font-size: 24px;
+      line-height: 1;
+      font-weight: 950;
+      letter-spacing: -.035em;
+    }
+    .metric-label {
+      display: block;
+      margin-top: 7px;
+      color: rgba(255,255,255,.63);
+      font-size: 12px;
+      font-weight: 820;
+    }
+    .feature-strip {
+      margin-top: -54px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      padding-bottom: 52px;
+    }
+    .feature-anchor {
+      min-height: 170px;
       padding: 22px;
-      text-align: left;
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      background: rgba(255,255,255,.96);
-      box-shadow: var(--shadow-soft);
       display: grid;
       align-content: start;
-      gap: 12px;
+      gap: 13px;
+      border-radius: 24px;
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(219, 229, 240, .92);
+      box-shadow: var(--shadow);
+      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
     }
-    .core-card.active,
-    .core-card:hover {
-      border-color: #b8c9df;
-      box-shadow: 0 16px 34px rgba(47, 110, 203, .12);
+    .feature-anchor:hover {
+      border-color: rgba(47, 114, 231, .42);
+      box-shadow: 0 24px 60px rgba(47, 114, 231, .13);
     }
     .sprite {
       display: inline-block;
@@ -174,252 +279,474 @@
       background-size: 200% 200%;
       flex: 0 0 auto;
     }
-    .feature-icon { width: 48px; height: 48px; border-radius: 14px; }
-    .icon-sm { width: 22px; height: 22px; border-radius: 7px; }
+    .feature-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background-color: #fff;
+      box-shadow: 0 8px 20px rgba(25, 42, 62, .08);
+    }
     .folder { background-position: 0 0; }
     .chat { background-position: 100% 0; }
     .doc { background-position: 0 100%; }
     .card-icon { background-position: 100% 100%; }
-    .card-title {
-      margin: 0;
-      color: #15221f;
-      font-size: 20px;
-      font-weight: 900;
-      letter-spacing: -.02em;
-    }
-    .card-copy {
-      margin: 0;
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.55;
-    }
-    .workspace {
-      display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(340px, .8fr);
-      gap: 16px;
-    }
-    .work-card, .flow-card, .advanced-card { padding: 24px 30px; }
-    .section-title {
-      margin: 0 0 12px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 22px;
-      font-weight: 900;
-      letter-spacing: -.02em;
-    }
-    .title-mark { color: var(--blue); }
-    .intro {
-      margin: -4px 0 16px;
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    .work-toolbar {
-      display: grid;
-      grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr);
-      gap: 12px;
-      margin-bottom: 14px;
-      padding: 14px;
-      border-radius: 17px;
-      background: linear-gradient(180deg, #fbfdff, #f5f8f7);
+    .icon-sm {
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
       border: 1px solid var(--line);
+      background-color: #fff;
     }
-    .toolbar-text strong {
-      display: block;
-      color: #172522;
-      font-size: 14px;
-      font-weight: 900;
+    .feature-anchor h2 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -.02em;
     }
-    .toolbar-text span {
-      display: block;
-      margin-top: 4px;
+    .feature-anchor p {
+      margin: 0;
       color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
+      line-height: 1.65;
+      font-size: 14px;
     }
-    .quick-presets {
+    .feature-anchor .arrow {
+      margin-top: auto;
+      color: var(--blue);
+      font-weight: 950;
+      font-size: 13px;
+    }
+    .content {
+      display: grid;
+      gap: 24px;
+      padding-bottom: 48px;
+    }
+    .section-card {
+      padding: 30px;
+      border-radius: var(--radius-xl);
+      background: rgba(255,255,255,.94);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-soft);
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    .section-kicker {
+      margin: 0 0 8px;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 950;
+      letter-spacing: .04em;
+    }
+    .section-title {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 38px);
+      letter-spacing: -.045em;
+      line-height: 1.12;
+    }
+    .section-copy {
+      max-width: 680px;
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .knowledge-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      gap: 16px;
     }
-    .preset-button {
-      min-height: 34px;
-      padding: 0 11px;
-      border-radius: 11px;
-      border: 1px solid #dbe5f1;
-      background: #fff;
-      color: #2b3d39;
-      font-size: 12px;
-      font-weight: 850;
+    .knowledge-card {
+      min-height: 156px;
+      padding: 18px;
+      display: grid;
+      align-content: start;
+      gap: 10px;
       text-align: left;
+      border-radius: 22px;
+      background: linear-gradient(180deg, #fff, #fbfdff);
+      border: 1px solid var(--line);
+      box-shadow: 0 10px 28px rgba(25, 42, 62, .06);
     }
-    .preset-button:hover { border-color: #aac4e9; background: #f9fbff; }
-    .search-note {
+    .knowledge-card:hover {
+      border-color: rgba(47, 114, 231, .36);
+      box-shadow: 0 18px 44px rgba(47, 114, 231, .11);
+    }
+    .card-meta {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
       align-items: center;
-      margin-bottom: 12px;
-      color: var(--muted);
+      gap: 8px;
+      color: var(--subtle);
       font-size: 12px;
-      line-height: 1.45;
+      font-weight: 850;
     }
-    .search-note strong {
-      color: var(--teal);
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 9px;
+      border-radius: 999px;
+      color: #255d8f;
+      background: #edf6ff;
+      border: 1px solid #d9eafe;
+    }
+    .knowledge-card h3 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.35;
+      letter-spacing: -.025em;
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .knowledge-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.58;
+      font-size: 14px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .source-line {
+      margin-top: auto;
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      color: #2f72e7;
+      background: #f1f6ff;
+      font-size: 12px;
       font-weight: 900;
     }
-    .kind-tabs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .kind-tab {
-      min-height: 34px;
-      padding: 0 13px;
-      border-radius: 999px;
+    .knowledge-detail {
+      display: none;
+      margin-top: 16px;
+      padding: 0;
+      border-radius: 28px;
       border: 1px solid var(--line);
       background: #fff;
-      color: #40504c;
-      font-size: 13px;
-      font-weight: 800;
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
     }
-    .kind-tab.active {
-      color: #fff;
-      border-color: var(--green);
-      background: var(--green);
-    }
-    .input-grid {
+    .knowledge-detail.visible { display: block; }
+    .detail-document {
       display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr);
-      gap: 14px;
-      align-items: stretch;
+      gap: 18px;
+      padding: 24px;
     }
-    textarea {
-      width: 100%;
-      resize: vertical;
-      border: 1px solid #a9c5ef;
-      border-radius: 14px;
-      padding: 16px;
-      outline: none;
-      background: #fff;
-      color: var(--ink);
-      font-size: 15px;
-      line-height: 1.62;
-      box-shadow: 0 0 0 3px rgba(47, 110, 203, .04);
-    }
-    textarea:focus {
-      border-color: var(--blue);
-      box-shadow: 0 0 0 4px rgba(47, 110, 203, .10);
-    }
-    #freeText { min-height: 150px; }
-    textarea::placeholder { color: #99a7a3; }
-    .file-target-panel {
-      min-height: 150px;
-      padding: 15px;
-      border: 1px dashed #b9cce5;
-      border-radius: 16px;
-      background: linear-gradient(180deg, #fbfdff, #f3f8f7);
-      color: #354743;
-    }
-    .target-head {
+    .detail-header {
       display: flex;
-      align-items: baseline;
       justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 8px;
+      gap: 16px;
+      align-items: flex-start;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--line);
     }
-    .target-head strong { color: #14211f; font-size: 14px; }
-    .target-head span { color: var(--green); font-size: 12px; font-weight: 900; }
-    .local-paths {
-      min-height: 54px;
-      height: 54px;
-      padding: 10px 12px;
-      border-color: #d3e0ef;
+    .detail-eyebrow {
+      margin: 0 0 8px;
+      color: #087a52;
       font-size: 12px;
-      line-height: 1.45;
-      box-shadow: none;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
     }
-    .drop-zone {
-      margin-top: 8px;
-      padding: 10px 12px;
-      border: 1px dashed #b9cce5;
-      border-radius: 11px;
-      background: rgba(255,255,255,.75);
-      color: #52635f;
-      font-size: 12px;
-      line-height: 1.45;
+    .detail-title {
+      margin: 0;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.18;
+      letter-spacing: -.04em;
+      color: var(--ink);
     }
-    .drop-zone.dragging { border-color: var(--blue); background: var(--blue-soft); color: #235eb2; }
-    .file-input { display: none; }
-    .path-actions {
+    .detail-pill-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 7px;
-      margin-top: 8px;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 180px;
     }
-    .mini-button {
-      min-height: 29px;
-      padding: 0 10px;
-      border-radius: 9px;
-      border: 1px solid #dbe5f1;
-      background: #fff;
-      color: var(--blue);
+    .detail-callout {
+      padding: 18px 20px;
+      border-radius: 20px;
+      border: 1px solid var(--mint-line);
+      background: linear-gradient(135deg, var(--mint-soft), #ffffff);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.8);
+    }
+    .detail-callout span {
+      display: inline-flex;
+      margin-bottom: 8px;
+      color: #087a52;
       font-size: 12px;
-      font-weight: 850;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
     }
-    .target-summary {
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
+    .detail-callout p {
+      margin: 0;
+      color: #132238;
+      font-size: 17px;
+      font-weight: 800;
+      line-height: 1.7;
     }
-    .primary-actions {
+    .detail-grid,
+    .detail-columns {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
     }
-    .action-button {
-      min-height: 46px;
-      border-radius: 13px;
+    .detail-box,
+    .detail-section {
+      min-width: 0;
+      padding: 16px;
+      border-radius: 18px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+    .detail-box strong,
+    .detail-section h4 {
+      display: block;
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: #274469;
+      letter-spacing: .02em;
+    }
+    .detail-box p,
+    .detail-section p {
+      margin: 0;
+      color: #26384d;
+      line-height: 1.65;
+    }
+    .detail-section-wide {
+      grid-column: 1 / -1;
+    }
+    .detail-list {
+      display: grid;
+      gap: 9px;
+      margin: 0;
+      padding-left: 18px;
+      color: #26384d;
+      line-height: 1.65;
+    }
+    .empty-list {
+      color: var(--muted);
+    }
+    .source-stack {
+      display: grid;
+      gap: 10px;
+    }
+    .source-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #f8fbff;
+    }
+    .source-label {
+      display: block;
+      color: #274469;
+      font-weight: 900;
+      margin-bottom: 4px;
+    }
+    .source-path {
+      color: #5d718d;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+    .related-stack,
+    .thinking-stack {
+      display: grid;
+      gap: 10px;
+    }
+    .related-item,
+    .thinking-prompt {
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #f8fffb;
+    }
+    .related-item strong {
+      display: block;
+      margin: 0 0 5px;
+      color: #132238;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .related-item span,
+    .thinking-prompt {
+      color: #4d6078;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .related-item code {
+      display: block;
+      margin-top: 6px;
+      color: #657386;
+      font-family: var(--mono);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .action-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+    .action-section {
+      scroll-margin-top: 24px;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: minmax(280px, 420px) minmax(360px, 1fr);
+      gap: 12px 24px;
+      align-items: start;
+      border-radius: 24px;
+      background: #fff;
+      border: 1px solid var(--line);
+      box-shadow: 0 14px 38px rgba(25, 42, 62, .06);
+    }
+    .action-section > :not(.site-action-result) { grid-column: 1; }
+    .action-top {
       display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .action-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .action-title h3 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -.03em;
+    }
+    .action-section p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+    .input-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 12px 0 8px;
+      color: #26384d;
+      font-size: 13px;
+      font-weight: 950;
+    }
+    textarea, .local-paths {
+      width: 100%;
+      min-height: 84px;
+      resize: vertical;
+      border-radius: 17px;
+      border: 1px solid var(--line-strong);
+      outline: none;
+      color: var(--ink);
+      background: #fbfdff;
+      padding: 15px 16px;
+      line-height: 1.6;
+      transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+    textarea:focus, .local-paths:focus {
+      border-color: rgba(47, 114, 231, .72);
+      background: #fff;
+      box-shadow: 0 0 0 4px rgba(47, 114, 231, .10);
+    }
+    .local-paths { min-height: 70px; font-family: var(--mono); font-size: 13px; }
+    .local-target-panel {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 18px;
+      background: #f8fbfe;
+      border: 1px solid var(--line);
+    }
+    .drop-zone {
+      display: grid;
+      place-items: center;
+      min-height: 56px;
+      margin-top: 10px;
+      border: 1px dashed #b9c8dc;
+      border-radius: 16px;
+      color: var(--muted);
+      background: #fff;
+      text-align: center;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .drop-zone.dragging {
+      color: var(--blue);
+      border-color: var(--blue);
+      background: #f0f6ff;
+    }
+    .file-input { display: none; }
+    .path-actions, .action-buttons, .result-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .site-button, .result-button {
+      min-height: 40px;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      border: 1px solid #dfe8f1;
+      padding: 0 14px;
+      border-radius: 13px;
+      border: 1px solid var(--line);
       background: #fff;
-      color: #263734;
-      font-size: 15px;
+      color: #24364c;
+      font-size: 14px;
       font-weight: 900;
-      box-shadow: var(--shadow-soft);
+      box-shadow: 0 8px 18px rgba(25, 42, 62, .05);
     }
-    .action-button.primary {
-      background: linear-gradient(180deg, #3478d7, #2360b2);
+    .site-button.primary, .result-button.primary {
       color: #fff;
-      border-color: #2360b2;
-      box-shadow: 0 14px 28px rgba(47, 110, 203, .22);
+      border-color: transparent;
+      background: linear-gradient(135deg, #2f72e7, #1aa8c4);
+      box-shadow: 0 14px 30px rgba(47, 114, 231, .22);
     }
-    .result-card {
-      margin-top: 16px;
+    .site-action-result {
+      min-height: 140px;
+      grid-column: 2;
+      grid-row: 1 / span 5;
+      margin-top: 0;
       padding: 18px;
       border-radius: 18px;
-      border: 1px solid #dbe7f6;
-      background: linear-gradient(180deg, #ffffff, #f8fbff);
-      box-shadow: var(--shadow-soft);
+      border: 1px solid var(--line);
+      background: #f9fbfe;
     }
-    .result-card.waiting { background: #fbfcfe; color: var(--muted); }
+    .site-action-result.waiting h4 { color: var(--muted); }
     .result-eyebrow {
-      margin-bottom: 8px;
       color: var(--blue);
       font-size: 12px;
-      font-weight: 900;
-      letter-spacing: .03em;
+      font-weight: 950;
+      letter-spacing: .06em;
     }
-    .result-card h3 { margin: 0; font-size: 18px; line-height: 1.35; }
-    .result-card p { margin: 9px 0 0; color: #475467; font-size: 13px; line-height: 1.6; }
-    .result-meta { display: grid; gap: 7px; margin-top: 12px; color: #667085; font-size: 12px; }
+    .site-action-result h4 {
+      margin: 8px 0 8px;
+      font-size: 20px;
+      letter-spacing: -.025em;
+    }
+    .site-action-result p {
+      margin: 0;
+      color: #34465c;
+      line-height: 1.65;
+    }
     .result-sections {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -427,457 +754,300 @@
       margin-top: 14px;
     }
     .result-section {
-      min-height: 86px;
       padding: 12px;
-      border-radius: 13px;
-      border: 1px solid #e1eaf4;
-      background: rgba(255,255,255,.82);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
     }
     .result-label {
       display: block;
-      margin-bottom: 7px;
-      color: var(--blue);
-      font-size: 12px;
-      font-weight: 900;
-    }
-    .result-detail {
-      color: #475467;
-      font-size: 12px;
-      line-height: 1.55;
-    }
-    .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-    .result-button {
-      min-height: 33px;
-      padding: 0 12px;
-      border-radius: 9px;
-      border: 1px solid #dbe5f1;
-      background: #fff;
-      color: var(--blue);
-      font-size: 13px;
-      font-weight: 850;
-    }
-    .result-button.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
-    .flow-card { display: grid; align-content: start; gap: 12px; }
-    .flow-list { display: grid; gap: 10px; }
-    .flow-step {
-      display: grid;
-      grid-template-columns: 30px minmax(0, 1fr);
-      align-items: center;
-      gap: 10px;
-      min-height: 46px;
-      padding: 9px 12px;
-      border-radius: 14px;
-      background: #f5f8f7;
-      color: #263734;
-      font-size: 14px;
-      font-weight: 760;
-    }
-    .step-num {
-      width: 26px;
-      height: 26px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      background: #4380d7;
-      color: #fff;
-      font-size: 12px;
-      font-weight: 900;
-    }
-    .product-notes {
-      display: grid;
-      gap: 9px;
-      margin-top: 2px;
-    }
-    .product-note {
-      padding: 11px 12px;
-      border: 1px solid var(--line);
-      border-radius: 13px;
-      background: #fff;
-      color: #52635f;
-      font-size: 12px;
-      line-height: 1.55;
-    }
-    .product-note strong { color: #20312e; }
-    .advanced-card summary {
-      cursor: pointer;
-      color: #20312e;
-      font-size: 17px;
-      font-weight: 900;
-    }
-    .advanced-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid var(--line);
-    }
-    .advanced-button {
-      min-height: 38px;
-      border-radius: 11px;
-      border: 1px solid #e1e8f0;
-      background: #fff;
-      color: #40504c;
-      font-size: 13px;
-      font-weight: 800;
-    }
-    .side { display: grid; align-content: start; position: sticky; top: 18px; }
-    .status-panel { padding: 26px 24px 22px; min-height: calc(100vh - 36px); }
-    .side-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 22px;
-    }
-    .side-head h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
-    .refresh { width: 32px; height: 32px; border-radius: 10px; color: var(--blue); font-size: 18px; }
-    .refresh:hover { background: var(--blue-soft); }
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 18px;
-    }
-    .metric {
-      min-height: 118px;
-      padding: 16px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: #fff;
-      box-shadow: var(--shadow-soft);
-    }
-    .metric-label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #40504c;
-      font-size: 13px;
-      font-weight: 780;
-    }
-    .metric-value { margin-top: 16px; color: var(--ink); font-size: 27px; line-height: 1; font-weight: 900; }
-    .metric-delta { margin-top: 12px; color: var(--green); font-size: 12px; }
-    .divider { height: 1px; margin: 18px 0; background: var(--line-strong); }
-    .result-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .result-head h2 { margin: 0; font-size: 18px; }
-    .result-head button { color: var(--blue); font-size: 13px; font-weight: 850; }
-    .result-list { display: grid; gap: 8px; margin-bottom: 22px; }
-    .result-item {
-      display: grid;
-      grid-template-columns: 38px minmax(0, 1fr) 46px;
-      gap: 10px;
-      align-items: center;
-      min-height: 60px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 13px;
-      background: #fff;
-      box-shadow: 0 2px 8px rgba(28, 43, 39, .03);
-    }
-    .result-icon {
-      width: 30px;
-      height: 30px;
-      border-radius: 9px;
-      background-image: url("/assets/gui/feature-icons.png");
-      background-repeat: no-repeat;
-      background-size: 200% 200%;
-    }
-    .result-title { color: #263734; font-size: 14px; font-weight: 850; }
-    .result-sub {
-      margin-top: 3px;
+      margin-bottom: 6px;
       color: var(--muted);
       font-size: 12px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-weight: 950;
     }
-    .result-status { text-align: right; color: var(--green); font-size: 12px; font-weight: 900; }
-    .result-status span { display: block; margin-top: 4px; color: var(--muted); font-weight: 500; }
-    .safety-box {
-      display: grid;
-      grid-template-columns: 36px minmax(0, 1fr);
-      gap: 10px;
-      align-items: center;
-      padding: 14px;
-      border-radius: 15px;
-      background: #f7f9fb;
-      border: 1px solid var(--line);
-      color: #52635f;
+    .result-detail {
+      color: #26384d;
       font-size: 13px;
-      line-height: 1.5;
-    }
-    .advanced-output {
-      display: none;
-      margin-top: 16px;
-      max-height: 220px;
-      overflow: auto;
-      white-space: pre-wrap;
-      border: 1px solid #d9e2ef;
-      border-radius: 12px;
-      padding: 12px;
-      background: #101828;
-      color: #f2f4f7;
-      font-family: var(--mono);
-      font-size: 11px;
       line-height: 1.55;
     }
-    .advanced-output.visible { display: block; }
-    @media (max-width: 1320px) {
-      .app { grid-template-columns: 1fr; }
-      .side { position: static; }
-      .status-panel { min-height: auto; }
+    .result-detail div + div { margin-top: 6px; }
+    .tools-entry {
+      padding: 20px 24px;
+      border-radius: 24px;
+      background: #fff;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-soft);
     }
-    @media (max-width: 900px) {
-      .core-grid, .workspace, .input-grid, .primary-actions, .advanced-grid, .metrics, .work-toolbar, .quick-presets, .result-sections { grid-template-columns: 1fr; }
-      .hero, .work-card, .flow-card, .advanced-card, .status-panel { padding: 22px; }
+    .tools-entry-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+    }
+    .tools-entry h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      letter-spacing: -.03em;
+    }
+    .tools-entry p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .site-footer {
+      padding: 26px 0 40px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      border-top: 1px solid var(--line);
+    }
+    @media (max-width: 980px) {
+      .feature-strip, .knowledge-grid, .action-grid, .hero-metrics, .tools-entry-grid, .result-sections, .detail-grid, .detail-columns {
+        grid-template-columns: 1fr;
+      }
+      .detail-header {
+        display: grid;
+      }
+      .detail-pill-row {
+        justify-content: flex-start;
+      }
+      .action-section { grid-template-columns: 1fr; }
+      .action-section > :not(.site-action-result), .site-action-result {
+        grid-column: 1;
+        grid-row: auto;
+      }
+      .site-action-result { margin-top: 8px; }
+      .site-hero { min-height: 480px; padding-bottom: 74px; }
+      .section-head { display: block; }
+      .nav-links { display: none; }
+      .section-card, .action-section { padding: 22px; }
     }
   </style>
 </head>
 <body>
-  <main class="app">
-    <section class="main">
-      <header class="panel hero">
-        <div class="eyebrow">成熟个人知识工作台</div>
-        <h1>本地知识整理助手</h1>
-        <p class="hero-subtitle">把本地文件、Obsidian 笔记和 AI 对话整理成可归档、可回顾、可提取给 AI 续用、可定时提醒的个人知识系统。</p>
-        <div class="safe-line"><span class="safe-dot">✓</span>默认只读，不删除、不移动、不重命名、不重写源文件</div>
-        <div class="hero-principles" aria-label="产品化原则">
-          <span class="principle-pill">统一入口</span>
-          <span class="principle-pill">搜索/筛选</span>
-          <span class="principle-pill">来源可追溯</span>
-          <span class="principle-pill">最近来源</span>
+  <div class="site">
+    <section class="hero-shell">
+      <nav class="site-nav" aria-label="主导航">
+        <a class="brand" href="#top" aria-label="本地知识整理助手">
+          <span class="brand-mark"></span>
+          <span>本地知识整理助手</span>
+        </a>
+        <div class="nav-links">
+          <a href="#knowledge">知识流</a>
+          <a href="#organize">添加资料</a>
+          <a href="#review">搜索回顾</a>
+          <a href="#extract">AI 上下文包</a>
+          <a href="/advanced">工具页</a>
+        </div>
+      </nav>
+
+      <header id="top" class="site-hero">
+        <div class="hero-badge"><span></span>Obsidian · AI 上下文 · 本地资料</div>
+        <h1><span class="hero-gradient">本地知识</span><br />整理助手</h1>
+        <p class="hero-copy">把你丢进来的资料、Obsidian 笔记和 AI 会话，沉淀成可归档、可回顾、可提取给 AI 续用的个人知识系统。</p>
+        <div class="safe-pill"><span class="safe-dot">✓</span>只生成建议和新记录，不改动你的源文件</div>
+        <div class="hero-actions">
+          <a class="hero-button primary" href="#knowledge">向下浏览知识流</a>
+          <a class="hero-button" href="#organize">添加资料</a>
+        </div>
+        <div class="hero-metrics" aria-label="当前状态">
+          <div class="hero-metric"><span class="metric-value" id="statFeed">-</span><span class="metric-label">知识卡片</span></div>
+          <div class="hero-metric"><span class="metric-value" id="statFiles">-</span><span class="metric-label">扫描文件</span></div>
+          <div class="hero-metric"><span class="metric-value" id="statNotes">-</span><span class="metric-label">Obsidian 笔记</span></div>
+          <div class="hero-metric"><span class="metric-value" id="statRefresh">--:--</span><span class="metric-label">最近刷新</span></div>
         </div>
       </header>
+    </section>
 
-      <section class="core-grid" aria-label="四功能主线">
-        <button class="core-card active" data-core-card="organize" onclick="setCoreMode('organize')">
-          <span class="sprite feature-icon folder"></span>
-          <h2 class="card-title">整理资料</h2>
-          <p class="card-copy">文本 / 文件目录 / AI 对话，写成 Obsidian 整理记录。</p>
-        </button>
-        <button class="core-card" data-core-card="review" onclick="setCoreMode('review')">
-          <span class="sprite feature-icon chat"></span>
-          <h2 class="card-title">回顾知识</h2>
-          <p class="card-copy">关键词检索已整理内容，返回答案 + 来源。</p>
-        </button>
-        <button class="core-card" data-core-card="extract" onclick="setCoreMode('extract')">
-          <span class="sprite feature-icon doc"></span>
-          <h2 class="card-title">提取上下文</h2>
-          <p class="card-copy">生成 AI 上下文包，输出 prompt + Markdown。</p>
-        </button>
-        <button class="core-card" data-core-card="remind" onclick="setCoreMode('remind')">
-          <span class="sprite feature-icon card-icon"></span>
-          <h2 class="card-title">今日提醒</h2>
-          <p class="card-copy">每天 9 点只给 1-3 个重点，不定时整理。</p>
-        </button>
+    <section class="feature-strip" aria-label="三个主要操作入口">
+      <a class="feature-anchor" href="#organize">
+        <span class="sprite feature-icon folder"></span>
+        <h2>添加资料</h2>
+        <p>放入文本、本地文件目录或 AI 对话，判断归档位置并写入新的 Obsidian 记录。</p>
+        <span class="arrow">跳转到添加资料 →</span>
+      </a>
+      <a class="feature-anchor" href="#review">
+        <span class="sprite feature-icon chat"></span>
+        <h2>搜索回顾</h2>
+        <p>按关键词或问题查已整理内容，返回答案、来源路径和可继续阅读的线索。</p>
+        <span class="arrow">跳转到搜索回顾 →</span>
+      </a>
+      <a class="feature-anchor" href="#extract">
+        <span class="sprite feature-icon doc"></span>
+        <h2>生成 AI 上下文包</h2>
+        <p>根据当前任务反向打包 AI 上下文包，生成可复制给新 AI 对话的 prompt。</p>
+        <span class="arrow">跳转到生成上下文 →</span>
+      </a>
+    </section>
+
+    <main class="content">
+      <section id="knowledge" class="section-card">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">最近内容</p>
+            <h2 class="section-title">知识流</h2>
+            <p class="section-copy">最近整理过的笔记、AI 对话和报告会沉淀在这里。点开卡片可以查看摘要、来源和后续可用的线索。</p>
+          </div>
+          <button class="site-button" onclick="refreshStatus()">刷新知识流</button>
+        </div>
+        <div id="knowledgeFeed" class="knowledge-grid" aria-live="polite"></div>
+        <article id="knowledgeDetail" class="knowledge-detail" aria-live="polite"></article>
       </section>
 
-      <section class="workspace">
-        <div class="panel work-card">
-          <h2 class="section-title"><span class="title-mark">✦</span><span id="workTitle">整理资料</span></h2>
-          <p class="intro" id="workIntro">把资料放进来，助手会保留来源、判断领域、写入新的 Obsidian 整理记录。</p>
-          <div class="work-toolbar">
-            <div class="toolbar-text">
-              <strong>统一入口</strong>
-              <span>输入问题、关键词、文件路径或 AI 对话；再选择整理、回顾、提取或提醒。</span>
-            </div>
-            <div class="quick-presets" aria-label="快速场景">
-              <button class="preset-button" onclick="applyPreset('organize-inbox')">快速场景：整理放进来的资料</button>
-              <button class="preset-button" onclick="applyPreset('review-topic')">快速场景：按关键词回顾</button>
-              <button class="preset-button" onclick="applyPreset('extract-context')">快速场景：打包给 AI</button>
-              <button class="preset-button" onclick="applyPreset('daily-remind')">快速场景：今日 1-3 个重点</button>
-            </div>
+      <section class="section-card">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">开始使用</p>
+            <h2 class="section-title">你现在想做什么？</h2>
+            <p class="section-copy">只保留三个真实入口：添加资料、搜索回顾、生成 AI 上下文包。其他低频诊断能力放在工具维护页。</p>
           </div>
-          <div class="search-note"><strong>搜索/筛选</strong><span>先用关键词或任务缩小范围，再看来源、产物和下一步；不把全部归档候选变成今日任务。</span></div>
-          <div class="kind-tabs" aria-label="整理资料类型">
-            <button class="kind-tab active" data-kind="text" onclick="setInputKind('text')">文本</button>
-            <button class="kind-tab" data-kind="file" onclick="setInputKind('file')">文件目录</button>
-            <button class="kind-tab" data-kind="ai" onclick="setInputKind('ai')">AI 对话</button>
-          </div>
-          <div class="input-grid">
-            <textarea id="freeText" placeholder="写下要整理、回顾或提取的内容。例如：NotebookLM 和 Obsidian 教程需要整理，后续给 AI 复用。"></textarea>
-            <div class="file-target-panel">
-              <div class="target-head"><strong>本地文件 / 目录目标</strong><span>默认只读</span></div>
+        </div>
+
+        <div class="action-grid">
+          <section id="organize" class="action-section">
+            <div class="action-top">
+              <div class="action-title"><span class="sprite icon-sm folder"></span><h3>添加资料</h3></div>
+            </div>
+            <p>适合把一段资料、本地路径或 AI 对话先落进 Obsidian，保留来源和判断理由。</p>
+            <label class="input-label" for="organizeInput">要整理的内容</label>
+            <textarea id="organizeInput" data-action-input="organize" placeholder="粘贴资料、AI 对话摘要，或说明你想整理的本地文件。"></textarea>
+            <div class="local-target-panel">
+              <label class="input-label" for="localPaths">本地文件 / 目录目标 <span>不会改动源文件</span></label>
               <textarea id="localPaths" class="local-paths" placeholder="粘贴本地路径，例如 D:\Downloads 或 D:\Work\report.md"></textarea>
               <div id="fileDropZone" class="drop-zone">上下文来源：拖放文件到这里，或选择文件/目录；要真实扫描本机目录，请粘贴完整路径。</div>
               <input id="filePicker" class="file-input" type="file" multiple onchange="handleFileSelect(event)" />
               <input id="folderPicker" class="file-input" type="file" webkitdirectory directory multiple onchange="handleFileSelect(event)" />
               <div class="path-actions">
-                <button class="mini-button" onclick="$('filePicker').click()">选择文件</button>
-                <button class="mini-button" onclick="$('folderPicker').click()">选择目录</button>
-                <button class="mini-button" onclick="inspectLocalTargets()">检查本地目标</button>
+                <button class="site-button" onclick="document.getElementById('filePicker').click()">选择文件</button>
+                <button class="site-button" onclick="document.getElementById('folderPicker').click()">选择目录</button>
+                <button class="site-button" onclick="inspectLocalTargets()">检查本地目标</button>
               </div>
-              <div id="targetSummary" class="target-summary">未选择路径时，只处理文本和已整理知识；文件类动作会提示使用默认配置范围。</div>
+              <p id="targetSummary">未选择路径时，只处理文本和已整理知识。</p>
             </div>
-          </div>
-          <div class="primary-actions">
-            <button class="action-button primary" onclick="runCoreAction('organize')">整理资料</button>
-            <button class="action-button" onclick="runCoreAction('review')">回顾知识</button>
-            <button class="action-button" onclick="runCoreAction('extract')">提取上下文</button>
-            <button class="action-button" onclick="runCoreAction('remind')">今日提醒</button>
-          </div>
-          <section id="workbenchResult" class="result-card waiting">
-            <div class="result-eyebrow">结果预览</div>
-            <h3>等待操作</h3>
-            <p>点击四个主入口后，这里会显示做了什么、来源是什么、产物在哪、下一步能点什么。默认不展示黑色 JSON。</p>
-            <div class="result-sections">
-              <div class="result-section"><span class="result-label">做了什么</span><div class="result-detail">等待你选择一个核心动作。</div></div>
-              <div class="result-section"><span class="result-label">来源是什么</span><div class="result-detail">文本、路径、Obsidian、报告或 AI 对话都会保留来源。</div></div>
-              <div class="result-section"><span class="result-label">产物在哪</span><div class="result-detail">完成后显示可打开的 Obsidian 笔记、报告或 AI 上下文包。</div></div>
-              <div class="result-section"><span class="result-label">下一步</span><div class="result-detail">优先给 1-3 个可执行动作，避免淹没在候选列表里。</div></div>
+            <div class="action-buttons">
+              <button class="site-button primary" onclick="runCoreAction('organize')">添加资料</button>
             </div>
+            <article id="organizeResult" class="site-action-result waiting">
+              <div class="result-eyebrow">结果</div>
+              <h4>等待整理</h4>
+              <p>整理会写入新的 Obsidian 记录，并保留来源；不会移动源文件。</p>
+            </article>
           </section>
-          <pre id="out" class="advanced-output">等待操作。</pre>
-        </div>
 
-        <div class="panel flow-card">
-          <h2 class="section-title"><span class="title-mark">□</span>使用流程</h2>
-          <div class="flow-list">
-            <div class="flow-step"><span class="step-num">1</span><span>先把资料、路径或 AI 对话放进来。</span></div>
-            <div class="flow-step"><span class="step-num">2</span><span>整理成 Obsidian 新记录，旧文件不动。</span></div>
-            <div class="flow-step"><span class="step-num">3</span><span>需要时回顾知识，查看答案和来源。</span></div>
-            <div class="flow-step"><span class="step-num">4</span><span>继续问 AI 前，提取 AI 上下文包。</span></div>
-          </div>
-          <div class="product-notes">
-            <div class="product-note"><strong>文件工具经验：</strong>固定入口、最近来源、搜索/筛选和详情面板比堆按钮更稳定。</div>
-            <div class="product-note"><strong>当前边界：</strong>这里只做整理、回顾、提取、提醒；高级能力折叠保留，不抢主线。</div>
-          </div>
+          <section id="review" class="action-section">
+            <div class="action-top">
+              <div class="action-title"><span class="sprite icon-sm chat"></span><h3>搜索回顾</h3></div>
+            </div>
+            <p>适合问“我之前怎么处理过这个？”或按关键词找已整理内容。</p>
+            <label class="input-label" for="reviewInput">关键词或问题</label>
+            <textarea id="reviewInput" data-action-input="review" placeholder="例如：Obsidian 新手怎么开始？AI 上下文包怎么用？"></textarea>
+            <div class="action-buttons">
+              <button class="site-button primary" onclick="runCoreAction('review')">搜索回顾</button>
+            </div>
+            <article id="reviewResult" class="site-action-result waiting">
+              <div class="result-eyebrow">结果</div>
+              <h4>等待回顾</h4>
+              <p>输入关键词或问题后，会列出匹配内容和可打开的来源。</p>
+            </article>
+          </section>
+
+          <section id="extract" class="action-section">
+            <div class="action-top">
+              <div class="action-title"><span class="sprite icon-sm doc"></span><h3>生成 AI 上下文包</h3></div>
+            </div>
+            <p>适合继续问 AI 前，把已有知识反向打包成 AI 上下文包。</p>
+            <label class="input-label" for="extractInput">当前任务</label>
+            <textarea id="extractInput" data-action-input="extract" placeholder="描述你要交给 AI 的任务，例如：继续优化 Obsidian 教程和 GUI。"></textarea>
+            <div class="action-buttons">
+              <button class="site-button primary" onclick="previewExtract()">预览候选来源</button>
+            </div>
+            <article id="extractResult" class="site-action-result waiting">
+              <div class="result-eyebrow">结果</div>
+              <h4>等待提取</h4>
+              <p>先预览候选来源；确认相关后，再生成可复制给 AI 的上下文包。</p>
+            </article>
+          </section>
+
         </div>
       </section>
 
-      <section class="panel advanced-card">
-        <details>
-          <summary>高级/诊断</summary>
-          <div class="advanced-grid">
-            <button class="advanced-button" onclick="runLegacyAction('file-radar')">查看文件雷达</button>
-            <button class="advanced-button" onclick="runLegacyAction('obsidian-health')">检查知识库</button>
-            <button class="advanced-button" onclick="runLegacyAction('legacy-index')">二次整理旧资料</button>
-            <button class="advanced-button" onclick="runLegacyAction('today')">今天先干什么</button>
-            <button class="advanced-button" onclick="runLegacyAction('inbox-route')">判断放哪</button>
-            <button class="advanced-button" onclick="runLegacyAction('action-note')">记录一个任务</button>
-            <button class="advanced-button" onclick="runLegacyAction('card-note')">沉淀知识卡</button>
-            <button class="advanced-button" onclick="runLegacyAction('time-review')">复盘今天</button>
-            <button class="advanced-button" onclick="runLegacyAction('archive-ai-chat')">归档 AI 对话</button>
-            <button class="advanced-button" onclick="runLegacyAction('onboarding')">快速初始化</button>
-            <button class="advanced-button" onclick="runLegacyAction('open-obsidian')">打开 Obsidian</button>
-            <button class="advanced-button" onclick="toggleOutput()">查看高级 JSON</button>
+      <section class="tools-entry" aria-label="工具维护页入口">
+        <div class="tools-entry-grid">
+          <div>
+            <p class="section-kicker">维护工具</p>
+            <h2>需要检查文件或知识库？</h2>
+            <p>打开工具页，可以扫描本地文件、体检 Obsidian、重建旧资料索引，也可以查看教程和交互说明。</p>
           </div>
-        </details>
+          <a class="site-button primary" href="/advanced">打开工具维护页</a>
+        </div>
       </section>
-    </section>
+    </main>
 
-    <aside class="side">
-      <section class="panel status-panel">
-        <div class="side-head"><h2>本地状态摘要</h2><button class="refresh" onclick="refreshStatus()">↻</button></div>
-        <div class="metrics">
-          <div class="metric">
-            <div class="metric-label"><span class="sprite icon-sm folder"></span>扫描文件数</div>
-            <div class="metric-value" id="totalFiles">-</div>
-            <div class="metric-delta">来自最新文件雷达</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label"><span class="sprite icon-sm doc"></span>归档候选数</div>
-            <div class="metric-value" id="archiveCount">-</div>
-            <div class="metric-delta">来自最新报告</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label"><span class="sprite icon-sm chat"></span>Obsidian 笔记数</div>
-            <div class="metric-value" id="totalNotes">-</div>
-            <div class="metric-delta">来自知识库体检</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label"><span class="sprite icon-sm card-icon"></span>最新刷新</div>
-            <div class="metric-value" style="font-size:18px;letter-spacing:0" id="latestReportTime">-</div>
-            <div class="metric-delta">页面状态</div>
-          </div>
-        </div>
-        <div class="divider"></div>
-        <div class="result-head"><h2>最近来源 / 最近动作</h2><button onclick="toggleOutput()">查看高级 JSON</button></div>
-        <div class="result-list" id="resultList">
-          <div class="result-item">
-            <div class="result-icon card-icon"></div>
-            <div><div class="result-title">等待状态加载</div><div class="result-sub">本地知识整理助手</div></div>
-            <div class="result-status">就绪<span>--:--</span></div>
-          </div>
-        </div>
-        <div class="safety-box">
-          <span class="sprite icon-sm card-icon"></span>
-          <div id="safety">默认不删除、不移动、不重命名、不重写源文件；只读取报告、生成建议、写入新的 Obsidian 记录。</div>
-        </div>
-      </section>
-    </aside>
-  </main>
+    <footer class="site-footer">
+      <strong>安全边界：</strong>不会改动你的源文件；需要写入时，只生成新的 Obsidian 记录或本地报告。
+    </footer>
+  </div>
 
   <script>
     const $ = (id) => document.getElementById(id);
     let selectedLocalFiles = [];
-    let currentKind = "text";
-    let currentCore = "organize";
     let lastResultPaths = [];
     let lastPrompt = "";
-
-    const coreCopy = {
-      organize: ["整理资料", "把资料放进来，助手会保留来源、判断领域、写入新的 Obsidian 整理记录。"],
-      review: ["回顾知识", "输入关键词或问题，助手会在已整理内容中检索，并返回答案和来源。"],
-      extract: ["提取上下文", "输入当前任务，助手会生成 AI 上下文包，同时输出 prompt 和 Markdown。"],
-      remind: ["今日提醒", "生成今天 1-3 个重点。计划任务每天 9 点运行；整理仍需要手动触发。"]
-    };
-
-    const presets = {
-      "organize-inbox": {
-        action: "organize",
-        kind: "text",
-        text: "整理我放进来的资料：先判断生活 / 学习 / 工作，再建议归档位置，保留来源，不移动源文件。"
-      },
-      "review-topic": {
-        action: "review",
-        kind: "text",
-        text: "回顾 Obsidian 教程、AI 上下文包和最近整理记录，给我答案和来源路径。"
-      },
-      "extract-context": {
-        action: "extract",
-        kind: "text",
-        text: "根据当前任务提取 AI 上下文包：包含来源路径、压缩摘要、安全边界和下一步请求。"
-      },
-      "daily-remind": {
-        action: "remind",
-        kind: "text",
-        text: "今天只给 1-3 个重点，不处理全部归档候选。"
-      }
-    };
-
-    function text() {
-      return $("freeText").value.trim();
-    }
+    let lastKnowledgeFeed = [];
+    let lastAction = "organize";
+    let lastExtractPreview = null;
 
     function nowTime() {
       return new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit", hour12: false});
     }
 
-    function setCoreMode(action) {
-      currentCore = action;
-      document.querySelectorAll("[data-core-card]").forEach((card) => card.classList.toggle("active", card.dataset.coreCard === action));
-      $("workTitle").textContent = coreCopy[action][0];
-      $("workIntro").textContent = coreCopy[action][1];
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[char]));
     }
 
-    function setInputKind(kind) {
-      currentKind = kind;
-      document.querySelectorAll("[data-kind]").forEach((tab) => tab.classList.toggle("active", tab.dataset.kind === kind));
+    function compact(value, limit = 150) {
+      const textValue = String(value ?? "").replace(/\s+/g, " ").trim();
+      if (!textValue) return "";
+      return textValue.length > limit ? `${textValue.slice(0, limit - 1)}…` : textValue;
     }
 
-    function applyPreset(id) {
-      const preset = presets[id];
-      if (!preset) return;
-      setCoreMode(preset.action);
-      setInputKind(preset.kind || "text");
-      $("freeText").value = preset.text || "";
-      updateTargetSummary();
-      $("freeText").focus();
+    function formatNumber(value) {
+      return typeof value === "number" ? value.toLocaleString("zh-CN") : "-";
+    }
+
+    function renderOutput(data, {show = false} = {}) {
+      const out = $("out");
+      if (!out) return;
+      out.textContent = JSON.stringify(data, null, 2);
+      out.classList.toggle("visible", Boolean(show));
+    }
+
+    function actionLabel(action) {
+      const map = {
+        organize: "添加资料",
+        review: "搜索回顾",
+        extract: "生成 AI 上下文包",
+        "inspect-local-targets": "检查本地目标",
+        "file-radar": "查看文件雷达",
+        "obsidian-health": "检查知识库",
+        "legacy-index": "二次整理旧资料",
+        today: "今天先干什么",
+        "inbox-route": "判断放哪",
+        "action-note": "记录一个任务",
+        "card-note": "沉淀知识卡",
+        "time-review": "复盘今天",
+        "archive-ai-chat": "归档 AI 对话",
+        onboarding: "快速初始化",
+        "open-obsidian": "打开 Obsidian"
+      };
+      return map[action] || action;
+    }
+
+    function inputForAction(action) {
+      return document.querySelector(`[data-action-input="${action}"]`)?.value.trim() || "";
     }
 
     function readLocalTargets() {
@@ -885,6 +1055,18 @@
         local_paths: $("localPaths") ? $("localPaths").value.trim() : "",
         selected_files: selectedLocalFiles
       };
+    }
+
+    function payloadForAction(action) {
+      const value = inputForAction(action);
+      const base = {kind: "text", text: value, query: value, request: value, source: "GUI"};
+      if (action === "organize") {
+        return {...base, ...readLocalTargets()};
+      }
+      if (action === "extract") {
+        return {...base, mode: "preview"};
+      }
+      return base;
     }
 
     function updateTargetSummary() {
@@ -896,7 +1078,7 @@
       if (pathCount || fileCount) {
         summary.textContent = `本次目标：${pathCount} 个粘贴路径，${fileCount} 个选择/拖放文件。整理会记录来源；文件雷达会优先使用粘贴路径。`;
       } else {
-        summary.textContent = "未选择路径时，只处理文本和已整理知识；文件类动作会提示使用默认配置范围。";
+        summary.textContent = "未选择路径时，只处理文本和已整理知识；需要扫描本机目录时请粘贴完整路径。";
       }
     }
 
@@ -930,51 +1112,9 @@
       document.querySelectorAll("button").forEach((button) => { button.disabled = value; });
     }
 
-    function formatNumber(value) {
-      return typeof value === "number" ? value.toLocaleString("zh-CN") : "-";
-    }
-
-    function escapeHtml(value) {
-      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-      }[char]));
-    }
-
-    function compact(value, limit = 150) {
-      const textValue = String(value ?? "").replace(/\s+/g, " ").trim();
-      if (!textValue) return "";
-      return textValue.length > limit ? `${textValue.slice(0, limit - 1)}…` : textValue;
-    }
-
-    function renderOutput(data, {show = false} = {}) {
-      const out = $("out");
-      out.textContent = JSON.stringify(data, null, 2);
-      out.classList.toggle("visible", Boolean(show));
-    }
-
-    function setResultList(items) {
-      $("resultList").innerHTML = items.map((item) => `
-        <div class="result-item">
-          <div class="result-icon ${item.icon || "card-icon"}"></div>
-          <div><div class="result-title">${escapeHtml(item.title)}</div><div class="result-sub">${escapeHtml(item.sub)}</div></div>
-          <div class="result-status">${item.ok === false ? "失败" : "成功"}<span>${item.time || nowTime()}</span></div>
-        </div>
-      `).join("");
-    }
-
-    function updateResultsFromStatus(status) {
-      const fileSummary = status.file_report?.summary || {};
-      const obsidianSummary = status.obsidian_report?.summary || {};
-      setResultList([
-        {title: "本地知识整理助手就绪", sub: "四功能主线：整理 / 回顾 / 提取 / 提醒", icon: "card-icon"},
-        {title: "最新文件雷达", sub: `扫描 ${formatNumber(fileSummary.total_files)} 个文件`, icon: "folder"},
-        {title: "Obsidian 体检", sub: `当前 ${formatNumber(obsidianSummary.total_notes)} 篇笔记`, icon: "chat"},
-        {title: "默认安全边界", sub: "只写新记录，不动源文件", icon: "doc"}
-      ]);
-    }
-
     function collectPaths(data) {
       const result = [];
+      lastPrompt = "";
       (data?.artifacts || []).forEach((item) => {
         if (item.path) result.push({label: item.label || "打开产物", path: item.path});
         if (item.type === "prompt" && item.content) lastPrompt = item.content;
@@ -1004,11 +1144,14 @@
       if (data?.scan_targets?.summary?.existing_count) {
         return `本地目标 ${data.scan_targets.summary.existing_count} 个；来源可追溯到粘贴路径。`;
       }
-      return "本次没有匹配来源时，会提示先整理资料；不会编造当前状态。";
+      return "本次没有匹配来源时，会提示先添加资料；不会编造当前状态。";
     }
 
     function artifactSummary(data, artifactCount) {
       const artifacts = Array.isArray(data?.artifacts) ? data.artifacts : [];
+      if (data?.action === "extract" && data?.debug?.mode === "preview") {
+        return "预览阶段不写入文件；确认后才生成 Markdown 和 prompt。";
+      }
       if (artifacts.length > 0) {
         const first = artifacts[0];
         return `${artifactCount} 个产物；${compact(first.path || first.label || first.type || "已生成", 92)}`;
@@ -1017,89 +1160,109 @@
       return fallback ? `产物路径：${compact(fallback, 96)}` : "如需落盘，优先写入新的 Obsidian 记录或本地报告。";
     }
 
-    function actionLabel(action) {
-      const map = {
-        organize: "整理资料",
-        review: "回顾知识",
-        extract: "提取上下文",
-        remind: "今日提醒",
-        "inspect-local-targets": "检查本地目标",
-        "file-radar": "查看文件雷达",
-        "obsidian-health": "检查知识库",
-        "legacy-index": "二次整理旧资料",
-        today: "今天先干什么",
-        "inbox-route": "判断放哪",
-        "action-note": "记录一个任务",
-        "card-note": "沉淀知识卡",
-        "time-review": "复盘今天",
-        "archive-ai-chat": "归档 AI 对话",
-        onboarding: "快速初始化",
-        "open-obsidian": "打开 Obsidian"
-      };
-      return map[action] || action;
+    function humanSummary(data) {
+      if (typeof data?.summary === "string") return data.summary;
+      if (data?.action === "inspect-local-targets" && data?.summary) {
+        return `本地目标检查完成：${data.summary.existing_count || 0} 个存在，${data.summary.target_count || 0} 个目标，${data.summary.selected_file_count || 0} 个选择/拖放文件。`;
+      }
+      if (data?.action === "file-radar" && typeof data?.total_files === "number") {
+        return `文件雷达完成：扫描 ${data.total_files} 个文件，目标模式 ${data.target_mode || "default"}。`;
+      }
+      if (data?.action === "obsidian-health" && data?.summary && typeof data.summary === "object") {
+        return `知识库检查完成：当前 ${data.summary.total_notes || 0} 篇笔记。`;
+      }
+      if (data?.error) return data.error;
+      return "已生成结果，请查看来源、保存位置和下一步建议。";
     }
 
-    function renderWorkbenchResult(action, data) {
-      lastPrompt = "";
+    function sourceDetailHtml(data) {
+      const sources = Array.isArray(data?.sources) ? data.sources : [];
+      if (!sources.length) {
+        return escapeHtml(sourceSummary(data, 0));
+      }
+      return sources.slice(0, 4).map((item, index) => {
+        const title = compact(item.title || `来源 ${index + 1}`, 56);
+        const path = compact(item.path || "无路径", 88);
+        const why = compact(item.why || item.summary || "与当前任务匹配。", 110);
+        return `<div><b>${escapeHtml(title)}</b><br>${escapeHtml(path)}<br>${escapeHtml(why)}</div>`;
+      }).join("");
+    }
+
+    function resultTitleFor(data, ok, sourceCount) {
+      if (!ok) return "未完成";
+      if (data?.action === "extract" && data?.debug?.mode === "preview") return "找到候选";
+      if (data?.action === "extract" && data?.debug?.mode === "generate") return "已生成";
+      if (data?.action === "review" && sourceCount > 0) return "找到来源";
+      if (data?.action === "organize") return "已生成";
+      return "已完成";
+    }
+
+    function renderActionResult(targetKey, data) {
+      lastAction = targetKey;
       lastResultPaths = collectPaths(data || {});
-      const label = actionLabel(action);
+      const target = $(`${targetKey}Result`) || $("organizeResult");
+      if (!target) return;
+      const displayAction = data?.action || targetKey;
+      const label = actionLabel(displayAction);
       const ok = Boolean(data?.ok);
       const sourceCount = Array.isArray(data?.sources) ? data.sources.length : 0;
       const artifactCount = Array.isArray(data?.artifacts) ? data.artifacts.length : 0;
       const nextActions = (data?.next_actions || []).slice(0, 3);
+      const noMatchReview = !ok && displayAction === "review" && sourceCount === 0;
+      const previewExtract = ok && displayAction === "extract" && data?.debug?.mode === "preview";
+      const resultTitle = resultTitleFor(data, ok, sourceCount);
+      const didWhat = previewExtract
+        ? "已找到候选来源，尚未写入上下文包。"
+        : noMatchReview
+          ? "本次回顾没有命中已整理资料。"
+          : ok ? `${label} ${resultTitle}。` : compact(data?.error || data?.summary || "没有完成。", 120);
       const pathButtons = lastResultPaths.slice(0, 5).map((item, index) =>
         `<button class="result-button" onclick="openResultPath(${index})">${escapeHtml(item.label)}</button>`
       ).join("");
       const promptButton = lastPrompt ? `<button class="result-button primary" onclick="copyPromptFromLast()">复制 prompt</button>` : "";
+      const confirmExtractButton = previewExtract
+        ? `<button class="result-button primary" onclick="generateExtractFromPreview()">确认生成上下文包</button>`
+        : "";
       const nextItems = nextActions.length
         ? nextActions.map((item) => `<div>${escapeHtml(compact(item, 130))}</div>`).join("")
-        : "<div>没有强制下一步；可以继续补充资料、回顾关键词或复制上下文给 AI。</div>";
-      $("workbenchResult").classList.remove("waiting");
-      $("workbenchResult").innerHTML = `
-        <div class="result-eyebrow">结果预览 · ${escapeHtml(label)}</div>
-        <h3>${ok ? "操作完成" : "操作失败"}</h3>
-        <p>${escapeHtml(compact(data?.summary || data?.error || "没有返回摘要。", 240))}</p>
+        : "<div>可以继续补充资料、回顾关键词，或复制上下文给 AI。</div>";
+      if (previewExtract) {
+        lastExtractPreview = data;
+      } else if (displayAction === "extract" && data?.debug?.mode === "generate") {
+        lastExtractPreview = null;
+      }
+      target.classList.remove("waiting");
+      target.innerHTML = `
+        <div class="result-eyebrow">结果 · ${escapeHtml(label)}</div>
+        <h4>${escapeHtml(resultTitle)}</h4>
+        <p>${escapeHtml(compact(humanSummary(data), 240))}</p>
         <div class="result-sections">
           <div class="result-section">
-            <span class="result-label">做了什么</span>
-            <div class="result-detail">${escapeHtml(ok ? `${label} 已完成。` : compact(data?.error || "动作没有完成。", 120))}</div>
+            <span class="result-label">完成情况</span>
+            <div class="result-detail">${escapeHtml(didWhat)}</div>
           </div>
           <div class="result-section">
-            <span class="result-label">来源是什么</span>
-            <div class="result-detail">${escapeHtml(sourceSummary(data, sourceCount))}</div>
+            <span class="result-label">参考来源</span>
+            <div class="result-detail">${sourceDetailHtml(data)}</div>
           </div>
           <div class="result-section">
-            <span class="result-label">产物在哪</span>
+            <span class="result-label">保存位置</span>
             <div class="result-detail">${escapeHtml(artifactSummary(data, artifactCount))}</div>
           </div>
           <div class="result-section">
-            <span class="result-label">下一步</span>
+            <span class="result-label">下一步建议</span>
             <div class="result-detail">${nextItems}</div>
           </div>
         </div>
         <div class="result-actions">
           ${pathButtons}
           ${promptButton}
-          <button class="result-button" onclick="toggleOutput()">查看高级 JSON</button>
+          ${confirmExtractButton}
         </div>
       `;
     }
 
-    async function refreshStatus() {
-      const response = await fetch("/api/status");
-      const status = await response.json();
-      const fileSummary = status.file_report?.summary || {};
-      const obsidianSummary = status.obsidian_report?.summary || {};
-      $("totalFiles").textContent = formatNumber(fileSummary.total_files);
-      $("archiveCount").textContent = formatNumber(fileSummary.counts?.archive_candidates);
-      $("totalNotes").textContent = formatNumber(obsidianSummary.total_notes);
-      $("latestReportTime").textContent = nowTime();
-      $("safety").textContent = status.safety || "默认不删除、不移动、不重命名、不重写源文件。";
-      updateResultsFromStatus(status);
-      return status;
-    }
-
-    async function api(action, payload = {}) {
+    async function api(action, payload = {}, renderTarget = action) {
       setBusy(true);
       try {
         const response = await fetch("/api/action", {
@@ -1109,60 +1272,47 @@
         });
         const data = await response.json();
         renderOutput(data, {show: false});
-        renderWorkbenchResult(action, data);
-        setResultList([{title: actionLabel(action), sub: data.ok ? compact(data.summary || "操作完成", 56) : (data.error || "执行失败"), icon: data.ok ? "card-icon" : "doc", ok: data.ok}]);
+        renderActionResult(renderTarget, data);
         return data;
       } catch (error) {
-        const data = {ok: false, error: String(error.stack || error)};
+        const data = {ok: false, action, error: String(error.stack || error)};
         renderOutput(data, {show: false});
-        renderWorkbenchResult(action, data);
-        setResultList([{title: "执行失败", sub: data.error, icon: "doc", ok: false}]);
+        renderActionResult(renderTarget, data);
         return data;
       } finally {
         setBusy(false);
       }
     }
 
-    function payloadBase() {
-      return {kind: currentKind, text: text(), query: text(), request: text(), source: "GUI", ...readLocalTargets()};
-    }
-
     function runCoreAction(action) {
-      setCoreMode(action);
-      return api(action, payloadBase());
+      return api(action, payloadForAction(action), action);
     }
 
-    function runLegacyAction(action) {
-      const value = text();
-      if (action === "action-note") {
-        return api(action, {title: value || "记录一个任务", domain: "工作", goal: value || "待明确目标", source: "GUI"});
-      }
-      if (action === "card-note") {
-        return api(action, {title: value || "知识卡", domain: "学习", source: "GUI", conclusion: value || "待补充结论"});
-      }
-      if (action === "time-review") {
-        return api(action, {title: "今日复盘", period: "daily", done: value || "完成轻量复盘", next: "明确下一步"});
-      }
-      if (action === "archive-ai-chat") {
-        return api(action, {title: value || "AI 对话归档", source: "GUI", background: value, conclusions: "待提炼结论", outputs: "待补充产出", open_items: "待确认"});
-      }
-      if (action === "inbox-route") {
-        return api(action, {text: value, body: value});
-      }
-      if (action === "file-radar") {
-        return api(action, {...readLocalTargets(), text: value});
-      }
-      return api(action, payloadBase());
+    function extractPayload(mode) {
+      const value = inputForAction("extract");
+      return {kind: "text", text: value, query: value, request: value, source: "GUI", mode};
+    }
+
+    function previewExtract() {
+      lastExtractPreview = null;
+      return api("extract", extractPayload("preview"), "extract");
+    }
+
+    function generateExtractFromPreview() {
+      const payload = extractPayload("generate");
+      const sources = Array.isArray(lastExtractPreview?.sources) ? lastExtractPreview.sources : [];
+      payload.source_paths = sources.map((item) => item.path).filter(Boolean);
+      return api("extract", payload, "extract");
     }
 
     function inspectLocalTargets() {
-      return api("inspect-local-targets", readLocalTargets());
+      return api("inspect-local-targets", readLocalTargets(), "organize");
     }
 
     function openResultPath(index) {
       const item = lastResultPaths[index];
       if (!item) return null;
-      return api("open-path", {path: item.path});
+      return api("open-path", {path: item.path}, lastAction);
     }
 
     async function copyPromptFromLast() {
@@ -1170,23 +1320,219 @@
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(lastPrompt).catch(() => null);
       }
-      const paragraph = $("workbenchResult").querySelector("p");
+      const target = $(`${lastAction}Result`) || $("extractResult");
+      const paragraph = target?.querySelector("p");
       if (paragraph) paragraph.textContent = "prompt 已复制。把它粘到 AI 对话里，就能带着已整理上下文继续。";
     }
 
-    function toggleOutput() {
-      $("out").classList.toggle("visible");
-      if ($("out").classList.contains("visible")) {
-        $("out").scrollIntoView({behavior: "smooth", block: "nearest"});
+    function renderKnowledgeFeed(items) {
+      lastKnowledgeFeed = Array.isArray(items) ? items : [];
+      const feed = $("knowledgeFeed");
+      if (!feed) return;
+      if (lastKnowledgeFeed.length === 0) {
+        feed.innerHTML = `
+          <article class="knowledge-card">
+            <div class="card-meta"><span class="tag">空状态</span></div>
+            <h3>还没有可展示的知识卡</h3>
+            <p>先使用“添加资料”写入一条 Obsidian 记录，知识流会在刷新后出现。</p>
+            <div class="source-line">等待整理</div>
+          </article>
+        `;
+        return;
       }
+      feed.innerHTML = lastKnowledgeFeed.map((item, index) => `
+        <button class="knowledge-card" data-knowledge-card="${index}" onclick="openKnowledgeDetail(${index})">
+          <div class="card-meta">
+            ${(item.tags || [item.type || "笔记"]).slice(0, 2).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
+            <span>${escapeHtml(item.updated_at || "")}</span>
+          </div>
+          <h3>${escapeHtml(compact(item.title || "未命名知识", 68))}</h3>
+          <p>${escapeHtml(compact(item.takeaway || item.description || "没有摘要，点击查看来源。", 118))}</p>
+          <div class="source-line">打开阅读卡片</div>
+        </button>
+      `).join("");
+    }
+
+    function inlineString(value) {
+      return JSON.stringify(String(value || "")).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+    }
+
+    function detailList(items, fallback) {
+      const values = Array.isArray(items) ? items.filter(Boolean).slice(0, 4) : [];
+      if (!values.length) return `<p class="empty-list">${escapeHtml(fallback)}</p>`;
+      return `<ul class="detail-list">${values.map((item) => `<li>${escapeHtml(compact(String(item), 140))}</li>`).join("")}</ul>`;
+    }
+
+    function detailTextList(value, fallback) {
+      const textValue = String(value || "").trim();
+      if (!textValue) return `<p class="empty-list">${escapeHtml(fallback)}</p>`;
+      const parts = textValue.split(/[；;]/).map((item) => item.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        return `<ul class="detail-list">${parts.slice(0, 4).map((item) => `<li>${escapeHtml(compact(item, 150))}</li>`).join("")}</ul>`;
+      }
+      return `<p>${escapeHtml(textValue)}</p>`;
+    }
+
+    function tagPills(item) {
+      const tags = Array.isArray(item.tags) ? item.tags.slice(0, 3) : [];
+      return tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+    }
+
+    function sourceItems(item) {
+      const rawSources = Array.isArray(item.source_items) ? item.source_items : [];
+      const sources = rawSources.length ? rawSources : [{label: "当前笔记", path: item.source_path || ""}];
+      return sources.slice(0, 4).map((source) => {
+        const label = source.label || "来源";
+        const path = source.path || item.source_path || "";
+        return `
+          <div class="source-item">
+            <div>
+              <span class="source-label">${escapeHtml(label)}</span>
+              <div class="source-path">${escapeHtml(path || "无来源路径")}</div>
+            </div>
+            <button class="result-button" onclick='copyText(${inlineString(path)})'>复制</button>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderDetailSections(item) {
+      const sections = Array.isArray(item.detail_sections) ? item.detail_sections : [];
+      if (!sections.length) {
+        return `
+          <div class="detail-columns">
+            <section class="detail-section">
+              <h4>适用场景</h4>
+              ${detailTextList(item.scenario || item.description, "暂无适用场景。")}
+            </section>
+            <section class="detail-section">
+              <h4>关键结论</h4>
+              ${detailList(item.conclusions, "这张卡还没有提炼出关键结论。")}
+            </section>
+          </div>
+        `;
+      }
+      return `
+        <div class="detail-columns">
+          ${sections.map((section) => `
+            <section class="detail-section">
+              <h4>${escapeHtml(section.title || "内容")}</h4>
+              ${Array.isArray(section.items) && section.items.length
+                ? detailList(section.items, section.body || "暂无内容。")
+                : detailTextList(section.body || "", "暂无内容。")}
+            </section>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderRelatedItems(item) {
+      const related = Array.isArray(item.related_items) ? item.related_items.slice(0, 3) : [];
+      if (!related.length) {
+        return `<p class="empty-list">还没有发现强关联卡片。后续添加更多知识后会自动补齐。</p>`;
+      }
+      return `
+        <div class="related-stack">
+          ${related.map((relatedItem) => `
+            <article class="related-item">
+              <strong>${escapeHtml(relatedItem.title || "未命名知识")}</strong>
+              <span>${escapeHtml((relatedItem.type || "笔记") + " · " + (relatedItem.why || "主题相关"))}</span>
+              ${relatedItem.source_path ? `<code>${escapeHtml(compact(relatedItem.source_path, 120))}</code>` : ""}
+            </article>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderThinkingPrompts(item) {
+      const prompts = Array.isArray(item.thinking_prompts) ? item.thinking_prompts.slice(0, 4) : [];
+      if (!prompts.length) {
+        return `<p class="empty-list">暂时没有可追问问题。</p>`;
+      }
+      return `
+        <div class="thinking-stack">
+          ${prompts.map((prompt) => `<div class="thinking-prompt">${escapeHtml(prompt)}</div>`).join("")}
+        </div>
+      `;
+    }
+
+    function openKnowledgeDetail(index) {
+      const item = lastKnowledgeFeed[index];
+      const detail = $("knowledgeDetail");
+      if (!item || !detail) return;
+      const type = item.type || "笔记";
+      const title = item.title || "未命名知识";
+      const takeaway = item.takeaway || item.description || "暂无结论。";
+      const actionHint = item.action_hint || "可打开来源继续阅读";
+      const sourcePath = item.source_path || "";
+      detail.classList.add("visible");
+      detail.innerHTML = `
+        <article class="detail-document">
+          <header class="detail-header">
+            <div>
+              <p class="detail-eyebrow">${escapeHtml(type)} · ${escapeHtml(item.updated_at || "最近更新")}</p>
+              <h3 class="detail-title">${escapeHtml(title)}</h3>
+            </div>
+            <div class="detail-pill-row">${tagPills(item)}</div>
+          </header>
+          <section class="detail-callout">
+            <span>一句话结论</span>
+            <p>${escapeHtml(takeaway)}</p>
+          </section>
+          ${renderDetailSections(item)}
+          <section class="detail-section detail-section-wide">
+            <h4>继续使用</h4>
+            <p>${escapeHtml(actionHint)}</p>
+          </section>
+          <div class="detail-columns">
+            <section class="detail-section">
+              <h4>关联内容</h4>
+              ${renderRelatedItems(item)}
+            </section>
+            <section class="detail-section">
+              <h4>可追问问题</h4>
+              ${renderThinkingPrompts(item)}
+            </section>
+          </div>
+          <section class="detail-section">
+            <h4>来源</h4>
+            <div class="source-stack">${sourceItems(item)}</div>
+          </section>
+          <div class="result-actions">
+            <button class="result-button primary" onclick='copyText(${inlineString(sourcePath)})'>复制主路径</button>
+          </div>
+        </article>
+      `;
+      detail.scrollIntoView({behavior: "smooth", block: "nearest"});
+    }
+
+    async function copyText(value) {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(value).catch(() => null);
+      }
+    }
+
+    async function refreshStatus() {
+      const response = await fetch("/api/status");
+      const status = await response.json();
+      const fileSummary = status.file_report?.summary || {};
+      const obsidianSummary = status.obsidian_report?.summary || {};
+      const feed = status.knowledge_feed || [];
+      $("statFeed").textContent = formatNumber(feed.length);
+      $("statFiles").textContent = formatNumber(fileSummary.total_files);
+      $("statNotes").textContent = formatNumber(obsidianSummary.total_notes);
+      $("statRefresh").textContent = nowTime();
+      renderKnowledgeFeed(feed);
+      return status;
     }
 
     installDropZone();
     updateTargetSummary();
     refreshStatus().catch((error) => {
-      const data = {ok: false, error: String(error)};
+      const data = {ok: false, action: "status", error: String(error)};
       renderOutput(data, {show: false});
-      renderWorkbenchResult("status", data);
+      renderKnowledgeFeed([]);
+      renderActionResult("review", data);
     });
   </script>
 </body>

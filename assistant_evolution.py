@@ -49,7 +49,7 @@ def build_guidebook_catalog(repo_root: Path = ROOT) -> dict[str, Any]:
         "pdf_size": pdf.stat().st_size if pdf.exists() else 0,
         "page_count": len(slides),
         "slides": [str(path) for path in slides],
-        "usage": "先看 7 页教程，再从 GUI 的“整理资料 / 回顾知识 / 提取上下文 / 今日提醒”开始试用。",
+        "usage": "先看 7 页教程，再从 GUI 的“添加资料 / 搜索回顾 / 生成 AI 上下文包”开始试用。",
     }
 
 
@@ -91,7 +91,7 @@ def build_initialization_plan(config_path: Path = DEFAULT_CONFIG) -> dict[str, A
         "复制 config.example.json 到 config.local.json，并只在本机私有文件里填写真实路径。",
         "运行一键初始化脚本生成 Obsidian 指南和场景报告。",
         "启动 GUI，从“今天先干什么”开始，而不是先看全部扫描指标。",
-        "把 guidebook PDF 作为第一份教程资料导入 Obsidian 或 NotebookLM；GUI 主入口是整理资料、回顾知识、提取上下文、今日提醒。",
+        "把 guidebook PDF 作为第一份教程资料导入 Obsidian 或 NotebookLM；GUI 主入口是添加资料、搜索回顾、生成 AI 上下文包。",
     ]
     commands = [
         "Copy-Item .\\config.example.json .\\config.local.json",
@@ -168,10 +168,13 @@ def markdown_title(text: str, fallback: str) -> str:
 
 
 def detect_note_type(text: str, path: Path) -> str:
-    lowered = f"{path.as_posix()}\n{text}".lower()
     for name in ["Action", "Card", "Time", "X-AI"]:
-        if name.lower() in lowered:
+        if any(part.lower() == name.lower() for part in path.parts):
             return name
+    marker = re.search(r"(?:^|\n)\s*(?:类型|type)\s*[:：]\s*(Action|Card|Time|X-AI)\b", text, flags=re.IGNORECASE)
+    if marker:
+        value = marker.group(1).lower()
+        return {"action": "Action", "card": "Card", "time": "Time", "x-ai": "X-AI"}[value]
     return "Note"
 
 
@@ -204,6 +207,13 @@ def build_ai_chat_archive(config: dict[str, Any], payload: dict[str, Any] | None
     outputs = lines_from_payload(payload.get("outputs") or payload.get("paths"))
     open_items = lines_from_payload(payload.get("open_items") or payload.get("next"))
     raw_excerpt = str(payload.get("raw") or payload.get("text") or "").strip()
+    if not background and not conclusions and not outputs and not open_items and not raw_excerpt:
+        return {
+            "ok": False,
+            "action": "archive-ai-chat",
+            "error": "没有提供可归档的 AI 对话内容。请至少提供背景、结论、产出路径、未完成事项或原始片段。",
+            "safety": "不会写入占位归档笔记。",
+        }
 
     archive_dir = obsidian_run_dir(config) / "AI 对话归档"
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -254,13 +264,20 @@ def build_ai_chat_archive(config: dict[str, Any], payload: dict[str, Any] | None
 
 def build_knowledge_index(config: dict[str, Any], limit: int = 200) -> dict[str, Any]:
     vault = vault_path(config)
+    configured_roots = [config.get("knowledge_root"), config.get("obsidian_run_dir")]
     roots = [
+        *(Path(str(item)) for item in configured_roots if item),
         vault / "02 项目" / "知识行动助手",
         vault / "04 例行工作" / "知识行动助手",
         vault / "02 项目" / "Codex",
     ]
     items: list[dict[str, Any]] = []
+    seen_roots: set[str] = set()
     for root in roots:
+        root_key = str(root.expanduser().resolve()) if root.exists() else str(root.expanduser())
+        if root_key in seen_roots:
+            continue
+        seen_roots.add(root_key)
         if not root.exists():
             continue
         for path in sorted(root.rglob("*.md"), key=lambda item: item.stat().st_mtime, reverse=True):
@@ -297,7 +314,7 @@ def score_item(query: str, item: dict[str, Any]) -> int:
     for token in tokens:
         if token in haystack:
             score += 3 if token in str(item.get("title", "")).lower() else 1
-    if item.get("type") == "Card":
+    if score > 0 and item.get("type") == "Card":
         score += 1
     return score
 
@@ -306,8 +323,6 @@ def build_knowledge_call_plan(config: dict[str, Any], query: str) -> dict[str, A
     index = build_knowledge_index(config)
     ranked = sorted(index["items"], key=lambda item: score_item(query, item), reverse=True)
     matches = [item for item in ranked if score_item(query, item) > 0][:5]
-    if not matches:
-        matches = ranked[:3]
     first_type = matches[0]["type"] if matches else "Note"
     next_action = {
         "Card": "引用这条 Card 的关键结论，再新建 Action 承接当前任务。",
@@ -315,6 +330,8 @@ def build_knowledge_call_plan(config: dict[str, Any], query: str) -> dict[str, A
         "Time": "参考这条 Time 复盘里的卡点和下一步，避免重复踩坑。",
         "X-AI": "复用这条 X-AI 的路径、边界和验收标准交给 Codex。",
     }.get(first_type, "先打开匹配笔记，确认来源后再复用。")
+    if not matches:
+        next_action = "没有匹配来源。先整理相关资料，或换一个更具体的关键词后再提取上下文。"
     return {
         "ok": bool(matches),
         "query": query,
@@ -343,6 +360,18 @@ def build_ai_context(config: dict[str, Any], query: str, request: str = "") -> d
         for source in sources
     ]
     compressed_context = "\n".join(compressed_lines) if compressed_lines else "未找到可用上下文，请先补充 Obsidian 笔记或运行知识库体检。"
+    if not sources:
+        return {
+            "ok": False,
+            "action": "build-ai-context",
+            "query": query,
+            "request": request,
+            "sources": [],
+            "compressed_context": compressed_context,
+            "next_request": "先整理或补充相关资料，再生成 AI 上下文包。",
+            "prompt": "",
+            "safety": "只读取已整理的 Obsidian 笔记、知识卡、项目记录和历史报告；不修改源文件。",
+        }
     next_request = f"请基于以上已整理上下文继续处理：{request}"
     prompt = f"""AI 上下文取用
 

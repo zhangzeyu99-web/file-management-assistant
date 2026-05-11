@@ -20,7 +20,7 @@ PRODUCT = {
     "name": "知识行动助手",
     "tagline": "把本地文件、Obsidian 笔记和 AI 对话整理成可归档、可复用、可继续被 AI 取用的上下文资产。",
 }
-SAFETY_TEXT = "默认不删除、不移动、不重命名、不重写源文件；只读取报告、生成建议、写入明确的 Obsidian 新笔记或追加到明确位置。"
+SAFETY_TEXT = "安全边界：不删除源文件，只读取报告和来源，只写明确的新笔记或追加到明确位置；源文件保持原样。"
 
 DOMAIN_BUCKETS = [
     {
@@ -332,17 +332,17 @@ def build_scenario_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
             sid="today",
             title="今天先干什么",
             user_phrase="今天先干什么",
-            does="读取最新报告，只给 1-3 个今日重点；不把全部归档候选变成今日任务。",
+            does="读取最新报告，只给最多 3 条今日行动建议；不把全部归档候选变成今日任务。",
             steps=[
                 "今日轻量规则：先看今日相关，不要每天处理全部归档候选。",
                 "先按生活 / 学习 / 工作分流，再决定具体项目、例行工作或归档建议。",
-                f"今日最多收敛到 1-3 个今日重点；当前收件箱待处理 {obs_totals['inbox_triage']} 条，大文件候选 {file_totals['large_files']} 个。",
+                f"今日最多收敛到 3 条行动建议；当前收件箱待处理 {obs_totals['inbox_triage']} 条，大文件候选 {file_totals['large_files']} 个。",
                 f"当前 {file_totals['archive_candidates']} 个归档候选进入每周或每月批处理，不进入今日清单。",
             ],
             next_action="先看今日相关文件；再清收件箱分类；最后只判断大文件未来 7 天是否会用。",
             prompt="根据最新文件雷达和 Obsidian 体检，只列今日相关事项，并按生活/学习/工作分流；不要让我每天处理全部归档候选。",
-            outputs=["今日 1-3 个重点", "生活/学习/工作分流", "Codex 继续处理提示词"],
-            acceptance_checks=["包含今日轻量规则。", "包含 1-3 个今日重点。", "不要每天处理全部归档候选。"],
+            outputs=["今日最多 3 条行动建议", "生活/学习/工作分流", "Codex 继续处理提示词"],
+            acceptance_checks=["包含今日轻量规则。", "包含最多 3 条行动建议。", "不要每天处理全部归档候选。"],
             extra={"domain_buckets": ctx["domain_buckets"], "large_file_review": ctx["large_file_review"]},
         ),
         scenario(
@@ -480,7 +480,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         "- 每天不是归档日，只处理：今日相关文件、收件箱分类、大文件保留判断。",
         "- 不要每天处理全部归档候选；归档候选进入每周或每月批处理。",
         "- 先按生活 / 学习 / 工作分流，再决定具体项目、例行工作或归档位置。",
-        "- 今天最多收敛到 1-3 个今日重点，避免被历史积压拖走。",
+        "- 今天最多收敛到 3 条行动建议，避免被历史积压拖走。",
         "",
         "## 生活 / 学习 / 工作分流",
         "",

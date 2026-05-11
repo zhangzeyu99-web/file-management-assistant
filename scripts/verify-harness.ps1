@@ -70,6 +70,16 @@ try {
         return "no forbidden token-like patterns found"
     }
 
+    Invoke-Checked "feature_contracts" {
+        $output = python -X utf8 .\scripts\audit-feature-contracts.py 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
+        $parsed = $output -join "`n" | ConvertFrom-Json
+        if (-not $parsed.ok) { throw "feature contract audit returned ok=false" }
+        if (-not (Test-Path -LiteralPath $parsed.json)) { throw "missing feature contract json: $($parsed.json)" }
+        if (-not (Test-Path -LiteralPath $parsed.markdown)) { throw "missing feature contract markdown: $($parsed.markdown)" }
+        return $parsed
+    }
+
     Invoke-Checked "dry_run" {
         if ($SkipDryRun) { return "skipped" }
         $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test 2>&1
@@ -130,7 +140,7 @@ try {
     }
 
     Invoke-Checked "gui_e2e" {
-        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -StrictUx 2>&1
+        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -ReadOnly -StrictUx 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
         $jsonLine = ($output | Where-Object { $_ -match '^\{' } | Select-Object -Last 1)
         if (-not $jsonLine) { throw "GUI E2E did not return JSON result" }

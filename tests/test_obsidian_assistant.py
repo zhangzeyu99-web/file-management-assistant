@@ -108,6 +108,39 @@ class ObsidianAssistantTests(unittest.TestCase):
         self.assertIn("## 归档候选", review_text)
         self.assertIn("## 结构调整", review_text)
 
+    def test_card_note_reads_source_file_when_conclusion_is_empty(self) -> None:
+        source = self.vault / "00 收件箱" / "路径整理复盘.md"
+        source.write_text(
+            "# 路径整理复盘\n\n## 关键结论\n\n真实经验：路径输入必须扫描目录并生成整理清单，不能只记录路径字符串。\n",
+            encoding="utf-8",
+        )
+
+        card = obsidian_assistant.command_card_note(
+            self.config,
+            title="路径整理规则",
+            domain="工作",
+            source=str(source),
+            conclusion="",
+        )
+
+        card_text = Path(card["note"]).read_text(encoding="utf-8")
+        self.assertIn("真实经验：路径输入必须扫描目录", card_text)
+        self.assertIn(str(source), card_text)
+        self.assertNotIn("待补充关键结论", card_text)
+
+    def test_card_note_refuses_empty_placeholder_card(self) -> None:
+        card = obsidian_assistant.command_card_note(
+            self.config,
+            title="空知识卡",
+            domain="学习",
+            source="",
+            conclusion="待补充关键结论",
+        )
+
+        self.assertFalse(card["ok"], card)
+        self.assertIn("没有可沉淀", card["error"])
+        self.assertNotIn("note", card)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

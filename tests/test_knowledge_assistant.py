@@ -131,8 +131,167 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertTrue(markdown_paths[0].exists())
         self.assertIn("AI 上下文包", markdown_paths[0].read_text(encoding="utf-8"))
 
-        self.assertIn("今日提醒", remind["summary"])
+        self.assertIn("今日行动建议", remind["summary"])
         self.assertLessEqual(len(remind["next_actions"]), 3)
+        self.assertTrue(any(item.get("type") == "obsidian-note" and "今日行动" in item.get("label", "") for item in remind["artifacts"]))
+
+    def test_review_does_not_fallback_to_unrelated_recent_notes(self) -> None:
+        result = knowledge_assistant.run_action("review", {"query": "b站"}, self.config_path)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("review", result["action"])
+        self.assertEqual([], result["sources"])
+        self.assertIn("没有找到", result["summary"])
+        self.assertNotIn("找到 5 条", result["summary"])
+
+    def test_review_no_match_is_not_reported_as_completed(self) -> None:
+        result = knowledge_assistant.run_action("review", {"query": "zzzxxyyqwerty"}, self.config_path)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("review", result["action"])
+        self.assertEqual([], result["sources"])
+        self.assertEqual([], result["artifacts"])
+
+    def test_extract_refuses_to_fake_context_when_no_sources_match(self) -> None:
+        result = knowledge_assistant.run_action("extract", {"request": "完全不存在的火星资料主题"}, self.config_path)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("extract", result["action"])
+        self.assertEqual([], result["sources"])
+        self.assertEqual([], [item for item in result["artifacts"] if item.get("type") == "prompt"])
+        self.assertIn("没有找到可用上下文", result["summary"])
+
+    def test_extract_preview_returns_candidates_without_writing_files(self) -> None:
+        extract_dir = self.vault / "04 例行工作" / "知识整理助手" / "提取"
+
+        result = knowledge_assistant.run_action(
+            "extract",
+            {"request": "继续学习 Obsidian", "mode": "preview"},
+            self.config_path,
+        )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("extract", result["action"])
+        self.assertGreaterEqual(len(result["sources"]), 1)
+        self.assertEqual([], result["artifacts"])
+        self.assertIn("候选来源", result["summary"])
+        self.assertEqual("preview", result["debug"]["mode"])
+        self.assertFalse(extract_dir.exists(), "preview mode must not write an Obsidian package")
+
+    def test_extract_generate_uses_confirmed_source_paths(self) -> None:
+        preview = knowledge_assistant.run_action(
+            "extract",
+            {"request": "继续优化 Codex 记录", "mode": "preview"},
+            self.config_path,
+        )
+        source_path = preview["sources"][0]["path"]
+
+        result = knowledge_assistant.run_action(
+            "extract",
+            {"request": "继续优化 Codex 记录", "mode": "generate", "source_paths": [source_path]},
+            self.config_path,
+        )
+
+        self.assertUnifiedResult(result, "extract")
+        self.assertEqual([source_path], [item["path"] for item in result["sources"]])
+        self.assertTrue(any(item.get("type") == "prompt" for item in result["artifacts"]))
+        self.assertTrue(any(item.get("type") == "markdown" for item in result["artifacts"]))
+        self.assertEqual("generate", result["debug"]["mode"])
+
+    def test_organize_local_directory_scans_contents_and_writes_manifest(self) -> None:
+        source_dir = self.fixture / "AI_Repo"
+        source_dir.mkdir()
+        (source_dir / "AI_Decision.html").write_text("<h1>AI decision</h1>", encoding="utf-8")
+        (source_dir / "AI 调研报告.pdf").write_bytes(b"%PDF-1.4\nfake")
+
+        result = knowledge_assistant.run_action("organize", {"local_paths": str(source_dir)}, self.config_path)
+
+        self.assertUnifiedResult(result, "organize")
+        self.assertIn("扫描 2 个文件", result["summary"])
+        self.assertEqual(2, result["debug"]["scan"]["total_files"])
+        self.assertTrue(any(item.get("type") == "markdown" and "整理清单" in item.get("label", "") for item in result["artifacts"]))
+        note_path = next(Path(item["path"]) for item in result["artifacts"] if item.get("type") == "obsidian-note")
+        note_text = note_path.read_text(encoding="utf-8")
+        self.assertIn("## 路径扫描结果", note_text)
+        self.assertIn("AI_Decision.html", note_text)
+        self.assertIn("AI 调研报告.pdf", note_text)
+        self.assertIn("不会移动源文件", note_text)
+
+    def test_organize_refuses_missing_local_path_without_text(self) -> None:
+        missing = self.fixture / "missing-folder"
+
+        result = knowledge_assistant.run_action("organize", {"local_paths": str(missing)}, self.config_path)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("organize", result["action"])
+        self.assertEqual([], result["artifacts"])
+        self.assertIn("路径不存在", result["summary"])
+        self.assertEqual("no_existing_local_paths", result["debug"]["reason"])
+
+    def test_organize_selected_files_only_is_metadata_not_scan(self) -> None:
+        result = knowledge_assistant.run_action(
+            "organize",
+            {"selected_files": [{"name": "report.pdf", "size": 1234, "relative_path": "docs/report.pdf"}]},
+            self.config_path,
+        )
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("organize", result["action"])
+        self.assertEqual([], result["artifacts"])
+        self.assertIn("浏览器选择", result["summary"])
+        self.assertEqual("metadata_only", result["debug"]["reason"])
+
+    def test_organize_refuses_empty_input_instead_of_writing_placeholder_note(self) -> None:
+        result = knowledge_assistant.run_action("organize", {}, self.config_path)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("organize", result["action"])
+        self.assertEqual([], result["artifacts"])
+        self.assertIn("没有提供", result["summary"])
+
+    def test_daily_action_dedupes_repeated_source_titles(self) -> None:
+        target = self.vault / "04 例行工作" / "知识整理助手"
+        (target / "gui-a.md").write_text("# GUI 快速记录\n\nGUI 今日行动测试。", encoding="utf-8")
+        (target / "gui-b.md").write_text("# GUI 快速记录\n\nGUI 重复标题。", encoding="utf-8")
+        (target / "gui-c.md").write_text("# GUI 控制台说明\n\nGUI 已改为知识整理入口。", encoding="utf-8")
+
+        result = knowledge_assistant.run_action("remind", {"query": "GUI 今日行动"}, self.config_path)
+
+        self.assertUnifiedResult(result, "remind")
+        titles = [item["title"] for item in result["sources"]]
+        self.assertEqual(len(titles), len(set(titles)), result)
+        self.assertLessEqual(len(titles), 3)
+
+        second = knowledge_assistant.run_action("remind", {"query": "GUI 今日行动"}, self.config_path)
+        self.assertUnifiedResult(second, "remind")
+        self.assertNotIn("今日行动建议", [item["title"] for item in second["sources"]])
+
+    def test_daily_action_refuses_to_fake_result_without_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as empty_root_raw:
+            empty_root = Path(empty_root_raw)
+            empty_runtime = empty_root / "runtime"
+            empty_vault = empty_root / "vault"
+            empty_runtime.mkdir()
+            (empty_vault / "04 例行工作" / "知识整理助手").mkdir(parents=True)
+            config_path = empty_root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "runtime_root": str(empty_runtime),
+                        "obsidian_vault": str(empty_vault),
+                        "obsidian_run_dir": str(empty_vault / "04 例行工作" / "知识整理助手"),
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = knowledge_assistant.run_action("remind", {}, config_path)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("remind", result["action"])
+        self.assertEqual([], result["sources"])
+        self.assertEqual([], result["artifacts"])
 
     def test_legacy_second_pass_indexes_existing_notes_without_moving_them(self) -> None:
         old_paths = [

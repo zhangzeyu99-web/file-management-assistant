@@ -20,12 +20,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
 
 打开 `http://127.0.0.1:8765/`。demo 会创建本地 demo vault 和 demo 文件；新机器上会生成 `config.local.json`，如果你已经有真实 `config.local.json`，脚本会改写到 `config.demo.json`，避免覆盖私有配置。
 
-## 3. 四个主入口
+## 3. 三个主入口
 
-- `整理资料`：放入文本、文件目录或 AI 对话，写入新的 Obsidian 整理记录。
-- `回顾知识`：输入关键词或问题，返回本地摘要和来源。
-- `提取上下文`：输入当前任务，生成 AI 上下文包。
-- `今日提醒`：生成今天 1-3 个重点。
+- `添加资料`：放入文本、完整本地路径或 AI 对话，写入新的 Obsidian 整理记录；路径只生成索引清单。
+- `搜索回顾`：输入关键词或问题，返回本地摘要、匹配来源和相关原因。
+- `生成 AI 上下文包`：输入当前任务，先预览候选来源，确认后生成 AI 上下文包。
+
+输入不足时助手不会硬写占位记录：没有资料就不生成整理笔记；没有匹配来源就不生成假上下文包；没有结论或可读取来源就不生成知识卡。
 
 ## 4. 接入真实 Obsidian
 
@@ -41,13 +42,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
 
 `config.local.json` 不进 Git。真实本地路径、个人 vault 和运行报告都只保留在你的机器上。
 
-## 5. 安装每天 9 点提醒
+## 5. 安装每天 9 点行动建议
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduled-task.ps1
 ```
 
-提醒任务只运行 `remind`，生成 1-3 个今日重点；不会触发文件整理、移动、删除或重命名。
+计划任务只运行兼容 action `remind`，生成今日行动建议笔记；不会触发文件整理、移动、删除或重命名。
 
 ## 6. 验证
 

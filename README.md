@@ -1,15 +1,14 @@
 # 本地知识整理助手
 
-给 Obsidian 新手和 AI 工作流用户用的本地知识整理助手：把你放进来的本地文件、Obsidian 笔记和 AI 对话整理成可归档、可回顾、可提取给 AI 续用、可定时提醒的个人知识系统。
+给 Obsidian 新手和 AI 工作流用户用的本地知识整理助手：把你放进来的本地文件、Obsidian 笔记和 AI 对话整理成可归档、可回顾、可提取给 AI 续用的个人知识系统。
 
-核心只做四件事：
+主界面只保留三个操作：
 
-- **整理**：把文本、文件目录或 AI 对话写成新的 Obsidian 整理记录，保留来源和生活 / 学习 / 工作判断。
-- **回顾**：按关键词或问题检索已整理内容，返回本地摘要、匹配来源和可打开路径。
-- **提取**：根据当前任务生成 `AI 上下文包`，输出可复制 prompt 和 Markdown。
-- **提醒**：每天 9 点生成 1-3 个今日重点，不做定时整理。
+- **添加资料**：把文本、文件目录或 AI 对话写成新的 Obsidian 整理记录；粘贴真实路径时会生成索引清单和 manifest。
+- **搜索回顾**：按关键词或问题做证据检索，返回本地摘要、匹配来源、相关原因和可打开路径。
+- **生成 AI 上下文包**：先预览候选来源，确认后再生成可复制 prompt 和 Markdown。
 
-它可以帮你沉淀知识卡、任务记录、今日提醒和 AI 上下文包。默认安全边界：不会删除、不会移动、不会重命名、不会重写你的源文件；只写新的 Obsidian 笔记和本地运行证据。
+它可以帮你沉淀知识卡、任务记录和 AI 上下文包。默认安全边界：不会删除、不会移动、不会重命名、不会重写你的源文件；只写新的 Obsidian 笔记和本地运行证据。
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![PowerShell](https://img.shields.io/badge/PowerShell-5%2B-5391FE)
@@ -25,28 +24,31 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\init-assistant.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
 ```
 
-打开 `http://127.0.0.1:8765/`，先用 demo vault 跑通四个入口，再把 `config.local.json` 改成你的真实 Obsidian 路径。
+打开 `http://127.0.0.1:8765/`，先用 demo vault 跑通站点式首页，再把 `config.local.json` 改成你的真实 Obsidian 路径。
 
 ## GUI 主入口
 
-- `整理资料`：文本 / 文件目录 / AI 对话三类输入，写入新的 Obsidian 整理记录。
-- `回顾知识`：检索 Obsidian、助手报告、AI 归档和旧资料索引。
-- `提取上下文`：生成 AI 上下文包，包含来源路径、摘要、安全边界和下一步请求。
-- `今日提醒`：只给今天 1-3 个重点，避免每天被归档候选淹没。
+GUI 现在是站点式知识库：首页首屏只说明用途和安全边界，三张卡片跳转到同页锚点区；下滑后可以浏览持续更新的知识流。
 
-旧能力如文件雷达、知识库体检、记录任务进入 `高级/诊断`，保留兼容但不再作为主线。
+- `添加资料`：在 `#organize` 区输入文本、AI 对话或完整本地路径；路径只做索引清单，不复制、不移动源文件。
+- `搜索回顾`：在 `#review` 区检索 Obsidian、助手报告、AI 归档和旧资料索引；无匹配时不编造答案。
+- `生成 AI 上下文包`：在 `#extract` 区先预览候选来源，再确认生成 AI 上下文包，包含来源路径、摘要、安全边界和下一步请求。
+- `知识流`：从已整理内容生成标题 + 描述卡片，点击只展开详情和来源，不触发写入。
+
+低频能力进入 `/advanced` 工具维护页，例如文件雷达、知识库体检、旧资料索引和本地教程入口；首页不再堆诊断按钮。
 
 ## 界面产品化原则
 
-首页按成熟文件工具的稳定经验收敛：一个统一入口接收文本、路径和 AI 对话；用快速场景降低上手成本；用搜索/筛选心智做回顾和提取；结果卡固定展示“做了什么 / 来源是什么 / 产物在哪 / 下一步”。详见 [Product UI Research](docs/PRODUCT_UI_RESEARCH.md)。
+首页按知识站点的信息架构收敛：深色首屏只讲清用途；三个操作作为导航入口；知识流用卡片沉淀标题、描述和来源；结果卡固定展示“做了什么 / 来源是什么 / 产物在哪 / 下一步”。详见 [Product UI Research](docs/PRODUCT_UI_RESEARCH.md) 和 [Product Retrospective And Next Plan](docs/PRODUCT_RETROSPECTIVE_AND_NEXT_PLAN.md)。
 
 ## 命令行入口
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action organize -Text "这段资料需要整理"
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action review -Query "Obsidian 教程"
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action extract -Request "继续优化知识库"
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action remind
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action extract -Request "继续优化知识库" -Mode preview
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action extract -Request "继续优化知识库" -Mode generate -SourcePath "C:\YourVault\path\source.md"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action remind  # 兼容命令名：生成今日行动建议
 ```
 
 ## 迁移与备份

@@ -76,6 +76,169 @@ class GuiServerTests(unittest.TestCase):
         self.assertEqual(2, status["obsidian_report"]["summary"]["total_notes"])
         self.assertTrue(status["obsidian_report"]["markdown_report"].endswith("obsidian-management-report.md"))
         self.assertIn("today", {item["id"] for item in status["scenarios"]})
+        self.assertIn("knowledge_feed", status)
+        self.assertGreaterEqual(len(status["knowledge_feed"]), 1)
+        first_card = status["knowledge_feed"][0]
+        for key in ["title", "description", "type", "source_path", "updated_at", "tags", "action_hint"]:
+            self.assertIn(key, first_card)
+        self.assertTrue(first_card["source_path"].endswith("AI 上下文取用.md"))
+
+    def test_knowledge_feed_dedupes_repeated_titles(self) -> None:
+        cards_dir = self.vault / "02 项目" / "知识行动助手" / "Card"
+        for index in range(2):
+            (cards_dir / f"AI 对话归档 {index}.md").write_text(
+                "# AI 对话归档\n\n同类对话归档记录，只应在首页知识流保留一张代表卡。\n",
+                encoding="utf-8",
+            )
+        (cards_dir / "old-product-name.md").write_text(
+            "# 文件管理助手复盘\n\n旧产品定位内容应该保留在库里，但不应进入首页知识流。\n",
+            encoding="utf-8",
+        )
+        (cards_dir / "old-action.md").write_text(
+            "# 记录一个任务\n\n旧功能入口已经降级，不应作为首页知识卡标题露出。\n",
+            encoding="utf-8",
+        )
+
+        feed = gui_server.build_knowledge_feed(gui_server.load_config(self.config_path), limit=8)
+        titles = [item["title"] for item in feed]
+
+        self.assertEqual(1, titles.count("AI 对话归档"))
+        self.assertNotIn("文件管理助手复盘", titles)
+        self.assertNotIn("记录一个任务", titles)
+        self.assertLessEqual(len(feed), 8)
+
+    def test_knowledge_feed_prioritizes_codex_session_index_and_cards(self) -> None:
+        codex_dir = self.vault / "02 项目" / "Codex"
+        cards_dir = codex_dir / "知识卡片"
+        cards_dir.mkdir(parents=True)
+        (codex_dir / "13 Codex 会话标题索引.md").write_text(
+            "# Codex 会话标题索引\n\n## 用法\n- 标题按真实 Codex 会话抽取。\n\n## 主题概览\n- AI 工作流/Codex: 66\n\n## 近期标题速览\n- Obsidian 使用指南 `1 天`\n",
+            encoding="utf-8",
+        )
+        (cards_dir / "知识整理助手三主操作.md").write_text(
+            "# 知识整理助手三主操作\n\n添加资料、搜索回顾、生成 AI 上下文包。\n",
+            encoding="utf-8",
+        )
+
+        feed = gui_server.build_knowledge_feed(gui_server.load_config(self.config_path), limit=3)
+        titles = [item["title"] for item in feed]
+        types = [item["type"] for item in feed]
+
+        self.assertEqual("Codex 会话标题索引", titles[0])
+        self.assertEqual("Codex 会话已按主题和近期标题建立索引，可按标题回到原始会话。", feed[0]["takeaway"])
+        self.assertIn("知识整理助手三主操作", titles)
+        self.assertIn("会话索引", types)
+        self.assertIn("知识卡片", types)
+
+    def test_knowledge_detail_is_type_specific_and_connects_related_items(self) -> None:
+        codex_dir = self.vault / "02 项目" / "Codex"
+        cards_dir = codex_dir / "知识卡片"
+        cards_dir.mkdir(parents=True)
+        (codex_dir / "13 Codex 会话标题索引.md").write_text(
+            "# Codex 会话标题索引\n\n## 用法\n- 标题按真实 Codex 会话抽取。\n- 复制来源路径让 Codex 读取原始 JSONL。\n\n## 主题概览\n- AI 工作流/Codex: 66\n- Obsidian/知识库: 24\n\n## 近期标题速览\n- Obsidian 使用指南 `1 天`\n- 知识卡片沉淀 `2 天`\n",
+            encoding="utf-8",
+        )
+        (cards_dir / "Codex 上下文包规则.md").write_text(
+            "# Codex 上下文包规则\n\n## 适用场景\n把 Codex 会话变成 AI 上下文包。\n\n## 关键结论\n- Codex 继续任务前必须读取来源路径。\n\n## 下次怎么用\n- 生成 AI 上下文包时引用会话索引。\n",
+            encoding="utf-8",
+        )
+
+        feed = gui_server.build_knowledge_feed(gui_server.load_config(self.config_path), limit=3)
+        index_item = feed[0]
+
+        self.assertEqual("session-index", index_item["detail_kind"])
+        section_titles = [section["title"] for section in index_item["detail_sections"]]
+        self.assertIn("怎么使用这个索引", section_titles)
+        self.assertIn("主题分布", section_titles)
+        self.assertIn("近期会话入口", section_titles)
+        self.assertTrue(any("沉淀成知识卡" in item for item in index_item["thinking_prompts"]))
+        self.assertTrue(any(item["title"] == "Codex 上下文包规则" for item in index_item["related_items"]))
+
+    def test_knowledge_feed_uses_topic_related_items_instead_of_loose_keywords(self) -> None:
+        codex_dir = self.vault / "02 项目" / "Codex"
+        cards_dir = codex_dir / "知识卡片"
+        cards_dir.mkdir(parents=True)
+        (codex_dir / "13 Codex 会话标题索引.md").write_text(
+            "# Codex 会话标题索引\n\n## 主题概览\n- AI 工作流/Codex: 66\n\n## 近期标题速览\n- 上下文包生成 `1 天`\n",
+            encoding="utf-8",
+        )
+        (cards_dir / "AI 上下文包规则.md").write_text(
+            "# AI 上下文包规则\n\n## 适用场景\n给新的 AI 对话补充已整理上下文。\n\n## 关键结论\n- 先预览候选来源，再生成 prompt。\n",
+            encoding="utf-8",
+        )
+        (cards_dir / "生活收纳清单.md").write_text(
+            "# 生活收纳清单\n\n## 适用场景\n整理衣柜、证件和日用品。\n\n## 关键结论\n- 按使用频率分层收纳。\n",
+            encoding="utf-8",
+        )
+
+        feed = gui_server.build_knowledge_feed(gui_server.load_config(self.config_path), limit=4)
+        index_item = feed[0]
+
+        self.assertIn("codex-session", index_item["topic_keys"])
+        self.assertIn("ai-context", index_item["topic_keys"])
+        self.assertTrue(any(item["title"] == "AI 上下文包规则" for item in index_item["related_items"]))
+        self.assertFalse(any(item["title"] == "生活收纳清单" for item in index_item["related_items"]))
+        self.assertTrue(all(item["why"].startswith("同属主题：") for item in index_item["related_items"]))
+
+    def test_plain_note_detail_gets_reader_friendly_sections_from_full_markdown(self) -> None:
+        note_dir = self.vault / "02 项目" / "学习资料"
+        note_dir.mkdir(parents=True)
+        (note_dir / "NotebookLM 学习笔记.md").write_text(
+            "# NotebookLM 学习笔记\n\n## 背景\n为了学会用 NotebookLM 教 Obsidian，需要把资料包、教程和问答路径整理清楚。\n\n## 关键结论\n- 先上传资料包，再按问题学习。\n- 不要一次处理所有历史文件。\n\n## 下一步\n- 生成一份给 AI 的上下文包。\n",
+            encoding="utf-8",
+        )
+
+        feed = gui_server.build_knowledge_feed(gui_server.load_config(self.config_path), limit=1)
+        item = feed[0]
+        section_titles = [section["title"] for section in item["detail_sections"]]
+
+        self.assertEqual("NotebookLM 学习笔记", item["title"])
+        self.assertNotIn("##", item["description"])
+        self.assertIn("阅读摘要", section_titles)
+        self.assertIn("关键信息", section_titles)
+        self.assertIn("下一步", section_titles)
+        self.assertTrue(any("上传资料包" in value for value in item["conclusions"]))
+
+    def test_knowledge_feed_exposes_structured_reading_fields(self) -> None:
+        codex_dir = self.vault / "02 项目" / "Codex"
+        cards_dir = codex_dir / "知识卡片"
+        cards_dir.mkdir(parents=True)
+        (cards_dir / "知识整理助手三主操作.md").write_text(
+            """---
+type: Card
+tags:
+  - knowledge-assistant
+---
+
+# 知识整理助手三主操作
+
+## 适用场景
+把 GUI 从伪控制台收敛成真实有用的知识入口。
+
+## 关键结论
+- 添加资料是索引清单，不是复制或搬家。
+- 搜索回顾是证据检索，不是无来源问答。
+
+## 下次怎么用
+- 输入真实路径生成索引。
+- 选择候选来源生成上下文包。
+
+## 来源
+- knowledge_assistant.py: `D:\\codex\\file-management-assistant\\knowledge_assistant.py`
+""",
+            encoding="utf-8",
+        )
+
+        feed = gui_server.build_knowledge_feed(gui_server.load_config(self.config_path), limit=1)
+        item = feed[0]
+
+        self.assertEqual("知识整理助手三主操作", item["title"])
+        self.assertNotIn("type: Card", item["description"])
+        self.assertEqual("添加资料是索引清单，不是复制或搬家。", item["takeaway"])
+        self.assertIn("真实有用的知识入口", item["scenario"])
+        self.assertEqual(2, len(item["conclusions"]))
+        self.assertEqual(2, len(item["next_steps"]))
+        self.assertTrue(item["source_items"][0]["path"].endswith("knowledge_assistant.py"))
 
     def test_rejects_unknown_action(self) -> None:
         result = gui_server.run_gui_action("delete-everything", {}, self.config_path)
@@ -89,7 +252,7 @@ class GuiServerTests(unittest.TestCase):
         health = gui_server.run_gui_action("obsidian-health", {}, self.config_path)
 
         self.assertTrue(today["ok"], today)
-        self.assertIn("今日轻量规则", today["summary"])
+        self.assertIn("今日行动规则", today["summary"])
         self.assertTrue(file_radar["ok"], file_radar)
         self.assertIn("html_report", file_radar)
         self.assertTrue(health["ok"], health)
@@ -107,6 +270,7 @@ class GuiServerTests(unittest.TestCase):
             self.config_path,
         )
         radar = gui_server.run_gui_action("file-radar", {"local_paths": str(manual_file)}, self.config_path)
+        organize = gui_server.run_gui_action("organize", {"local_paths": str(manual_dir)}, self.config_path)
 
         self.assertTrue(inspect["ok"], inspect)
         self.assertEqual("inspect-local-targets", inspect["action"])
@@ -124,6 +288,12 @@ class GuiServerTests(unittest.TestCase):
         self.assertEqual(1, radar["scan_targets"]["summary"]["existing_count"])
         self.assertTrue(Path(radar["html_report"]).exists())
         self.assertTrue(Path(radar["summary_json"]).exists())
+
+        self.assertTrue(organize["ok"], organize)
+        self.assertEqual("organize", organize["action"])
+        self.assertIn("已扫描 1 个文件", organize["summary"])
+        self.assertEqual(1, organize["debug"]["scan"]["total_files"])
+        self.assertTrue(any(item.get("type") == "markdown" and "整理清单" in item.get("label", "") for item in organize["artifacts"]))
 
     def test_capture_daily_and_act_actions_write_to_vault(self) -> None:
         capture = gui_server.run_gui_action(
@@ -228,61 +398,88 @@ class GuiServerTests(unittest.TestCase):
             for key in ["summary", "sources", "artifacts", "next_actions", "safety", "debug"]:
                 self.assertIn(key, result, result)
         self.assertIn("AI 上下文包", extract["summary"])
-        self.assertIn("今日提醒", remind["summary"])
+        self.assertIn("今日行动建议", remind["summary"])
 
-    def test_html_exposes_four_core_entries_without_product_drift(self) -> None:
+    def test_html_exposes_three_primary_operations_without_product_drift(self) -> None:
         html = gui_server.HTML
 
         for label in [
             "本地知识整理助手",
-            "整理资料",
-            "回顾知识",
-            "提取上下文",
-            "今日提醒",
+            "添加资料",
+            "搜索回顾",
+            "生成 AI 上下文包",
             "AI 上下文包",
-            "高级/诊断",
-            "结果预览",
+            "工具维护页",
+            "知识流",
             "本地文件 / 目录目标",
             "粘贴本地路径",
             "拖放文件到这里",
             "检查本地目标",
         ]:
             self.assertIn(label, html)
+        self.assertNotIn("今日提醒", html)
+        self.assertNotIn("今日行动</h2>", html)
+        self.assertNotIn("href=\"#remind\"", html)
+        self.assertNotIn("runCoreAction('remind')", html)
+        self.assertEqual(3, html.count('class="feature-anchor"'))
         for required in [
-            "成熟个人知识工作台",
-            "文本 / 文件目录 / AI 对话",
-            "答案 + 来源",
-            "默认只读",
-            "不删除、不移动、不重命名、不重写源文件",
-            "默认不展示黑色 JSON",
+            "site-hero",
+            "feature-anchor",
+            'href="#organize"',
+            'href="#review"',
+            'href="#extract"',
+            'id="knowledgeFeed"',
+            "renderKnowledgeFeed",
+            "openKnowledgeDetail",
+            "一句话结论",
+            "适用场景",
+            "关键结论",
+            "继续使用",
+            "关联内容",
+            "可追问问题",
+            "renderDetailSections",
+            "renderRelatedItems",
+            "renderThinkingPrompts",
+            "data-knowledge-card",
+            "action-section",
+            "site-action-result",
+            "只生成建议和新记录",
+            "不改动你的源文件",
+            "工具维护页",
+            'href="/advanced"',
             "feature-icons.png",
             'id="localPaths"',
             'id="fileDropZone"',
             'type="file"',
             "runCoreAction('organize')",
             "runCoreAction('review')",
-            "runCoreAction('extract')",
-            "runCoreAction('remind')",
+            "previewExtract()",
+            "generateExtractFromPreview()",
+            "候选来源",
+            "确认生成上下文包",
             "inspect-local-targets",
             "readLocalTargets()",
         ]:
             self.assertIn(required, html)
         for productized in [
-            "统一入口",
-            "快速场景",
-            "搜索/筛选",
+            "向下浏览",
             "来源可追溯",
-            "最近来源",
-            "做了什么",
-            "来源是什么",
-            "产物在哪",
-            "下一步",
+            "完成情况",
+            "参考来源",
+            "保存位置",
+            "下一步建议",
             "result-sections",
-            "applyPreset",
+            "noMatchReview",
+            "未完成",
+            "找到候选",
+            "已生成",
+            "工具维护页",
+            'href="/advanced"',
         ]:
             self.assertIn(productized, html)
         self.assertIn("renderOutput(data, {show: false})", html)
-        self.assertIn("renderWorkbenchResult(action, data)", html)
+        self.assertIn("renderActionResult(renderTarget, data)", html)
+        self.assertIn("tools-entry", html)
         self.assertNotIn("<symbol", html)
         self.assertNotIn("<svg", html)
         self.assertNotIn("Codex 文件管理小助手", html)
@@ -297,11 +494,40 @@ class GuiServerTests(unittest.TestCase):
         self.assertNotIn("生成 Codex 接手包", html)
         self.assertNotIn("这不是 Codex 本体", html)
         self.assertNotIn("不是替代 Codex", html)
+        self.assertNotIn("workbenchResult", html)
+        self.assertNotIn("primary-actions", html)
+        self.assertNotIn("status-panel", html)
+        self.assertNotIn("本地状态摘要", html)
+        self.assertNotIn("站点式知识库", html)
+        self.assertNotIn("首屏极简", html)
+        self.assertNotIn("默认只读", html)
+        self.assertNotIn("不删除、不移动、不重命名、不重写源文件", html)
+        self.assertNotIn("四个轻量操作区", html)
+        self.assertNotIn("首页不再堆功能", html)
+        self.assertNotIn("每次点击后", html)
         self.assertNotIn("hero-kicker", html)
         self.assertNotIn("boundary-grid", html)
         self.assertNotIn("boundary-card", html)
         self.assertNotIn("hero-illustration.png", html)
+        self.assertNotIn("高级/诊断", html)
+        self.assertNotIn("advanced-grid", html)
+        self.assertNotIn("runLegacyAction", html)
+        self.assertNotIn("function toggleOutput", html)
         self.assertNotRegex(html, r"鏂|绠|鍏|浠婃|瀛︿|宸ヤ")
+        self.assertNotIn('<button class="result-button" onclick="toggleOutput()">', html)
+        self.assertNotIn('<button class="advanced-button" onclick="toggleOutput()">', html)
+
+    def test_advanced_tools_page_exposes_only_real_actions(self) -> None:
+        advanced = (gui_server.ROOT / "docs" / "assets" / "gui" / "advanced.html").read_text(encoding="utf-8-sig")
+
+        for phrase in ["工具维护页", "诊断与维护", "打开资料", "查看文件雷达", "检查知识库", "二次整理旧资料", "打开 Obsidian", "打开教程 PDF", "打开交互说明"]:
+            self.assertIn(phrase, advanced)
+        for action in ["file-radar", "obsidian-health", "legacy-index", "open-obsidian", "open-guidebook", "open-interaction-guide"]:
+            self.assertIn(f"runTool('{action}')", advanced)
+        for readable_source in ["data?.by_root", "data.total_files", "来源根"]:
+            self.assertIn(readable_source, advanced)
+        for obsolete in ["查看高级 JSON", "console-output", "今日操作台", "伪控制台", "runLegacyAction"]:
+            self.assertNotIn(obsolete, advanced)
 
     def test_interaction_guide_action_exposes_generated_assets(self) -> None:
         result = gui_server.run_gui_action("open-interaction-guide", {}, self.config_path)

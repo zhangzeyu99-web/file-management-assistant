@@ -51,6 +51,7 @@ function New-FixtureConfig {
     Set-Content -Path (Join-Path $fixture "notebooklm-obsidian-tutorial.txt") -Value "NotebookLM and Obsidian learning material for reusable notes." -Encoding UTF8
     Set-Content -Path (Join-Path $fixture "work-project-review.csv") -Value "task,status`nGUI E2E,done" -Encoding UTF8
     Set-Content -Path (Join-Path $vault "projects\knowledge-organizer\Card\gui-result-card.md") -Value "# GUI result card`n`nType: Card`nSource: E2E fixture`n`n## Key conclusion`n`nThe result area should show human-readable cards instead of default JSON." -Encoding UTF8
+    Set-Content -Path (Join-Path $obsidianRun "obsidian-ai-context.md") -Value "# Obsidian tutorial and AI context pack`n`nType: Card`nSource: E2E fixture`n`n## Key conclusion`n`nObsidian tutorial material and AI context packs must be searchable through review before extraction." -Encoding UTF8
 
     $oldFile = Join-Path $fixture "old-installer.exe"
     Set-Content -Path $oldFile -Value "fake installer" -Encoding ASCII
@@ -120,6 +121,18 @@ function Wait-HttpOk {
     throw "GUI server did not become ready: $Url"
 }
 
+function Invoke-PlaywrightClose {
+    param([string]$SessionName)
+    if (-not (Get-Command npx.cmd -ErrorAction SilentlyContinue)) { return }
+    $closeArgs = @("--package", "@playwright/cli", "playwright-cli", "-s=$SessionName", "close")
+    $process = Start-Process -FilePath "npx.cmd" -ArgumentList $closeArgs -WorkingDirectory $Repo -WindowStyle Hidden -PassThru
+    try {
+        Wait-Process -Timeout 15 -Id $process.Id -ErrorAction Stop
+    } catch {
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Get-ResultPaths {
     param($Value)
     $paths = New-Object System.Collections.Generic.List[string]
@@ -186,6 +199,8 @@ try {
     & npx.cmd @openArgs | Out-Null
 
     & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" resize 1680 950 | Out-Null
+    $heroScreenshot = Join-Path $RunDir "hero-page.png"
+    & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" screenshot --filename $heroScreenshot | Out-Null
     $raw = & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" --raw run-code --filename (Join-Path $Repo "scripts\gui-e2e-playwright.js")
     $rawText = ($raw -join "`n").Trim()
     $rawPath = Join-Path $RunDir "playwright-raw.txt"
@@ -202,11 +217,12 @@ try {
 
     $screenshot = Join-Path $RunDir "final-page.png"
     & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" screenshot --filename $screenshot | Out-Null
-    & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" close | Out-Null
+    Invoke-PlaywrightClose -SessionName $Session
 
     $result | Add-Member -NotePropertyName "base_url" -NotePropertyValue $BaseUrl -Force
     $result | Add-Member -NotePropertyName "browser" -NotePropertyValue $Browser -Force
     $result | Add-Member -NotePropertyName "run_dir" -NotePropertyValue $RunDir -Force
+    $result | Add-Member -NotePropertyName "hero_screenshot" -NotePropertyValue $heroScreenshot -Force
     $result | Add-Member -NotePropertyName "screenshot" -NotePropertyValue $screenshot -Force
 
     $pathChecks = @()
@@ -247,6 +263,7 @@ try {
         "- Actions: $($result.actions.Count)",
         "- Mechanics failures: $($result.mechanics_failures.Count)",
         "- UX issues: $($result.ux_issues.Count)",
+        "- Hero screenshot: $heroScreenshot",
         "- Screenshot: $screenshot",
         "",
         "## Actions"
@@ -285,6 +302,7 @@ try {
         run_dir = $RunDir
         result_json = $jsonPath
         summary_md = $mdPath
+        hero_screenshot = $heroScreenshot
         screenshot = $screenshot
         browser = $Browser
         actions = $result.actions.Count
@@ -296,7 +314,7 @@ try {
     if ($StrictUx -and $result.ux_issues.Count -gt 0) { exit 2 }
 } finally {
     try {
-        & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" close | Out-Null
+        Invoke-PlaywrightClose -SessionName $Session
     } catch {}
     if ($ServerProcess) {
         Stop-Process -Id $ServerProcess.Id -Force -ErrorAction SilentlyContinue

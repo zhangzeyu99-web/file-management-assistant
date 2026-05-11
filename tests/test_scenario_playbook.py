@@ -131,7 +131,7 @@ class ScenarioPlaybookTests(unittest.TestCase):
         combined = "\n".join(today["steps"] + today["acceptance_checks"])
         self.assertIn("今日轻量规则", combined)
         self.assertIn("不要每天处理全部归档候选", combined)
-        self.assertIn("1-3 个今日重点", combined)
+        self.assertIn("最多 3 条行动建议", combined)
         self.assertIn("今日相关", today["next_action"])
         self.assertEqual(["生活", "学习", "工作"], [item["name"] for item in today["domain_buckets"]])
 

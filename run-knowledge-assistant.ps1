@@ -6,6 +6,9 @@ param(
     [string]$Request = "",
     [string]$Kind = "",
     [string[]]$LocalPath = @(),
+    [ValidateSet("", "preview", "generate")]
+    [string]$Mode = "",
+    [string[]]$SourcePath = @(),
     [string]$Config = ".\config.json"
 )
 
@@ -20,8 +23,12 @@ try {
     if (-not [string]::IsNullOrWhiteSpace($Query)) { $args += @("--query", $Query) }
     if (-not [string]::IsNullOrWhiteSpace($Request)) { $args += @("--request", $Request) }
     if (-not [string]::IsNullOrWhiteSpace($Kind)) { $args += @("--kind", $Kind) }
+    if (-not [string]::IsNullOrWhiteSpace($Mode)) { $args += @("--mode", $Mode) }
     foreach ($path in $LocalPath) {
         if (-not [string]::IsNullOrWhiteSpace($path)) { $args += @("--local-path", $path) }
+    }
+    foreach ($path in $SourcePath) {
+        if (-not [string]::IsNullOrWhiteSpace($path)) { $args += @("--source-path", $path) }
     }
     & python @args
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

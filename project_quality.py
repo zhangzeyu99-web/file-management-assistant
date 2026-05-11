@@ -24,8 +24,12 @@ REQUIRED_DOCS = [
     "docs/ARCHITECTURE.md",
     "docs/PROJECT_PRINCIPLES.md",
     "docs/SELF_EVOLUTION.md",
+    "docs/PRODUCT_RETROSPECTIVE_AND_NEXT_PLAN.md",
+    "docs/ITERATION_REVIEW_PROTOCOL.md",
     "docs/MIGRATION_BACKUP.md",
     "docs/guidebook/README.md",
+    "DESIGN.md",
+    "docs/design-references/vibeui-mintlify-DESIGN.md",
 ]
 
 PRINCIPLES = {
@@ -33,13 +37,13 @@ PRINCIPLES = {
     "safe-by-default": ["safe-by-default", "不删除", "不移动", "不重命名", "不重写"],
     "private local configuration": ["config.local.json", "private local configuration"],
     "local knowledge organizer": ["本地知识整理助手", "local knowledge organizer"],
-    "four core actions": ["整理 / 回顾 / 提取 / 提醒", "organize / review / extract / remind"],
+    "three primary operations": ["添加资料 / 搜索回顾 / 生成 AI 上下文包", "organize / review / extract"],
     "obsidian workflow": ["Obsidian", "新笔记", "obsidian workflow"],
-    "human-readable gui": ["成熟个人知识工作台", "默认不展示黑色 JSON", "human-readable GUI"],
+    "human-readable gui": ["成熟个人知识工作台", "默认展示可读结果", "human-readable GUI"],
     "portable bootstrap": ["scripts/init-assistant.ps1", "demo mode", "一键初始化"],
     "cloud backup boundary": ["GitHub 备份", "个人 Obsidian 内容不进公开仓库", "cloud backup boundary"],
     "closed loop": ["closed loop", "acceptance checks", "闭环验收"],
-    "lightweight daily triage": ["每天 9 点", "1-3 个重点", "不做定时整理"],
+    "lightweight daily triage": ["每天 9 点", "最多 3 条行动建议", "不做定时整理"],
     "life study work separation": ["life / study / work", "生活 / 学习 / 工作"],
     "thin gui": ["thin gui", "GUI 只负责展示和调用"],
     "validation harness": ["validation harness", "verify-harness"],
@@ -191,6 +195,9 @@ def check_validation_harness(root: Path) -> dict[str, Any]:
         "test_scenario_playbook.py",
         "test_project_quality.py",
         "run-gui-e2e.ps1",
+        "audit-feature-contracts.py",
+        "feature_contracts",
+        "-ReadOnly",
         "secret_scan",
         "dry_run",
         "obsidian_manager_dry_run",
@@ -239,19 +246,20 @@ def check_scenario_workflow(root: Path) -> dict[str, Any]:
     )
     required = [
         "本地知识整理助手",
-        "整理资料",
-        "回顾知识",
-        "提取上下文",
-        "今日提醒",
+        "添加资料",
+        "搜索回顾",
+        "生成 AI 上下文包",
+        "索引清单",
+        "证据检索",
+        "预览候选来源",
         "organize",
         "review",
         "extract",
-        "remind",
         "AI 上下文包",
         "legacy-index",
         "file-radar",
         "obsidian-health",
-        "默认不展示黑色 JSON",
+        "默认展示可读结果",
         "不删除、不移动、不重命名、不重写源文件",
     ]
     haystack = "\n".join([knowledge, gui, docs])
@@ -276,6 +284,64 @@ def check_backup_manifest(root: Path) -> dict[str, Any]:
     if missing:
         return fail_check("backup_manifest", {"missing": missing})
     return ok_check("backup_manifest", required)
+
+
+def check_iteration_review_protocol(root: Path) -> dict[str, Any]:
+    relative = "docs/ITERATION_REVIEW_PROTOCOL.md"
+    protocol = root / relative
+    if not protocol.exists():
+        return fail_check("iteration_review_protocol", {"missing": relative})
+    text = read_text(root, relative)
+    required = [
+        "做到了视觉清晰阅读友好了吗",
+        "做到了总结归纳到位",
+        "发给别人能看懂吗",
+        "传到 Codex 指引性足够吗",
+        "GUI 双向交互方便吗",
+        "信息内容容易编辑吗",
+        "展示的方式足够方便吗",
+        "信息集关联有做吗",
+        "能让人发散性思考吗",
+        "docs/iteration-logs",
+        "Obsidian",
+        "下一轮改进",
+    ]
+    missing = [item for item in required if item not in text]
+    if missing:
+        return fail_check("iteration_review_protocol", {"missing": missing})
+    logs = sorted((root / "docs" / "iteration-logs").glob("*.md"))
+    if not logs:
+        return fail_check("iteration_review_protocol", {"missing": ["docs/iteration-logs/*.md"]})
+    return ok_check(
+        "iteration_review_protocol",
+        {"protocol": relative, "latest_log": str(logs[-1].relative_to(root)), "required_questions": required[:9]},
+    )
+
+
+def check_design_system_reference(root: Path) -> dict[str, Any]:
+    project_design = read_text(root, "DESIGN.md")
+    vibe_reference = read_text(root, "docs/design-references/vibeui-mintlify-DESIGN.md")
+    required = [
+        "Mintlify",
+        "documentation-as-product",
+        "知识详情",
+        "关联内容",
+        "可追问问题",
+        "默认不做后台管理系统",
+    ]
+    missing = [item for item in required if item not in project_design]
+    evidence = {
+        "project_design": "DESIGN.md",
+        "reference": "docs/design-references/vibeui-mintlify-DESIGN.md",
+        "required": required,
+    }
+    if missing:
+        evidence["missing"] = missing
+        return fail_check("design_system_reference", evidence)
+    if "# Design System: Mintlify" not in vibe_reference:
+        evidence["missing_reference_heading"] = "# Design System: Mintlify"
+        return fail_check("design_system_reference", evidence)
+    return ok_check("design_system_reference", evidence)
 
 
 def iter_public_text_files(root: Path) -> list[Path]:
@@ -318,6 +384,8 @@ def run_checks(root: Path) -> dict[str, Any]:
         check_scenario_workflow(root),
         check_validation_harness(root),
         check_backup_manifest(root),
+        check_iteration_review_protocol(root),
+        check_design_system_reference(root),
         check_guidebook_assets(root),
         check_no_stale_legacy_files(root),
         check_mojibake_scan(root),

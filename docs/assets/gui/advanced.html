@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>工具维护页 · 本地知识整理助手</title>
+  <style>
+    :root {
+      --page: #f5f7fb;
+      --paper: #fff;
+      --paper-soft: #f8fafc;
+      --ink: #102033;
+      --muted: #64748b;
+      --line: #dce6f2;
+      --blue: #2f72e7;
+      --cyan: #22b8cf;
+      --green: #2d8a5f;
+      --amber: #bd741f;
+      --shadow: 0 22px 70px rgba(25, 42, 62, .10);
+      --font: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--font);
+      background:
+        radial-gradient(circle at 12% 0%, rgba(47, 114, 231, .11), transparent 30rem),
+        radial-gradient(circle at 92% 5%, rgba(34, 184, 207, .10), transparent 28rem),
+        var(--page);
+    }
+    a { color: inherit; text-decoration: none; }
+    button, textarea { font: inherit; }
+    button {
+      cursor: pointer;
+      border: 0;
+      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+    }
+    button:hover, a:hover { transform: translateY(-1px); }
+    .page {
+      width: min(1180px, calc(100vw - 36px));
+      margin: 0 auto;
+      padding: 26px 0 42px;
+    }
+    .topbar {
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 950;
+      letter-spacing: -.02em;
+    }
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #dff3ff, #2f72e7 48%, #22b8cf);
+      box-shadow: 0 10px 28px rgba(47, 114, 231, .22);
+    }
+    .nav {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .nav a, .button {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 14px;
+      border-radius: 13px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: #25364a;
+      font-weight: 900;
+      box-shadow: 0 8px 20px rgba(25, 42, 62, .05);
+    }
+    .button.primary {
+      color: #fff;
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      box-shadow: 0 14px 30px rgba(47, 114, 231, .22);
+    }
+    .hero {
+      margin-top: 22px;
+      padding: 34px;
+      border-radius: 30px;
+      background: linear-gradient(135deg, #081628, #0d2e3e);
+      color: #fff;
+      box-shadow: var(--shadow);
+    }
+    .kicker {
+      margin: 0 0 10px;
+      color: #7bd8ee;
+      font-size: 12px;
+      font-weight: 950;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 60px);
+      line-height: 1.02;
+      letter-spacing: -.06em;
+    }
+    .hero p {
+      max-width: 760px;
+      margin: 16px 0 0;
+      color: rgba(255,255,255,.76);
+      line-height: 1.8;
+      font-size: 17px;
+    }
+    .safety {
+      width: fit-content;
+      max-width: 100%;
+      margin-top: 20px;
+      padding: 9px 13px;
+      border-radius: 999px;
+      color: #dfffea;
+      background: rgba(45, 138, 95, .20);
+      border: 1px solid rgba(140, 230, 176, .32);
+      font-weight: 850;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      gap: 18px;
+      margin-top: 18px;
+      align-items: start;
+    }
+    .sidebar, .panel {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 12px 40px rgba(25, 42, 62, .06);
+    }
+    .sidebar {
+      position: sticky;
+      top: 18px;
+      padding: 14px;
+    }
+    .sidebar a {
+      display: block;
+      padding: 12px 13px;
+      border-radius: 14px;
+      color: #33465d;
+      font-weight: 850;
+    }
+    .sidebar a:hover { background: #eef5ff; }
+    .section {
+      display: grid;
+      gap: 18px;
+    }
+    .panel {
+      padding: 24px;
+      scroll-margin-top: 24px;
+    }
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: -.04em;
+    }
+    .section-copy {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .tool-card {
+      min-height: 250px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 14px;
+      padding: 18px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: var(--paper-soft);
+    }
+    .tool-card h3 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -.03em;
+    }
+    .tool-card p {
+      margin: 8px 0 0;
+      color: #4c6078;
+      line-height: 1.65;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .pill {
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #eaf2ff;
+      color: #2464ca;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .tool-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .input-row {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 76px;
+      padding: 13px 14px;
+      border-radius: 16px;
+      border: 1px solid #c9d7e8;
+      background: #fff;
+      color: var(--ink);
+      resize: vertical;
+      outline: none;
+      line-height: 1.6;
+    }
+    textarea:focus {
+      border-color: rgba(47, 114, 231, .72);
+      box-shadow: 0 0 0 4px rgba(47, 114, 231, .10);
+    }
+    .result {
+      margin-top: 18px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: #f9fbfe;
+    }
+    .result h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      letter-spacing: -.03em;
+    }
+    .result p {
+      margin: 0;
+      color: #34465c;
+      line-height: 1.7;
+    }
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .result-box {
+      padding: 12px;
+      border-radius: 15px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #24384f;
+      line-height: 1.6;
+    }
+    .result-box strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #5b6d83;
+      font-size: 12px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .empty-state {
+      padding: 18px;
+      border-radius: 18px;
+      background: #fff8ed;
+      border: 1px solid #f3d8ad;
+      color: #6b4a1e;
+      line-height: 1.7;
+    }
+    .research-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .research-card {
+      padding: 16px;
+      border-radius: 18px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: #34465c;
+      line-height: 1.65;
+    }
+    .footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    @media (max-width: 900px) {
+      .layout, .tool-grid, .result-grid, .research-list { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+      .section-head { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <nav class="topbar">
+      <a class="brand" href="/">
+        <span class="brand-mark"></span>
+        <span>本地知识整理助手</span>
+      </a>
+      <div class="nav">
+        <a href="/">返回首页</a>
+        <a href="#diagnostics">诊断</a>
+        <a href="#resources">资料</a>
+        <a href="#usage">使用场景</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">维护工具</p>
+      <h1>工具维护页</h1>
+      <p>需要检查本地文件、体检 Obsidian、重建旧资料索引，或打开教程时，从这里进入。</p>
+      <div class="safety">只生成报告或打开资料，不改动你的源文件</div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar" aria-label="工具页导航">
+        <a href="#diagnostics">诊断与维护</a>
+        <a href="#resources">打开资料</a>
+        <a href="#usage">使用场景</a>
+      </aside>
+
+      <main class="section">
+        <section id="diagnostics" class="panel">
+          <div class="section-head">
+            <div>
+              <p class="kicker">检查</p>
+              <h2>诊断与维护</h2>
+              <p class="section-copy">用于排查文件、笔记和旧资料索引问题。</p>
+            </div>
+          </div>
+
+          <div class="tool-grid">
+            <article class="tool-card" data-tool-card="file-radar">
+              <div>
+                <h3>查看文件雷达</h3>
+                <p>扫描配置目录或你粘贴的本地路径，输出近期文件、归档候选、大文件和重复文件。默认只报告，不移动源文件。</p>
+                <div class="meta"><span class="pill">只读扫描</span><span class="pill">本地文件</span></div>
+                <div class="input-row">
+                  <textarea id="radarPaths" placeholder="可选：粘贴本地文件或目录路径，例如 D:\Downloads 或 D:\Work\report.md"></textarea>
+                </div>
+              </div>
+              <div class="tool-actions">
+                <button class="button primary" onclick="runTool('file-radar')">运行文件雷达</button>
+              </div>
+            </article>
+
+            <article class="tool-card" data-tool-card="obsidian-health">
+              <div>
+                <h3>检查知识库</h3>
+                <p>检查 Obsidian 收件箱、空壳笔记、断链、低连接笔记和 Codex 索引缺口，只生成报告和建议。</p>
+                <div class="meta"><span class="pill">只读体检</span><span class="pill">Obsidian</span></div>
+              </div>
+              <div class="tool-actions">
+                <button class="button primary" onclick="runTool('obsidian-health')">运行知识库体检</button>
+              </div>
+            </article>
+
+            <article class="tool-card" data-tool-card="legacy-index">
+              <div>
+                <h3>二次整理旧资料</h3>
+                <p>给历史报告、AI 会话归档和旧 Obsidian 笔记建立索引，帮助回顾和提取上下文。不移动旧文件。</p>
+                <div class="meta"><span class="pill">索引旧资料</span><span class="pill">可追溯来源</span></div>
+              </div>
+              <div class="tool-actions">
+                <button class="button primary" onclick="runTool('legacy-index')">生成旧资料索引</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="resources" class="panel">
+          <div class="section-head">
+            <div>
+              <p class="kicker">资料</p>
+              <h2>打开资料</h2>
+              <p class="section-copy">打开 Obsidian、教程 PDF 和交互说明。</p>
+            </div>
+          </div>
+
+          <div class="tool-grid">
+            <article class="tool-card" data-tool-card="open-obsidian">
+              <div>
+                <h3>打开 Obsidian</h3>
+                <p>打开当前配置的 Obsidian vault，用于查看刚生成的笔记、报告和知识卡。</p>
+                <div class="meta"><span class="pill">外部打开</span><span class="pill">本地 vault</span></div>
+              </div>
+              <div class="tool-actions">
+                <button class="button primary" onclick="runTool('open-obsidian')">打开 Obsidian</button>
+              </div>
+            </article>
+
+            <article class="tool-card" data-tool-card="open-guidebook">
+              <div>
+                <h3>打开教程 PDF</h3>
+                <p>打开已有教程资料，适合新手按添加资料、搜索回顾、生成 AI 上下文包三步学习。</p>
+                <div class="meta"><span class="pill">学习资料</span><span class="pill">PDF</span></div>
+              </div>
+              <div class="tool-actions">
+                <button class="button primary" onclick="runTool('open-guidebook')">打开教程 PDF</button>
+              </div>
+            </article>
+
+            <article class="tool-card" data-tool-card="open-interaction-guide">
+              <div>
+                <h3>打开交互说明</h3>
+                <p>查看页面交互图和按钮说明，用于理解每个入口点击后会发生什么。</p>
+                <div class="meta"><span class="pill">操作说明</span><span class="pill">本地页面</span></div>
+              </div>
+              <div class="tool-actions">
+                <button class="button primary" onclick="runTool('open-interaction-guide')">打开交互说明</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="usage" class="panel">
+          <div class="section-head">
+            <div>
+              <p class="kicker">怎么选</p>
+              <h2>什么时候来这里？</h2>
+              <p class="section-copy">日常先用首页；遇到下面这些情况，再打开工具页。</p>
+            </div>
+          </div>
+          <div class="research-list">
+            <div class="research-card">不知道哪些本地文件需要整理时，运行文件雷达。</div>
+            <div class="research-card">觉得 Obsidian 里内容变乱时，运行知识库体检。</div>
+            <div class="research-card">想把历史报告和旧 AI 对话重新用起来时，生成旧资料索引。</div>
+          </div>
+        </section>
+
+        <section class="result" aria-live="polite">
+          <p class="kicker">结果</p>
+          <h2 id="resultTitle">等待操作</h2>
+          <p id="resultSummary">选择上方任一工具。这里会显示完成情况、参考来源、保存位置和下一步建议。</p>
+          <div class="result-grid">
+            <div class="result-box"><strong>完成情况</strong><span id="resultDid">尚未运行。</span></div>
+            <div class="result-box"><strong>参考来源</strong><span id="resultSource">尚未运行。</span></div>
+            <div class="result-box"><strong>保存位置</strong><span id="resultArtifact">尚未运行。</span></div>
+            <div class="result-box"><strong>下一步建议</strong><span id="resultNext">选择一个工具即可。</span></div>
+          </div>
+          <div id="emptyState" class="empty-state" hidden>没有可展示的数据。请先回到首页添加资料，或检查 config.local.json 里的路径配置。</div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="footer">安全边界：不会改动你的源文件；需要写入时，只生成新的 Obsidian 记录或本地报告。</footer>
+  </div>
+
+  <script>
+    const actionLabels = {
+      "file-radar": "文件雷达",
+      "obsidian-health": "知识库体检",
+      "legacy-index": "旧资料索引",
+      "open-obsidian": "打开 Obsidian",
+      "open-guidebook": "打开教程 PDF",
+      "open-interaction-guide": "打开交互说明",
+    };
+
+    function $(id) { return document.getElementById(id); }
+
+    function compact(value, limit = 150) {
+      const text = String(value || "").replace(/\s+/g, " ").trim();
+      return text.length > limit ? text.slice(0, limit - 1) + "…" : text;
+    }
+
+    function splitPaths(value) {
+      return String(value || "").split(/\r?\n|;/).map(item => item.trim()).filter(Boolean);
+    }
+
+    function collectPaths(data) {
+      const paths = [];
+      function visit(node) {
+        if (!node) return;
+        if (typeof node === "string" && /^[A-Za-z]:\\/.test(node)) {
+          paths.push(node);
+          return;
+        }
+        if (Array.isArray(node)) {
+          node.forEach(visit);
+          return;
+        }
+        if (typeof node === "object") {
+          Object.values(node).forEach(visit);
+        }
+      }
+      visit(data);
+      return [...new Set(paths)];
+    }
+
+    function payloadFor(action) {
+      if (action === "file-radar") {
+        const paths = splitPaths($("radarPaths").value);
+        return paths.length ? { local_paths: paths, path_text: paths.join("\n") } : {};
+      }
+      return {};
+    }
+
+    function sourceSummary(data) {
+      if (Array.isArray(data?.sources) && data.sources.length) {
+        const first = data.sources[0];
+        return `${data.sources.length} 条来源；${compact(first.path || first.title || first.source || "已整理来源", 110)}`;
+      }
+      if (Array.isArray(data?.by_root) && data.by_root.length) {
+        const roots = data.by_root.slice(0, 2).map(item => `${item.root_name || "本地目录"} ${item.files || 0} 个文件`).join("；");
+        return `扫描 ${data.total_files || 0} 个文件；来源根：${roots}`;
+      }
+      if (data?.scan_targets?.summary) {
+        return `${data.scan_targets.summary.target_count || 0} 个扫描目标；${data.scan_targets.summary.existing_count || 0} 个存在。`;
+      }
+      if (data?.opened) return compact(data.opened, 130);
+      return "这次没有返回来源；可以先添加资料，或检查配置路径。";
+    }
+
+    function artifactSummary(data) {
+      if (Array.isArray(data?.artifacts) && data.artifacts.length) {
+        const first = data.artifacts[0];
+        return `${data.artifacts.length} 个产物；${compact(first.path || first.label || first.type, 110)}`;
+      }
+      const paths = collectPaths(data);
+      if (paths.length) return compact(paths[0], 130);
+      if (data?.opened) return compact(data.opened, 130);
+      return "本次没有生成新文件。";
+    }
+
+    function nextSummary(data) {
+      if (Array.isArray(data?.next_actions) && data.next_actions.length) {
+        return data.next_actions.slice(0, 3).map(item => compact(item, 80)).join("；");
+      }
+      if (data?.opened) return "查看已打开的本地资源。";
+      if (data?.ok) return "按需回到首页添加资料、搜索回顾或生成 AI 上下文包。";
+      return "检查配置路径后重试。";
+    }
+
+    function renderResult(action, data) {
+      const label = actionLabels[action] || action;
+      const ok = Boolean(data?.ok);
+      $("resultTitle").textContent = ok ? `${label}完成` : `${label}失败`;
+      $("resultSummary").textContent = compact(data?.summary || data?.error || "已生成结果。", 220);
+      $("resultDid").textContent = ok ? `${label}已完成。` : compact(data?.error || "没有完成。", 140);
+      $("resultSource").textContent = sourceSummary(data);
+      $("resultArtifact").textContent = artifactSummary(data);
+      $("resultNext").textContent = nextSummary(data);
+      $("emptyState").hidden = ok && (Array.isArray(data?.sources) ? data.sources.length > 0 : true);
+      document.querySelector(".result").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    async function runTool(action) {
+      document.querySelectorAll("button").forEach(button => { button.disabled = true; });
+      try {
+        const response = await fetch("/api/action", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action, payload: payloadFor(action) }),
+        });
+        const data = await response.json();
+        renderResult(action, data);
+        if (data?.url && action === "open-interaction-guide") {
+          window.open(data.url, "_blank", "noopener");
+        }
+        return data;
+      } catch (error) {
+        const data = { ok: false, error: String(error && error.stack ? error.stack : error) };
+        renderResult(action, data);
+        return data;
+      } finally {
+        document.querySelectorAll("button").forEach(button => { button.disabled = false; });
+      }
+    }
+  </script>
+</body>
+</html>

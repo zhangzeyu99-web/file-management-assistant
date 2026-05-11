@@ -57,8 +57,8 @@ class AssistantEvolutionTests(unittest.TestCase):
         self.assertTrue(catalog["pdf"].endswith("knowledge-action-assistant-tutorial.pdf"))
         self.assertEqual(7, catalog["page_count"])
         self.assertEqual(7, len(catalog["slides"]))
-        self.assertIn("整理资料", catalog["usage"])
-        self.assertIn("提取上下文", catalog["usage"])
+        self.assertIn("添加资料", catalog["usage"])
+        self.assertIn("生成 AI 上下文包", catalog["usage"])
 
     def test_initialization_plan_is_fast_and_non_destructive(self) -> None:
         plan = assistant_evolution.build_initialization_plan(self.config_path)
@@ -89,6 +89,58 @@ class AssistantEvolutionTests(unittest.TestCase):
         self.assertTrue(call["ok"], call)
         self.assertIn("ACT 方法", call["top_matches"][0]["title"])
         self.assertIn("引用这条 Card", call["next_action"])
+
+    def test_knowledge_index_uses_configured_knowledge_root(self) -> None:
+        custom_root = self.vault / "custom-knowledge-root"
+        custom_root.mkdir()
+        (custom_root / "Portable Card.md").write_text(
+            "# Portable Card\n\n类型：Card\n\n## 关键结论\n\nConfigured roots must be indexed.\n",
+            encoding="utf-8",
+        )
+        config = assistant_evolution.load_config(self.config_path)
+        config["knowledge_root"] = str(custom_root)
+
+        index = assistant_evolution.build_knowledge_index(config)
+        context = assistant_evolution.build_ai_context(config, "Portable Card", "reuse portable setup")
+
+        portable = next(item for item in index["items"] if item["title"] == "Portable Card")
+        self.assertEqual("Card", portable["type"])
+        self.assertTrue(context["ok"], context)
+        self.assertTrue(any(item["title"] == "Portable Card" and item["type"] == "Card" for item in context["sources"]))
+
+    def test_note_type_detection_does_not_treat_knowledge_action_path_as_action(self) -> None:
+        path = self.vault / "routine" / "knowledge-action" / "plain-note.md"
+        path.parent.mkdir(parents=True)
+        path.write_text("# Plain Note\n\nNo ACT type marker here.\n", encoding="utf-8")
+        config = assistant_evolution.load_config(self.config_path)
+        config["knowledge_root"] = str(path.parent)
+
+        index = assistant_evolution.build_knowledge_index(config)
+        note = next(item for item in index["items"] if item["title"] == "Plain Note")
+
+        self.assertEqual("Note", note["type"])
+
+    def test_ai_context_does_not_fallback_to_unrelated_notes(self) -> None:
+        config = assistant_evolution.load_config(self.config_path)
+
+        call = assistant_evolution.build_knowledge_call_plan(config, "完全不存在的火星资料主题")
+        context = assistant_evolution.build_ai_context(config, "完全不存在的火星资料主题", "继续处理这个主题")
+
+        self.assertFalse(call["ok"], call)
+        self.assertEqual([], call["top_matches"])
+        self.assertFalse(context["ok"], context)
+        self.assertEqual([], context["sources"])
+        self.assertIn("未找到可用上下文", context["compressed_context"])
+        self.assertNotIn("ACT 方法", context.get("prompt", ""))
+
+    def test_ai_chat_archive_refuses_empty_placeholder_archive(self) -> None:
+        config = assistant_evolution.load_config(self.config_path)
+
+        result = assistant_evolution.build_ai_chat_archive(config, {})
+
+        self.assertFalse(result["ok"], result)
+        self.assertIn("没有提供", result["error"])
+        self.assertNotIn("note", result)
 
     def test_self_evolution_report_writes_runtime_and_obsidian_outputs(self) -> None:
         result = assistant_evolution.run_self_evolution(self.config_path)

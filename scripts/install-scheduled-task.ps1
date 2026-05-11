@@ -36,7 +36,7 @@ Register-ScheduledTask `
     -Action $Action `
     -Trigger $Trigger `
     -Principal $Principal `
-    -Description "Generate 1-3 local knowledge reminders at 09:00. Writes new notes only; does not move source files." `
+    -Description "Generate up to 3 local daily action suggestions at 09:00. Writes new notes only; does not move source files." `
     -Force | Out-Null
 
 Get-ScheduledTask -TaskName $TaskName -TaskPath "\" |

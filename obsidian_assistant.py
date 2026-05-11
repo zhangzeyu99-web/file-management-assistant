@@ -321,15 +321,49 @@ def command_action_note(config: dict[str, Any], title: str, domain: str, goal: s
     return {"ok": True, "note": str(path)}
 
 
+def read_source_snippet(source: str, limit: int = 700) -> str:
+    if not source.strip():
+        return ""
+    path = Path(source).expanduser()
+    if not path.exists() or not path.is_file():
+        return ""
+    try:
+        text = path.read_text(encoding="utf-8-sig", errors="ignore")
+    except OSError:
+        return ""
+    normalized = " ".join(line.strip() for line in text.splitlines() if line.strip())
+    return normalized[: limit - 1] + "…" if len(normalized) > limit else normalized
+
+
+def useful_conclusion(conclusion: str, source: str) -> str:
+    cleaned = conclusion.strip()
+    if cleaned and cleaned not in {"待补充", "待补充。", "待补充关键结论"}:
+        return cleaned
+    snippet = read_source_snippet(source)
+    if snippet:
+        return snippet
+    return "未提取到明确结论。请补充来源内容后再沉淀为知识卡。"
+
+
 def command_card_note(config: dict[str, Any], title: str, domain: str, source: str, conclusion: str) -> dict[str, Any]:
     stamp = now_local().strftime("%Y%m%d-%H%M%S")
     path = knowledge_action_dir(config) / "Card" / f"{stamp} {safe_filename(title)}.md"
+    final_conclusion = useful_conclusion(conclusion, source)
+    if final_conclusion.startswith("未提取到明确结论"):
+        return {
+            "ok": False,
+            "error": "没有可沉淀为知识卡的关键结论。请提供结论，或提供可读取的来源文件路径。",
+        }
+    source_label = source or "手动输入"
+    conclusion_line = " ".join(final_conclusion.split())
     contents = f"""# {title}
 
 类型：Card
 领域：{domain}
-来源：{source}
+来源：{source_label}
 创建时间：`{now_local().strftime('%Y-%m-%d %H:%M:%S %z')}`
+
+> 一句话结论：{conclusion_line}
 
 ## 主题
 
@@ -338,22 +372,25 @@ def command_card_note(config: dict[str, Any], title: str, domain: str, source: s
 ## 适用场景
 
 - 需要复用这条经验、规则或资料时。
+- 需要在搜索回顾或生成 AI 上下文包时快速找回这条结论时。
 
 ## 关键结论
 
-{conclusion}
+- {conclusion_line}
 
-## 相关链接
+## 下次怎么用
 
-- {source}
+- 搜索相关关键词时优先查看这张卡。
+- 生成 AI 上下文包时把这张卡作为候选来源。
 
-## 下一步
+## 来源
 
-- 在下次相关任务中验证是否可复用。
+- {source_label}
 
 ## 验收标准
 
 - 能被下一次任务直接引用。
+- 保留来源，不覆盖原始资料。
 """
     write_text(path, contents)
     return {"ok": True, "note": str(path)}

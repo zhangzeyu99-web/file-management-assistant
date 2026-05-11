@@ -125,21 +125,21 @@ try {
 
     if (-not $SkipInitialReminder) {
         $remind = python .\knowledge_assistant.py remind --config .\config.json --query "today" | ConvertFrom-Json
-        if (-not $remind.ok) { throw "initial reminder failed" }
-        $result.initial_reminder = $remind.artifacts[0].path
-        $result.actions += "generated first local reminder note"
+        if (-not $remind.ok) { throw "initial daily action failed" }
+        $result.initial_daily_action = $remind.artifacts[0].path
+        $result.actions += "generated first local daily action note"
     }
 
     if ($InstallReminder) {
         $task = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduled-task.ps1 | ConvertTo-Json -Depth 6
         $result.scheduled_task = $task
-        $result.actions += "installed 09:00 local reminder task"
+        $result.actions += "installed 09:00 local daily action task"
     }
 
     $result.next = @(
         "powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1",
         "Open http://127.0.0.1:8765/",
-        "Start from the four entries: organize, review, extract, remind"
+        "Start from the three entries: add material, search review, generate AI context pack"
     )
     $result.ok = $true
     $result | ConvertTo-Json -Depth 8
