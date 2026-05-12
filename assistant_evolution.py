@@ -345,18 +345,44 @@ def build_ai_context(config: dict[str, Any], query: str, request: str = "") -> d
     query = query.strip() or request.strip() or "当前任务"
     request = request.strip() or query
     call_plan = build_knowledge_call_plan(config, query)
-    sources = [
-        {
-            "title": item.get("title", ""),
-            "type": item.get("type", ""),
-            "path": item.get("path", ""),
-            "why": f"与查询“{query}”在标题、类型或摘要上匹配。",
-            "summary": item.get("summary", ""),
-        }
-        for item in call_plan.get("top_matches", [])
-    ]
+    matches = call_plan.get("top_matches", [])
+    evidence_by_path: dict[str, str] = {}
+    try:
+        import knowledge_assistant
+
+        review_index = knowledge_assistant.build_review_index(config)
+        review_by_path = {knowledge_assistant.comparable_path(str(item.get("path", ""))): item for item in review_index}
+        for item in matches:
+            raw_path = str(item.get("path", ""))
+            review_item = review_by_path.get(knowledge_assistant.comparable_path(raw_path))
+            if not review_item:
+                continue
+            evidence = knowledge_assistant.direct_evidence_for_item(query, review_item)
+            if evidence:
+                evidence_by_path[raw_path] = "；".join(evidence)
+    except Exception:
+        evidence_by_path = {}
+    sources = []
+    for item in matches:
+        raw_path = str(item.get("path", ""))
+        evidence = evidence_by_path.get(raw_path, "")
+        summary = str(item.get("summary", ""))
+        if evidence:
+            summary = f"直接线索：{evidence}。{summary}"
+        sources.append(
+            {
+                "title": item.get("title", ""),
+                "type": item.get("type", ""),
+                "path": raw_path,
+                "why": f"与查询“{query}”在标题、类型或摘要上匹配。",
+                "summary": summary,
+                "direct_evidence": evidence,
+            }
+        )
     compressed_lines = [
-        f"- [{source['type']}] {source['title']}：{source['summary']}（来源：{source['path']}）"
+        f"- [{source['type']}] {source['title']}："
+        f"{('直接线索：' + source['direct_evidence'] + '。') if source.get('direct_evidence') else ''}"
+        f"{source['summary']}（来源：{source['path']}）"
         for source in sources
     ]
     compressed_context = "\n".join(compressed_lines) if compressed_lines else "未找到可用上下文，请先补充 Obsidian 笔记或运行知识库体检。"

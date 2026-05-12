@@ -78,7 +78,9 @@ async page => {
     await delay(100);
   }
 
-  async function runAction(action, buttonSelector, resultSelector, label) {
+  async function runAction(action, buttonSelector, resultSelector, label, options = {}) {
+    const expectedStatus = options.expectedStatus ?? 200;
+    const expectedResponseOk = options.expectedResponseOk ?? true;
     const item = {
       action,
       label,
@@ -103,9 +105,17 @@ async page => {
       item.status = response.status();
       item.response_ok = Boolean(data && data.ok);
       item.result_text = await text(resultSelector, 4000);
-      item.ok = item.status >= 200 && item.status < 400 && item.response_ok && item.request_action === action;
+      item.ok = item.status === expectedStatus && item.response_ok === expectedResponseOk && item.request_action === action;
       if (!item.ok) {
-        failure("action did not complete", { action, label, status: item.status, request_action: item.request_action, response_ok: item.response_ok });
+        failure("action did not meet expected response contract", {
+          action,
+          label,
+          status: item.status,
+          expectedStatus,
+          request_action: item.request_action,
+          response_ok: item.response_ok,
+          expectedResponseOk,
+        });
       }
       if (item.result_text.includes("[object Object]") || /^\s*\{[\s\S]*\}\s*$/.test(item.result_text)) {
         issue("debug-output-as-result", "result area looks like raw debug output", { action, label });
@@ -191,9 +201,11 @@ async page => {
 
     step("review no-match behavior");
     await humanFill("#review textarea[data-action-input]", "__no_such_topic_20260508__", "review no-match query");
-    await runAction("review", "#review .action-buttons .site-button.primary", "#reviewResult", "review no-match");
+    await runAction("review", "#review .action-buttons .site-button.primary", "#reviewResult", "review no-match", { expectedStatus: 400, expectedResponseOk: false });
     const noMatchText = await text("#reviewResult", 2500);
-    if (!noMatchText.includes("没有找到相关内容") || noMatchText.includes("打开匹配来源")) {
+    const hasNoMatchState = noMatchText.includes("未完成")
+      && (noMatchText.includes("没有命中已整理资料") || noMatchText.includes("没有找到已整理内容"));
+    if (!hasNoMatchState || noMatchText.includes("打开匹配来源")) {
       issue("review-no-match-fallback", "review should not pretend unrelated notes are matches", { result_text: noMatchText.slice(0, 500) });
     }
 

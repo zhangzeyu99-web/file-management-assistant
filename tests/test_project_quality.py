@@ -246,6 +246,11 @@ class ProjectQualityTests(unittest.TestCase):
             "console_events",
             "network_events",
             "inspect-local-targets",
+            "expectedStatus",
+            "expectedResponseOk",
+            "review no-match",
+            "没有命中已整理资料",
+            "没有找到已整理内容",
             "/advanced",
             "[data-tool-card]",
         ]:

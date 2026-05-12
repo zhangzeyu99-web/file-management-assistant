@@ -188,8 +188,8 @@ class GuiServerTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        feed = gui_server.build_knowledge_feed(gui_server.load_config(self.config_path), limit=1)
-        item = feed[0]
+        feed = gui_server.build_knowledge_feed(gui_server.load_config(self.config_path), limit=20)
+        item = next(entry for entry in feed if entry["title"] == "NotebookLM 学习笔记")
         section_titles = [section["title"] for section in item["detail_sections"]]
 
         self.assertEqual("NotebookLM 学习笔记", item["title"])

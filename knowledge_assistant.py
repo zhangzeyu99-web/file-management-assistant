@@ -23,6 +23,19 @@ PRODUCT = {
 SAFETY_TEXT = "安全边界：不删除源文件，只读取来源，只写新记录和运行证据；源文件保持原样。"
 CORE_ACTIONS = ["organize", "review", "extract", "remind"]
 MAX_REVIEW_ITEMS = 300
+SEARCH_STOP_WORDS = {
+    "找到",
+    "我用",
+    "用来",
+    "这个",
+    "那个",
+    "一下",
+    "什么",
+    "怎么",
+    "如何",
+    "需要",
+    "帮我",
+}
 
 
 def now_local() -> dt.datetime:
@@ -484,15 +497,17 @@ def organize(config: dict[str, Any], payload: dict[str, Any] | None = None) -> d
 
 
 def iter_markdown_notes(config: dict[str, Any]) -> list[Path]:
+    project_root = vault_path(config) / folder_name(config, "projects", "02 项目")
+    codex_root = project_root / folder_name(config, "codex_project", "Codex")
     roots = [
+        codex_root,
+        project_root / "知识行动助手",
         knowledge_root(config),
-        vault_path(config),
         vault_path(config) / folder_name(config, "routine", "04 例行工作") / "知识行动助手",
-        vault_path(config) / folder_name(config, "projects", "02 项目") / "知识行动助手",
-        vault_path(config) / folder_name(config, "projects", "02 项目") / folder_name(config, "codex_project", "Codex"),
         Path(config.get("obsidian_run_dir") or knowledge_root(config)),
         runtime_root(config) / "runs",
         runtime_root(config) / "knowledge-assistant",
+        vault_path(config),
     ]
     seen: set[str] = set()
     notes: list[Path] = []
@@ -540,16 +555,207 @@ def build_review_index(config: dict[str, Any], limit: int = MAX_REVIEW_ITEMS) ->
     return items
 
 
+def query_tokens(query: str) -> list[str]:
+    normalized = query.lower()
+    tokens: list[str] = []
+
+    def add(token: str) -> None:
+        cleaned = token.strip().lower()
+        if not cleaned or cleaned in SEARCH_STOP_WORDS or cleaned in tokens:
+            return
+        if re.fullmatch(r"[a-z0-9_.#@+-]+", cleaned) and len(cleaned) < 2:
+            return
+        tokens.append(cleaned)
+
+    for token in re.findall(r"[a-z0-9_.#@+-]+[一-鿿]+|[一-鿿]+[a-z0-9_.#@+-]+", normalized):
+        add(token)
+    for token in re.findall(r"[a-z0-9_.#@+-]{2,}", normalized):
+        add(token)
+    concept_aliases = {
+        "文件管理助手": ["file-management-assistant"],
+        "知识整理助手": ["file-management-assistant"],
+        "知识行动助手": ["file-management-assistant"],
+    }
+    for phrase, aliases in concept_aliases.items():
+        if phrase in normalized:
+            for alias in aliases:
+                add(alias)
+    for segment in re.findall(r"[一-鿿]{2,}", normalized):
+        for keyword in ["启动", "流程", "仓库", "脚本", "安装", "桌面", "归档", "会话", "记忆", "项目", "索引", "报告", "教程", "路径", "文件", "地址", "位置", "可执行"]:
+            if keyword in segment:
+                add(keyword)
+        if len(segment) <= 8:
+            add(segment)
+        for size in (4, 3, 2):
+            for index in range(0, max(0, len(segment) - size + 1)):
+                add(segment[index : index + size])
+    return tokens
+
+
 def score_item(query: str, item: dict[str, Any]) -> int:
     if not query.strip():
         return 1
-    haystack = "\n".join(str(item.get(key, "")) for key in ("title", "path", "summary", "type")).lower()
-    tokens = [token for token in re.split(r"\s+|/|\\|，|。|：|:|\||-", query.lower()) if token]
+    haystack = "\n".join(str(item.get(key, "")) for key in ("title", "path", "summary", "type", "raw_markdown")).lower()
+    tokens = query_tokens(query)
     score = 0
     for token in tokens:
         if token in haystack:
             score += 5 if token in str(item.get("title", "")).lower() else 2
     return score
+
+
+def evidence_line_score(query: str, line: str) -> int:
+    lowered = line.lower()
+    tokens = query_tokens(query)
+    score = sum(2 for token in tokens if token in lowered)
+    has_url = bool(re.search(r"https?://\S+", line))
+    has_windows_path = bool(re.search(r"[A-Za-z]:\\[^\s`，。；）)]+", line))
+    has_executable = bool(re.search(r"\.(?:cmd|exe|ps1|bat|md)\b", lowered))
+    if has_url:
+        score += 5
+    if has_windows_path:
+        score += 4
+    if has_executable:
+        score += 3
+    wants_repo_url = "github" in tokens or "仓库" in tokens or "地址" in tokens
+    if wants_repo_url and ("github" in lowered or has_url):
+        score += 8
+    if wants_repo_url and has_url:
+        score += 20
+    if wants_repo_url and has_windows_path and not has_url:
+        score -= 18
+    if "github" in tokens and "github" not in lowered and not has_url:
+        score -= 10
+    wants_script = "启动" in tokens or "脚本" in tokens
+    if wants_script and ("启动" in line or "脚本" in line or ".cmd" in lowered or ".ps1" in lowered):
+        score += 8
+    if wants_script and (".cmd" in lowered or ".ps1" in lowered):
+        score += 30
+    wants_executable_path = "可执行" in tokens or ("文件" in tokens and "路径" in tokens)
+    if wants_executable_path and (".exe" in lowered or "可执行" in line):
+        score += 8
+    if wants_executable_path and ".exe" in lowered:
+        score += 40
+    # Aggregated index summaries are useful fallbacks, but they often bury the
+    # concrete URL/path after enough prose that the result card truncates it.
+    if lowered.startswith("摘要："):
+        score -= 30
+    if len(line) > 240:
+        score -= 4
+    return score
+
+
+def query_entity_tokens(query: str) -> list[str]:
+    generic = {"github", "http", "https", "www", "com"}
+    entities: list[str] = []
+    for token in query_tokens(query):
+        if token in generic:
+            continue
+        if re.fullmatch(r"[a-z0-9_.#@+-]{4,}", token):
+            entities.append(token)
+    return entities
+
+
+def entity_token_matches(token: str, text: str) -> bool:
+    lowered = text.lower()
+    if token == "codex":
+        if "codexdesktop" in lowered or "codex.exe" in lowered or "start-codex" in lowered:
+            return True
+        return bool(re.search(r"(?<![a-z0-9_\\/-])codex(?![a-z0-9_\\/-])", lowered))
+    return token in lowered
+
+
+def clean_evidence_line(line: str) -> str:
+    cleaned = line.strip()
+    cleaned = re.sub(r"^[-*]\s*", "", cleaned)
+    cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
+    return cleaned
+
+
+def extract_direct_answers(query: str, matches: list[dict[str, Any]], limit: int = 4) -> list[str]:
+    if not query.strip():
+        return []
+    candidates: list[tuple[int, int, str, str]] = []
+    seen: set[str] = set()
+    entity_tokens = query_entity_tokens(query)
+    for item in matches:
+        title = str(item.get("title") or "来源")
+        raw = str(item.get("raw_markdown") or item.get("summary") or "")
+        for line in raw.splitlines():
+            cleaned = clean_evidence_line(line)
+            if not cleaned or cleaned.startswith("#") or len(cleaned) < 6:
+                continue
+            combined = f"{title}\n{cleaned}".lower()
+            if entity_tokens and not any(entity_token_matches(token, combined) for token in entity_tokens):
+                continue
+            score = evidence_line_score(query, cleaned)
+            if score < 6:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append((score, -len(cleaned), title, cleaned))
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [f"{title}：{compact_text(line, 140)}" for _, _, title, line in candidates[:limit]]
+
+
+def direct_evidence_for_item(query: str, item: dict[str, Any], limit: int = 2) -> list[str]:
+    title = str(item.get("title") or "来源")
+    prefix = f"{title}："
+    evidence: list[str] = []
+    for answer in extract_direct_answers(query, [item], limit=limit):
+        evidence.append(answer[len(prefix) :] if answer.startswith(prefix) else answer)
+    return evidence
+
+
+def best_evidence_score_for_item(query: str, item: dict[str, Any]) -> int:
+    title = str(item.get("title") or "来源")
+    raw = str(item.get("raw_markdown") or item.get("summary") or "")
+    entity_tokens = query_entity_tokens(query)
+    best = 0
+    for line in raw.splitlines():
+        cleaned = clean_evidence_line(line)
+        if not cleaned or cleaned.startswith("#") or len(cleaned) < 6:
+            continue
+        combined = f"{title}\n{cleaned}".lower()
+        if entity_tokens and not any(entity_token_matches(token, combined) for token in entity_tokens):
+            continue
+        best = max(best, evidence_line_score(query, cleaned))
+    return best
+
+
+def source_item_from_review_match(query: str, item: dict[str, Any], why: str = "") -> dict[str, str]:
+    evidence = direct_evidence_for_item(query, item)
+    summary = str(item.get("summary") or "")
+    if evidence:
+        summary = f"直接线索：{'；'.join(evidence)}。{summary}"
+    source = source_item(
+        str(item["title"]),
+        str(item["path"]),
+        summary,
+        str(item["type"]),
+        why or (f"直接线索：{'；'.join(evidence)}" if evidence else f"与“{query}”在标题、路径或正文片段上匹配。"),
+    )
+    if evidence:
+        source["direct_evidence"] = "；".join(evidence)
+    return source
+
+
+def context_matches_for_query(config: dict[str, Any], query: str, limit: int = 8) -> tuple[list[dict[str, Any]], int]:
+    index = build_review_index(config)
+    ranked = sorted(index, key=lambda item: (score_item(query, item), item.get("modified_at", "")), reverse=True)
+    matches = [item for item in ranked if score_item(query, item) > 0][:limit]
+    if not query and not matches and ranked:
+        matches = ranked[: min(5, limit)]
+    evidence_matches = [item for item in matches if direct_evidence_for_item(query, item)]
+    if evidence_matches:
+        matches = sorted(
+            evidence_matches,
+            key=lambda item: (best_evidence_score_for_item(query, item), score_item(query, item), item.get("modified_at", "")),
+            reverse=True,
+        )[:limit]
+    return matches, len(index)
 
 
 def dedupe_review_items(items: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
@@ -568,7 +774,7 @@ def dedupe_review_items(items: list[dict[str, Any]], limit: int) -> list[dict[st
     return picked
 
 
-def sources_from_confirmed_paths(config: dict[str, Any], source_paths: list[str]) -> list[dict[str, Any]]:
+def sources_from_confirmed_paths(config: dict[str, Any], source_paths: list[str], query: str = "") -> list[dict[str, Any]]:
     if not source_paths:
         return []
     index = build_review_index(config)
@@ -583,15 +789,7 @@ def sources_from_confirmed_paths(config: dict[str, Any], source_paths: list[str]
         item = by_path.get(key)
         if not item:
             continue
-        selected.append(
-            source_item(
-                str(item["title"]),
-                str(item["path"]),
-                str(item["summary"]),
-                str(item["type"]),
-                "用户确认用于生成本次 AI 上下文包的来源。",
-            )
-        )
+        selected.append(source_item_from_review_match(query, item, "用户确认用于生成本次 AI 上下文包的来源。"))
     return selected
 
 
@@ -615,7 +813,11 @@ def review(config: dict[str, Any], payload: dict[str, Any] | None = None) -> dic
     ]
     if sources:
         lead = "；".join(f"{item['title']}（{item['type']}）" for item in sources[:3])
-        summary = f"本地摘要：找到 {len(sources)} 条相关内容。优先查看：{lead}。"
+        direct_answers = extract_direct_answers(query, matches)
+        if direct_answers:
+            summary = f"本地摘要：找到 {len(sources)} 条相关内容。直接线索：{'；'.join(direct_answers)}。优先查看：{lead}。"
+        else:
+            summary = f"本地摘要：找到 {len(sources)} 条相关内容。优先查看：{lead}。"
         next_actions = ["打开匹配来源", "提取 AI 上下文包", "整理新的补充资料"]
     else:
         summary = "本地摘要：没有找到已整理内容。建议先使用“整理资料”写入一条记录。"
@@ -626,14 +828,17 @@ def review(config: dict[str, Any], payload: dict[str, Any] | None = None) -> dic
         sources=sources,
         artifacts=[],
         next_actions=next_actions,
-        debug={"query": query, "index_count": len(index)},
+        debug={"query": query, "index_count": len(index), "tokens": query_tokens(query), "direct_answers": extract_direct_answers(query, matches) if sources else []},
         ok=bool(sources),
     )
 
 
 def render_context_markdown(request: str, sources: list[dict[str, Any]], prompt: str, generated_at: dt.datetime) -> str:
     source_lines = "\n".join(
-        f"- [{item.get('type', 'note')}] {item.get('title', '')}：{item.get('summary', '')}\n  来源：{item.get('path', '')}"
+        f"- [{item.get('type', 'note')}] {item.get('title', '')}\n"
+        f"  直接线索：{item.get('direct_evidence') or item.get('summary', '')}\n"
+        f"  摘要：{item.get('summary', '')}\n"
+        f"  来源：{item.get('path', '')}"
         for item in sources
     )
     return f"""# AI 上下文包
@@ -667,7 +872,7 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
     request = str(payload.get("request") or payload.get("text") or query).strip()
     source_paths = split_source_paths(payload.get("source_paths") or payload.get("confirmed_source_paths"))
     if source_paths:
-        sources = sources_from_confirmed_paths(config, source_paths)
+        sources = sources_from_confirmed_paths(config, source_paths, query)
         if not sources:
             return unified_result(
                 "extract",
@@ -679,8 +884,11 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
                 ok=False,
             )
     else:
-        review_result = review(config, {"query": query})
-        sources = review_result["sources"][:8]
+        matches, _index_count = context_matches_for_query(config, query, 8)
+        sources = [
+            source_item_from_review_match(query, item, f"与“{query}”在标题、路径或正文片段上匹配。")
+            for item in matches
+        ]
     if not sources:
         return unified_result(
             "extract",
@@ -698,9 +906,20 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
             sources=sources,
             artifacts=[],
             next_actions=["确认生成上下文包", "调整关键词重新预览", "先打开来源核对内容"],
-            debug={"query": query, "request": request, "mode": "preview", "candidate_count": len(sources)},
+            debug={
+                "query": query,
+                "request": request,
+                "mode": "preview",
+                "candidate_count": len(sources),
+                "direct_answers": [item.get("direct_evidence") for item in sources if item.get("direct_evidence")],
+            },
         )
-    compressed = "\n".join(f"- {item['title']}：{item['summary']}（来源：{item['path']}）" for item in sources) or "- 暂无匹配来源。"
+    compressed = "\n".join(
+        f"- {item['title']}："
+        f"{('直接线索：' + item['direct_evidence'] + '。') if item.get('direct_evidence') else ''}"
+        f"{item['summary']}（来源：{item['path']}）"
+        for item in sources
+    ) or "- 暂无匹配来源。"
     prompt = f"""AI 上下文包
 
 当前需求：
@@ -732,7 +951,13 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
             artifact("obsidian-note", obsidian_md, "打开 Obsidian 上下文包"),
         ],
         next_actions=["复制 prompt 给 AI", "打开 Markdown 包", "继续整理缺失来源"],
-        debug={"query": query, "request": request, "mode": "generate", "source_paths": source_paths},
+        debug={
+            "query": query,
+            "request": request,
+            "mode": "generate",
+            "source_paths": source_paths,
+            "direct_answers": [item.get("direct_evidence") for item in sources if item.get("direct_evidence")],
+        },
     )
 
 
