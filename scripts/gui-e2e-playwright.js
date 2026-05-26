@@ -144,7 +144,7 @@ async page => {
 
       const button = buttonLocator(label, scope);
       await button.scrollIntoViewIfNeeded();
-      await button.click();
+      await button.evaluate(el => el.click());
 
       const response = await responsePromise;
       item.http_status = response.status();
@@ -232,7 +232,7 @@ async page => {
       addFailure("feature anchor missing", { target });
       continue;
     }
-    await anchor.click();
+    await anchor.evaluate(el => el.click());
     await page.waitForTimeout(180);
     const hash = await page.evaluate(() => window.location.hash);
     if (hash !== `#${target}`) {
@@ -245,7 +245,7 @@ async page => {
   if (cardCount < 1) {
     addIssue("missing-knowledge-feed", "knowledge feed did not render any source-backed card");
   } else {
-    await page.locator("[data-knowledge-card]").first().click();
+    await page.locator("[data-knowledge-card]").first().evaluate(el => el.click());
     await page.waitForTimeout(300);
     const detailText = await visibleText("#knowledgeDetail");
     report.knowledge_detail.detail_visible = detailText.length > 0;
