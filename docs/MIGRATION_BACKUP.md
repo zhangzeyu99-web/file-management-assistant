@@ -29,4 +29,4 @@ manifest 会写到 `output/backup-manifest.json`，包含 `git rev-parse HEAD` �
 
 ## 安全边界
 
-迁移和备份脚本只创建配置、demo vault、索引和今日行动建议记录。默认不删除、不移动、不重命名、不重写源文件。
+迁移和备份脚本只创建配置、demo vault 和三主闭环所需记录。默认不删除、不移动、不重命名、不重写源文件。

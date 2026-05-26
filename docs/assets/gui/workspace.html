@@ -772,29 +772,6 @@
       line-height: 1.55;
     }
     .result-detail div + div { margin-top: 6px; }
-    .tools-entry {
-      padding: 20px 24px;
-      border-radius: 24px;
-      background: #fff;
-      border: 1px solid var(--line);
-      box-shadow: var(--shadow-soft);
-    }
-    .tools-entry-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 18px;
-      align-items: center;
-    }
-    .tools-entry h2 {
-      margin: 0 0 8px;
-      font-size: 22px;
-      letter-spacing: -.03em;
-    }
-    .tools-entry p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.7;
-    }
     .site-footer {
       padding: 26px 0 40px;
       color: var(--muted);
@@ -803,7 +780,7 @@
       border-top: 1px solid var(--line);
     }
     @media (max-width: 980px) {
-      .feature-strip, .knowledge-grid, .action-grid, .hero-metrics, .tools-entry-grid, .result-sections, .detail-grid, .detail-columns {
+      .feature-strip, .knowledge-grid, .action-grid, .hero-metrics, .result-sections, .detail-grid, .detail-columns {
         grid-template-columns: 1fr;
       }
       .detail-header {
@@ -838,7 +815,6 @@
           <a href="#organize">添加资料</a>
           <a href="#review">搜索回顾</a>
           <a href="#extract">AI 上下文包</a>
-          <a href="/advanced">工具页</a>
         </div>
       </nav>
 
@@ -900,7 +876,7 @@
           <div>
             <p class="section-kicker">开始使用</p>
             <h2 class="section-title">你现在想做什么？</h2>
-            <p class="section-copy">只保留三个真实入口：添加资料、搜索回顾、生成 AI 上下文包。其他低频诊断能力放在工具维护页。</p>
+            <p class="section-copy">只保留三个真实入口：添加资料、搜索回顾、生成 AI 上下文包。</p>
           </div>
         </div>
 
@@ -972,16 +948,6 @@
         </div>
       </section>
 
-      <section class="tools-entry" aria-label="工具维护页入口">
-        <div class="tools-entry-grid">
-          <div>
-            <p class="section-kicker">维护工具</p>
-            <h2>需要检查文件或知识库？</h2>
-            <p>打开工具页，可以扫描本地文件、体检 Obsidian、重建旧资料索引，也可以查看教程和交互说明。</p>
-          </div>
-          <a class="site-button primary" href="/advanced">打开工具维护页</a>
-        </div>
-      </section>
     </main>
 
     <footer class="site-footer">
@@ -1030,18 +996,7 @@
         organize: "添加资料",
         review: "搜索回顾",
         extract: "生成 AI 上下文包",
-        "inspect-local-targets": "检查本地目标",
-        "file-radar": "查看文件雷达",
-        "obsidian-health": "检查知识库",
-        "legacy-index": "二次整理旧资料",
-        today: "今天先干什么",
-        "inbox-route": "判断放哪",
-        "action-note": "记录一个任务",
-        "card-note": "沉淀知识卡",
-        "time-review": "复盘今天",
-        "archive-ai-chat": "归档 AI 对话",
-        onboarding: "快速初始化",
-        "open-obsidian": "打开 Obsidian"
+        "inspect-local-targets": "检查本地目标"
       };
       return map[action] || action;
     }
@@ -1164,12 +1119,6 @@
       if (typeof data?.summary === "string") return data.summary;
       if (data?.action === "inspect-local-targets" && data?.summary) {
         return `本地目标检查完成：${data.summary.existing_count || 0} 个存在，${data.summary.target_count || 0} 个目标，${data.summary.selected_file_count || 0} 个选择/拖放文件。`;
-      }
-      if (data?.action === "file-radar" && typeof data?.total_files === "number") {
-        return `文件雷达完成：扫描 ${data.total_files} 个文件，目标模式 ${data.target_mode || "default"}。`;
-      }
-      if (data?.action === "obsidian-health" && data?.summary && typeof data.summary === "object") {
-        return `知识库检查完成：当前 ${data.summary.total_notes || 0} 篇笔记。`;
       }
       if (data?.error) return data.error;
       return "已生成结果，请查看来源、保存位置和下一步建议。";

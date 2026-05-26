@@ -1,10 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import datetime as dt
 import json
 import re
-import subprocess
 import sys
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,11 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import file_assistant
-import assistant_evolution
 import knowledge_assistant
-import obsidian_assistant
-import obsidian_manager
-import scenario_playbook
 from config_loader import load_config
 
 
@@ -45,13 +40,6 @@ def sanitize_public_copy(value: Any) -> str:
         text = text.replace(old, new)
     return text
 
-
-def latest_file_report(config: dict[str, Any]) -> dict[str, Any] | None:
-    return scenario_playbook.latest_file_report(config)
-
-
-def latest_obsidian_report(config: dict[str, Any]) -> dict[str, Any] | None:
-    return scenario_playbook.latest_obsidian_report(config)
 
 
 def clean_feed_description(summary: Any, fallback: str, title: str = "") -> str:
@@ -447,7 +435,6 @@ def build_knowledge_feed(config: dict[str, Any], limit: int = 8) -> list[dict[st
     type_labels = {
         "organize": "整理",
         "extract": "提取",
-        "remind": "今日行动",
         "legacy-codex": "历史",
         "knowledge-card": "知识卡片",
         "session-index": "会话索引",
@@ -456,7 +443,6 @@ def build_knowledge_feed(config: dict[str, Any], limit: int = 8) -> list[dict[st
     action_hints = {
         "organize": "可继续回顾或提取为 AI 上下文包",
         "extract": "可复制给新的 AI 对话继续使用",
-        "remind": "可作为今日行动建议参考",
         "legacy-codex": "可作为历史项目上下文",
         "knowledge-card": "可作为下次任务的复用规则",
         "session-index": "可按标题回到原始 Codex 会话",
@@ -511,66 +497,11 @@ def build_status(config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
         "ok": True,
         "product": knowledge_assistant.PRODUCT,
         "config": str(config_path),
-        "vault": str(scenario_playbook.obsidian_vault(config)),
-        "runtime_root": str(scenario_playbook.runtime_root(config)),
-        "file_report": latest_file_report(config),
-        "obsidian_report": latest_obsidian_report(config),
+        "vault": str(knowledge_assistant.vault_path(config)),
+        "runtime_root": str(knowledge_assistant.runtime_root(config)),
         "knowledge_feed": build_knowledge_feed(config),
-        "scenarios": scenario_playbook.build_scenario_catalog(config),
-        "guidebook": assistant_evolution.build_guidebook_catalog(ROOT),
-        "safety": scenario_playbook.SAFETY_TEXT,
+        "safety": knowledge_assistant.SAFETY_TEXT,
     }
-
-
-def split_lines(value: Any) -> list[str]:
-    if isinstance(value, list):
-        return [str(item) for item in value if str(item).strip()]
-    if value is None:
-        return []
-    text = str(value).strip()
-    if not text:
-        return []
-    return [item.strip() for item in text.splitlines() if item.strip()]
-
-
-def build_codex_prompt(user_request: str, config: dict[str, Any]) -> str:
-    file_report = latest_file_report(config) or {}
-    obsidian_report = latest_obsidian_report(config) or {}
-    ai_context = assistant_evolution.build_ai_context(config, user_request, user_request)
-    return f"""请基于真实本地文件继续执行知识行动助手任务。
-
-用户请求：
-{user_request}
-
-能力说明：
-- 这是 AI 上下文取用，不是一次性移交单。
-- 先从已整理的 Obsidian 笔记、知识卡、项目记录和历史报告中取用上下文，再继续对话。
-- AI 对话归档用于保存已有对话；AI 上下文取用用于给新的 AI 对话补充上下文。
-
-本地上下文：
-- Obsidian vault：{scenario_playbook.obsidian_vault(config)}
-- 运行目录：{scenario_playbook.runtime_root(config)}
-- 最新文件雷达报告：{file_report.get("html_report") or "暂无"}
-- 最新 Obsidian 体检报告：{obsidian_report.get("markdown_report") or "暂无"}
-
-已整理上下文：
-{ai_context["compressed_context"]}
-
-判断规则：
-- 先按生活 / 学习 / 工作分流。
-- 再按 Action / Card / Time / X-AI 判断产物类型。
-- 今日行动只给最多 3 条建议，不要把全部归档候选变成今日任务。
-
-安全边界：
-- 不删除源文件；源文件保持原样，只在明确位置写新笔记或追加内容。
-- 先读真实文件和报告，再执行。
-- 需要写入时写新笔记或追加明确位置，并保留来源。
-
-验收标准：
-- 给出实际写入路径或报告路径。
-- 说明是否仍有未处理风险。
-- 若无法确认当前状态，明确说无法确认，不编造。
-"""
 
 
 def split_local_paths(value: Any) -> list[str]:
@@ -687,256 +618,69 @@ def inspect_local_targets(config: dict[str, Any], payload: dict[str, Any]) -> di
     }
 
 
-def make_file_record(root_name: str, path: Path, reference: Any) -> file_assistant.FileRecord | None:
-    try:
-        stat = path.stat()
-    except OSError:
-        return None
-    modified = file_assistant.dt.datetime.fromtimestamp(stat.st_mtime, tz=reference.tzinfo)
-    age_days = max(0.0, (reference - modified).total_seconds() / 86400)
-    return file_assistant.FileRecord(
-        root_name=root_name,
-        path=str(path),
-        extension=file_assistant.normalize_extension(path),
-        size_bytes=int(stat.st_size),
-        modified_at=modified.strftime("%Y-%m-%d %H:%M:%S %z"),
-        age_days=round(age_days, 2),
-    )
+GUI_CORE_ACTIONS = {"organize", "review", "extract"}
+GUI_SUPPORT_ACTIONS = {"inspect-local-targets", "open-path"}
+DEPRECATED_GUI_ACTIONS = {
+    "today",
+    "file-radar",
+    "file-scan",
+    "obsidian-health",
+    "obsidian-audit",
+    "full-scan",
+    "guide",
+    "scenarios",
+    "scenario-demo",
+    "guidebook",
+    "onboarding",
+    "deep-thinking",
+    "knowledge-index",
+    "archive-ai-chat",
+    "build-ai-context",
+    "self-evolution",
+    "ask",
+    "capture",
+    "daily",
+    "action-note",
+    "card-note",
+    "time-review",
+    "inbox-route",
+    "codex-prompt",
+    "open-obsidian",
+    "open-guidebook",
+    "open-interaction-guide",
+    "open-codex",
+    "remind",
+    "legacy-index",
+}
 
 
-def build_target_records(config: dict[str, Any], payload: dict[str, Any], reference: Any) -> tuple[list[file_assistant.FileRecord], list[str]]:
-    excluded = {str(item).lower() for item in config.get("exclude_dir_names", [])}
-    records: list[file_assistant.FileRecord] = []
-    warnings: list[str] = []
-    for raw_path in extract_local_target_paths(payload):
-        target = Path(raw_path).expanduser()
-        if not target.exists():
-            warnings.append(f"路径不存在：{target}")
-            continue
-        if target.is_file():
-            record = make_file_record(target.parent.name or "SelectedFile", target, reference)
-            if record:
-                records.append(record)
-            continue
-        if target.is_dir():
-            root_name = target.name or str(target)
-            files = file_assistant.iter_files(
-                target,
-                max_depth=int(payload.get("max_depth") or 3),
-                max_files=int(payload.get("max_files") or 2000),
-                excluded_dirs=excluded,
-            )
-            for file_path in files:
-                record = make_file_record(root_name, file_path, reference)
-                if record:
-                    records.append(record)
-            continue
-        warnings.append(f"暂不支持的路径类型：{target}")
-    return records, warnings
-
-
-def run_target_file_radar(config_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
-    config = load_config(config_path)
-    generated_at = file_assistant.now_local()
-    run_dir = (
-        Path(config["runtime_root"])
-        / "runs"
-        / generated_at.strftime("%Y-%m-%d")
-        / f"{generated_at.strftime('%H%M%S')}-gui-targets"
-    )
-    records, warnings = build_target_records(config, payload, generated_at)
-    classifications = file_assistant.classify_records(records, config)
-    duplicates = file_assistant.detect_duplicates(records, config)
-    summary = file_assistant.build_summary(config, records, warnings, classifications, duplicates, "GUI", run_dir, generated_at)
-    scan_targets = inspect_local_targets(config, payload)
-    summary.update({"target_mode": scan_targets["mode"], "scan_targets": scan_targets})
-
-    summary_json = run_dir / "summary.json"
-    markdown_report = run_dir / "report.md"
-    html_report = run_dir / "report.html"
-    file_assistant.write_json(summary_json, summary)
-    file_assistant.write_text(markdown_report, file_assistant.render_markdown(summary))
-    file_assistant.write_text(html_report, file_assistant.render_html(summary))
-    obsidian_note = file_assistant.write_obsidian_run_note(config, summary, markdown_report, html_report)
-    summary.update(
-        {
-            "summary_json": str(summary_json),
-            "markdown_report": str(markdown_report),
-            "html_report": str(html_report),
-            "obsidian_note": str(obsidian_note),
-        }
-    )
-    file_assistant.write_json(summary_json, summary)
-    return summary
+def deprecated_gui_action(action: str) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "action": action,
+        "status": "deprecated",
+        "summary": "这个入口已从 GUI 产品主线降级。当前只保留三件事：添加资料、搜索回顾、生成 AI 上下文包。",
+        "error": "deprecated gui action",
+        "sources": [],
+        "artifacts": [],
+        "next_actions": ["添加资料", "搜索回顾", "生成 AI 上下文包"],
+        "safety": knowledge_assistant.SAFETY_TEXT,
+        "debug": {"reason": "core_loop_only"},
+    }
 
 
 def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     payload = payload or {}
-    config = load_config(config_path)
 
-    if action in {"organize", "review", "extract", "remind", "legacy-index"}:
+    if action in GUI_CORE_ACTIONS:
         return knowledge_assistant.run_action(action, payload, config_path)
 
-    if action == "today":
-        today = next(item for item in scenario_playbook.build_scenario_catalog(config) if item["id"] == "today")
-        return {
-            "ok": True,
-            "action": action,
-            "summary": "今日行动规则：只给最多 3 条建议，不要每天处理全部归档候选。",
-            "scenario": today,
-        }
+    if action in DEPRECATED_GUI_ACTIONS:
+        return deprecated_gui_action(action)
 
     if action == "inspect-local-targets":
+        config = load_config(config_path)
         return inspect_local_targets(config, payload)
-
-    if action in {"file-radar", "file-scan"}:
-        if extract_local_target_paths(payload):
-            report = run_target_file_radar(config_path, payload)
-            return {"ok": True, "action": action, **report}
-        report = latest_file_report(config)
-        if report is None:
-            report = file_assistant.run(config_path, "GUI")
-        return {"ok": True, "action": action, **report}
-
-    if action in {"obsidian-health", "obsidian-audit"}:
-        report = latest_obsidian_report(config)
-        if report is None:
-            report = obsidian_manager.run(config_path, "GUI")
-        return {"ok": True, "action": action, **report}
-
-    if action == "full-scan":
-        file_result = run_gui_action("file-radar", payload, config_path)
-        obsidian_result = run_gui_action("obsidian-health", payload, config_path)
-        return {"ok": file_result["ok"] and obsidian_result["ok"], "file": file_result, "obsidian": obsidian_result}
-
-    if action == "guide":
-        return obsidian_assistant.command_guide(config)
-
-    if action == "scenarios":
-        return {"ok": True, "scenarios": scenario_playbook.build_scenario_catalog(config)}
-
-    if action == "scenario-demo":
-        return scenario_playbook.run_demo(config_path)
-
-    if action == "guidebook":
-        return assistant_evolution.build_guidebook_catalog(ROOT)
-
-    if action == "onboarding":
-        return assistant_evolution.build_initialization_plan(config_path)
-
-    if action == "deep-thinking":
-        return {"ok": True, "prompts": assistant_evolution.build_deep_thinking_prompts()}
-
-    if action == "knowledge-index":
-        query = str(payload.get("query") or payload.get("text") or "")
-        return {
-            "ok": True,
-            "index": assistant_evolution.build_knowledge_index(config),
-            "call_plan": assistant_evolution.build_knowledge_call_plan(config, query) if query else None,
-        }
-
-    if action == "archive-ai-chat":
-        return assistant_evolution.build_ai_chat_archive(config, payload)
-
-    if action == "build-ai-context":
-        query = str(payload.get("query") or payload.get("text") or payload.get("request") or "")
-        request = str(payload.get("request") or payload.get("text") or query)
-        return assistant_evolution.build_ai_context(config, query, request)
-
-    if action == "self-evolution":
-        return assistant_evolution.run_self_evolution(config_path)
-
-    if action == "ask":
-        return obsidian_assistant.command_ask(config, str(payload.get("question") or ""), bool(payload.get("write_note")))
-
-    if action == "capture":
-        return obsidian_assistant.command_capture(
-            config,
-            str(payload.get("title") or "未命名"),
-            str(payload.get("body") or ""),
-            split_lines(payload.get("tags")) or ["inbox"],
-        )
-
-    if action == "daily":
-        return obsidian_assistant.command_daily(
-            config,
-            split_lines(payload.get("done")),
-            split_lines(payload.get("next")),
-            split_lines(payload.get("blocker")),
-        )
-
-    if action == "action-note":
-        return obsidian_assistant.command_action_note(
-            config,
-            str(payload.get("title") or "未命名任务"),
-            str(payload.get("domain") or "工作"),
-            str(payload.get("goal") or "待明确目标"),
-            str(payload.get("source") or "GUI"),
-        )
-
-    if action == "card-note":
-        return obsidian_assistant.command_card_note(
-            config,
-            str(payload.get("title") or "未命名知识卡"),
-            str(payload.get("domain") or "学习"),
-            str(payload.get("source") or "GUI"),
-            str(payload.get("conclusion") or "待补充关键结论"),
-        )
-
-    if action == "time-review":
-        return obsidian_assistant.command_time_review(
-            config,
-            str(payload.get("title") or "今日复盘"),
-            str(payload.get("period") or "daily"),
-            split_lines(payload.get("done")),
-            split_lines(payload.get("next")),
-        )
-
-    if action == "inbox-route":
-        text = str(payload.get("text") or payload.get("body") or "")
-        domain = scenario_playbook.classify_domain(text)
-        return {
-            "ok": True,
-            "domain": domain,
-            "route": "不确定时先放 00 收件箱；若是今日过程放 01 今日日志；持续任务写 Action；复用经验写 Card。",
-            "safety": scenario_playbook.SAFETY_TEXT,
-        }
-
-    if action == "codex-prompt":
-        request = str(payload.get("request") or payload.get("text") or "")
-        result = assistant_evolution.build_ai_context(config, request, request)
-        result["legacy_action"] = "codex-prompt"
-        return result
-
-    if action == "open-obsidian":
-        vault = scenario_playbook.obsidian_vault(config)
-        webbrowser.open(str(vault))
-        return {"ok": True, "opened": str(vault)}
-
-    if action == "open-guidebook":
-        catalog = assistant_evolution.build_guidebook_catalog(ROOT)
-        if not catalog["ok"]:
-            return {"ok": False, "error": "guidebook assets are missing"}
-        webbrowser.open(catalog["pdf"])
-        return {"ok": True, "opened": catalog["pdf"]}
-
-    if action == "open-interaction-guide":
-        guide = ROOT / "docs" / "assets" / "gui" / "interaction-guide.html"
-        if not guide.exists():
-            return {"ok": False, "error": f"interaction guide not found: {guide}"}
-        return {
-            "ok": True,
-            "opened": str(guide),
-            "url": "/assets/gui/interaction-guide.html",
-            "assets": [
-                str(ROOT / "docs" / "assets" / "gui" / "interaction-map.png"),
-                str(ROOT / "docs" / "assets" / "gui" / "interaction-states.png"),
-            ],
-        }
-
-    if action == "open-codex":
-        subprocess.Popen(["cmd", "/c", "start", "", str(ROOT)], shell=False)
-        return {"ok": True, "opened": str(ROOT)}
 
     if action == "open-path":
         target = Path(str(payload.get("path") or ""))

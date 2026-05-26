@@ -18,7 +18,9 @@ SPEC.loader.exec_module(gui_server)
 
 class GuiServerTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp_root = Path(__file__).resolve().parents[1] / ".tmp-tests"
+        self.tmp_root.mkdir(exist_ok=True)
+        self.tmp = tempfile.TemporaryDirectory(dir=self.tmp_root)
         self.root = Path(self.tmp.name)
         self.runtime = self.root / "runtime"
         self.vault = self.root / "vault"
@@ -66,16 +68,17 @@ class GuiServerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def test_status_reports_latest_file_and_obsidian_outputs(self) -> None:
+    def test_status_reports_core_knowledge_feed(self) -> None:
         status = gui_server.build_status(self.config_path)
 
         self.assertTrue(status["ok"])
         self.assertEqual("本地知识整理助手", status["product"]["name"])
-        self.assertEqual(3, status["file_report"]["summary"]["total_files"])
-        self.assertTrue(status["file_report"]["html_report"].endswith("report.html"))
-        self.assertEqual(2, status["obsidian_report"]["summary"]["total_notes"])
-        self.assertTrue(status["obsidian_report"]["markdown_report"].endswith("obsidian-management-report.md"))
-        self.assertIn("today", {item["id"] for item in status["scenarios"]})
+        self.assertEqual(str(self.vault), status["vault"])
+        self.assertEqual(str(self.runtime), status["runtime_root"])
+        self.assertNotIn("file_report", status)
+        self.assertNotIn("obsidian_report", status)
+        self.assertNotIn("scenarios", status)
+        self.assertNotIn("guidebook", status)
         self.assertIn("knowledge_feed", status)
         self.assertGreaterEqual(len(status["knowledge_feed"]), 1)
         first_card = status["knowledge_feed"][0]
@@ -246,19 +249,44 @@ tags:
         self.assertFalse(result["ok"])
         self.assertIn("unsupported", result["error"])
 
-    def test_scenario_entry_actions_return_results(self) -> None:
-        today = gui_server.run_gui_action("today", {}, self.config_path)
-        file_radar = gui_server.run_gui_action("file-radar", {}, self.config_path)
-        health = gui_server.run_gui_action("obsidian-health", {}, self.config_path)
+    def test_non_core_gui_actions_are_deprecated(self) -> None:
+        for action in [
+            "today",
+            "file-radar",
+            "obsidian-health",
+            "full-scan",
+            "guide",
+            "scenarios",
+            "scenario-demo",
+            "guidebook",
+            "onboarding",
+            "deep-thinking",
+            "knowledge-index",
+            "archive-ai-chat",
+            "build-ai-context",
+            "ask",
+            "capture",
+            "daily",
+            "action-note",
+            "card-note",
+            "time-review",
+            "inbox-route",
+            "codex-prompt",
+            "open-obsidian",
+            "open-guidebook",
+            "open-interaction-guide",
+            "open-codex",
+            "remind",
+            "legacy-index",
+        ]:
+            with self.subTest(action=action):
+                result = gui_server.run_gui_action(action, {}, self.config_path)
+                self.assertFalse(result["ok"], result)
+                self.assertEqual(action, result["action"])
+                self.assertEqual("deprecated", result["status"])
+                self.assertEqual(["添加资料", "搜索回顾", "生成 AI 上下文包"], result["next_actions"])
 
-        self.assertTrue(today["ok"], today)
-        self.assertIn("今日行动规则", today["summary"])
-        self.assertTrue(file_radar["ok"], file_radar)
-        self.assertIn("html_report", file_radar)
-        self.assertTrue(health["ok"], health)
-        self.assertIn("markdown_report", health)
-
-    def test_local_target_input_is_inspected_and_used_by_file_radar(self) -> None:
+    def test_local_target_input_is_inspected_and_used_by_organize(self) -> None:
         manual_dir = self.root / "manual-target"
         manual_dir.mkdir()
         manual_file = manual_dir / "manual-report.md"
@@ -269,7 +297,6 @@ tags:
             {"local_paths": str(manual_file), "selected_files": [{"name": "manual-report.md", "size": 42}]},
             self.config_path,
         )
-        radar = gui_server.run_gui_action("file-radar", {"local_paths": str(manual_file)}, self.config_path)
         organize = gui_server.run_gui_action("organize", {"local_paths": str(manual_dir)}, self.config_path)
 
         self.assertTrue(inspect["ok"], inspect)
@@ -281,101 +308,35 @@ tags:
         self.assertEqual(str(manual_file), inspect["targets"][0]["path"])
         self.assertTrue(inspect["targets"][0]["is_file"])
 
-        self.assertTrue(radar["ok"], radar)
-        self.assertEqual("file-radar", radar["action"])
-        self.assertEqual("custom-local-paths", radar["target_mode"])
-        self.assertEqual(1, radar["total_files"])
-        self.assertEqual(1, radar["scan_targets"]["summary"]["existing_count"])
-        self.assertTrue(Path(radar["html_report"]).exists())
-        self.assertTrue(Path(radar["summary_json"]).exists())
-
         self.assertTrue(organize["ok"], organize)
         self.assertEqual("organize", organize["action"])
         self.assertIn("已扫描 1 个文件", organize["summary"])
         self.assertEqual(1, organize["debug"]["scan"]["total_files"])
         self.assertTrue(any(item.get("type") == "markdown" and "整理清单" in item.get("label", "") for item in organize["artifacts"]))
 
-    def test_capture_daily_and_act_actions_write_to_vault(self) -> None:
-        capture = gui_server.run_gui_action(
-            "capture",
-            {"title": "GUI 想法", "body": "从 GUI 写入", "tags": ["gui"]},
-            self.config_path,
-        )
-        daily = gui_server.run_gui_action(
-            "daily",
-            {"done": "完成 GUI 测试", "next": "继续实现", "blocker": "暂无"},
-            self.config_path,
-        )
-        action = gui_server.run_gui_action(
-            "action-note",
-            {"title": "GUI 任务", "domain": "工作", "goal": "验证入口", "source": "GUI"},
-            self.config_path,
-        )
-        card = gui_server.run_gui_action(
-            "card-note",
-            {"title": "GUI 知识卡", "domain": "学习", "source": "GUI", "conclusion": "入口可用"},
-            self.config_path,
-        )
-        review = gui_server.run_gui_action(
-            "time-review",
-            {"title": "GUI 复盘", "period": "daily", "done": "完成入口验证", "next": "跑测试"},
-            self.config_path,
-        )
+    def test_removed_act_shortcuts_do_not_write_to_vault(self) -> None:
+        before = set(self.vault.rglob("*.md"))
 
-        self.assertTrue(Path(capture["note"]).exists())
-        self.assertTrue(Path(daily["daily"]).exists())
-        self.assertTrue(Path(action["note"]).exists())
-        self.assertTrue(Path(card["note"]).exists())
-        self.assertTrue(Path(review["note"]).exists())
-        self.assertIn("完成 GUI 测试", Path(daily["daily"]).read_text(encoding="utf-8"))
+        for action in ["capture", "daily", "action-note", "card-note", "time-review"]:
+            result = gui_server.run_gui_action(
+                action,
+                {"title": "GUI 不应写入", "body": "旧 ACT 快捷入口已下线"},
+                self.config_path,
+            )
+            self.assertFalse(result["ok"], result)
 
-    def test_codex_prompt_preserves_user_request_and_local_context(self) -> None:
-        config = gui_server.load_config(self.config_path)
-        prompt = gui_server.build_codex_prompt("帮我整理今天的收件箱", config)
+        after = set(self.vault.rglob("*.md"))
+        self.assertEqual(before, after)
 
-        self.assertIn("帮我整理今天的收件箱", prompt)
-        self.assertIn(str(self.vault), prompt)
-        self.assertIn("生活 / 学习 / 工作", prompt)
-        self.assertIn("不删除", prompt)
-        self.assertIn("AI 上下文取用", prompt)
-        self.assertNotIn("交接记录", prompt)
+    def test_old_ai_archive_and_context_actions_are_not_gui_products(self) -> None:
+        archive = gui_server.run_gui_action("archive-ai-chat", {"title": "NotebookLM 教程讨论"}, self.config_path)
+        context = gui_server.run_gui_action("build-ai-context", {"query": "AI 上下文取用"}, self.config_path)
 
-    def test_ai_chat_archive_and_context_actions_are_separate(self) -> None:
-        archive = gui_server.run_gui_action(
-            "archive-ai-chat",
-            {
-                "title": "NotebookLM 教程讨论",
-                "source": "Codex 会话",
-                "background": "讨论如何让 Obsidian 新手理解助手用途",
-                "conclusions": "归档 AI 对话和提取 AI 上下文必须分成两个功能",
-                "outputs": "README 与 GUI 首屏",
-                "open_items": "补产品化文案",
-            },
-            self.config_path,
-        )
-        context = gui_server.run_gui_action(
-            "build-ai-context",
-            {"query": "AI 上下文取用", "request": "继续优化产品首屏"},
-            self.config_path,
-        )
-
-        self.assertTrue(archive["ok"], archive)
-        self.assertEqual("archive-ai-chat", archive["action"])
-        self.assertTrue(Path(archive["note"]).exists())
-        archive_text = Path(archive["note"]).read_text(encoding="utf-8")
-        self.assertIn("AI 对话归档", archive_text)
-        self.assertIn("已有 AI 对话整理", archive_text)
-        self.assertNotIn("补充给新的 AI 对话", archive_text)
-
-        self.assertTrue(context["ok"], context)
-        self.assertEqual("build-ai-context", context["action"])
-        self.assertIn("sources", context)
-        self.assertIn("compressed_context", context)
-        self.assertIn("next_request", context)
-        self.assertIn("safety", context)
-        self.assertTrue(any(str(item["path"]).endswith("AI 上下文取用.md") for item in context["sources"]), context)
-        self.assertIn("继续优化产品首屏", context["prompt"])
-        self.assertIn("AI 上下文取用", context["prompt"])
+        self.assertFalse(archive["ok"], archive)
+        self.assertFalse(context["ok"], context)
+        self.assertEqual("deprecated", archive["status"])
+        self.assertEqual("deprecated", context["status"])
+        self.assertIn("生成 AI 上下文包", context["next_actions"])
 
     def test_core_knowledge_actions_are_exposed_through_gui_api(self) -> None:
         organize = gui_server.run_gui_action(
@@ -385,20 +346,17 @@ tags:
         )
         review = gui_server.run_gui_action("review", {"query": "NotebookLM Obsidian"}, self.config_path)
         extract = gui_server.run_gui_action("extract", {"query": "NotebookLM", "request": "继续学习 Obsidian"}, self.config_path)
-        remind = gui_server.run_gui_action("remind", {}, self.config_path)
 
         for action, result in {
             "organize": organize,
             "review": review,
             "extract": extract,
-            "remind": remind,
         }.items():
             self.assertTrue(result["ok"], result)
             self.assertEqual(action, result["action"])
             for key in ["summary", "sources", "artifacts", "next_actions", "safety", "debug"]:
                 self.assertIn(key, result, result)
         self.assertIn("AI 上下文包", extract["summary"])
-        self.assertIn("今日行动建议", remind["summary"])
 
     def test_html_exposes_three_primary_operations_without_product_drift(self) -> None:
         html = gui_server.HTML
@@ -409,7 +367,6 @@ tags:
             "搜索回顾",
             "生成 AI 上下文包",
             "AI 上下文包",
-            "工具维护页",
             "知识流",
             "本地文件 / 目录目标",
             "粘贴本地路径",
@@ -445,8 +402,6 @@ tags:
             "site-action-result",
             "只生成建议和新记录",
             "不改动你的源文件",
-            "工具维护页",
-            'href="/advanced"',
             "feature-icons.png",
             'id="localPaths"',
             'id="fileDropZone"',
@@ -473,13 +428,10 @@ tags:
             "未完成",
             "找到候选",
             "已生成",
-            "工具维护页",
-            'href="/advanced"',
         ]:
             self.assertIn(productized, html)
         self.assertIn("renderOutput(data, {show: false})", html)
         self.assertIn("renderActionResult(renderTarget, data)", html)
-        self.assertIn("tools-entry", html)
         self.assertNotIn("<symbol", html)
         self.assertNotIn("<svg", html)
         self.assertNotIn("Codex 文件管理小助手", html)
@@ -512,48 +464,61 @@ tags:
         self.assertNotIn("高级/诊断", html)
         self.assertNotIn("advanced-grid", html)
         self.assertNotIn("runLegacyAction", html)
+        self.assertNotIn("工具维护页", html)
+        self.assertNotIn("工具页", html)
+        self.assertNotIn('href="/advanced"', html)
+        self.assertNotIn("tools-entry", html)
+        for deprecated_action in [
+            "file-radar",
+            "obsidian-health",
+            "legacy-index",
+            "archive-ai-chat",
+            "build-ai-context",
+            "open-obsidian",
+            "open-guidebook",
+            "open-interaction-guide",
+        ]:
+            self.assertNotIn(deprecated_action, html)
         self.assertNotIn("function toggleOutput", html)
         self.assertNotRegex(html, r"鏂|绠|鍏|浠婃|瀛︿|宸ヤ")
         self.assertNotIn('<button class="result-button" onclick="toggleOutput()">', html)
         self.assertNotIn('<button class="advanced-button" onclick="toggleOutput()">', html)
 
-    def test_advanced_tools_page_exposes_only_real_actions(self) -> None:
+    def test_advanced_page_is_degraded_to_static_notice(self) -> None:
         advanced = (gui_server.ROOT / "docs" / "assets" / "gui" / "advanced.html").read_text(encoding="utf-8-sig")
 
-        for phrase in ["工具维护页", "诊断与维护", "打开资料", "查看文件雷达", "检查知识库", "二次整理旧资料", "打开 Obsidian", "打开教程 PDF", "打开交互说明"]:
+        for phrase in ["旧工具已降级", "添加资料", "搜索回顾", "生成 AI 上下文包"]:
             self.assertIn(phrase, advanced)
-        for action in ["file-radar", "obsidian-health", "legacy-index", "open-obsidian", "open-guidebook", "open-interaction-guide"]:
-            self.assertIn(f"runTool('{action}')", advanced)
-        for readable_source in ["data?.by_root", "data.total_files", "来源根"]:
-            self.assertIn(readable_source, advanced)
-        for obsolete in ["查看高级 JSON", "console-output", "今日操作台", "伪控制台", "runLegacyAction"]:
+        for obsolete in [
+            "查看高级 JSON",
+            "console-output",
+            "今日操作台",
+            "伪控制台",
+            "runLegacyAction",
+            "runTool(",
+            "查看文件雷达",
+            "检查知识库",
+            "二次整理旧资料",
+            "打开 Obsidian",
+            "打开教程 PDF",
+            "打开交互说明",
+            "file-radar",
+            "obsidian-health",
+            "legacy-index",
+        ]:
             self.assertNotIn(obsolete, advanced)
 
-    def test_interaction_guide_action_exposes_generated_assets(self) -> None:
+    def test_interaction_guide_action_is_deprecated_in_gui_api(self) -> None:
         result = gui_server.run_gui_action("open-interaction-guide", {}, self.config_path)
 
-        self.assertTrue(result["ok"], result)
-        self.assertEqual("/assets/gui/interaction-guide.html", result["url"])
-        self.assertTrue(Path(result["opened"]).exists())
-        self.assertTrue(any(path.endswith("interaction-map.png") for path in result["assets"]))
-        self.assertTrue(any(path.endswith("interaction-states.png") for path in result["assets"]))
-        for path in result["assets"]:
-            self.assertTrue(Path(path).exists(), path)
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("deprecated", result["status"])
 
-    def test_evolution_actions_return_actionable_outputs(self) -> None:
-        onboarding = gui_server.run_gui_action("onboarding", {}, self.config_path)
-        thinking = gui_server.run_gui_action("deep-thinking", {}, self.config_path)
-        knowledge = gui_server.run_gui_action("knowledge-index", {"query": "ACT 方法"}, self.config_path)
-        guidebook = gui_server.run_gui_action("guidebook", {}, self.config_path)
-
-        self.assertTrue(onboarding["ok"], onboarding)
-        self.assertIn("commands", onboarding)
-        self.assertTrue(thinking["ok"], thinking)
-        self.assertEqual(["Action", "Card", "Time", "X-AI"], [item["mode"] for item in thinking["prompts"]])
-        self.assertTrue(knowledge["ok"], knowledge)
-        self.assertIn("items", knowledge["index"])
-        self.assertTrue(guidebook["ok"], guidebook)
-        self.assertEqual(7, guidebook["page_count"])
+    def test_evolution_actions_are_not_public_gui_products(self) -> None:
+        for action in ["onboarding", "deep-thinking", "knowledge-index", "guidebook"]:
+            result = gui_server.run_gui_action(action, {"query": "ACT 方法"}, self.config_path)
+            self.assertFalse(result["ok"], result)
+            self.assertEqual("deprecated", result["status"])
 
 
 if __name__ == "__main__":

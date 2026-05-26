@@ -1,9 +1,10 @@
 param(
-    [ValidateSet("organize", "review", "extract", "remind", "legacy-index")]
-    [string]$Action = "remind",
+    [ValidateSet("organize", "review", "extract")]
+    [string]$Action = "review",
     [string]$Text = "",
     [string]$Query = "",
     [string]$Request = "",
+    [string]$Title = "",
     [string]$Kind = "",
     [string[]]$LocalPath = @(),
     [ValidateSet("", "preview", "generate")]
@@ -22,6 +23,7 @@ try {
     if (-not [string]::IsNullOrWhiteSpace($Text)) { $args += @("--text", $Text) }
     if (-not [string]::IsNullOrWhiteSpace($Query)) { $args += @("--query", $Query) }
     if (-not [string]::IsNullOrWhiteSpace($Request)) { $args += @("--request", $Request) }
+    if (-not [string]::IsNullOrWhiteSpace($Title)) { $args += @("--title", $Title) }
     if (-not [string]::IsNullOrWhiteSpace($Kind)) { $args += @("--kind", $Kind) }
     if (-not [string]::IsNullOrWhiteSpace($Mode)) { $args += @("--mode", $Mode) }
     foreach ($path in $LocalPath) {

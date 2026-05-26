@@ -68,8 +68,8 @@ function New-HumanFixtureConfig {
         New-Item -ItemType Directory -Force -Path $path | Out-Null
     }
 
-    Set-Content -Path (Join-Path $fixture "human-test-obsidian-material.md") -Value "# Human test material`n`n- Obsidian organize`n- AI context package`n- Daily action suggestions" -Encoding UTF8
-    Set-Content -Path (Join-Path $vault "projects\Codex\Obsidian beginner guide.md") -Value "# Obsidian beginner guide`n`nPut notes into inbox first, then review, extract context, and create light daily action suggestions." -Encoding UTF8
+    Set-Content -Path (Join-Path $fixture "human-test-obsidian-material.md") -Value "# Human test material`n`n- Obsidian organize`n- AI context package`n- Evidence-based review and context packaging" -Encoding UTF8
+    Set-Content -Path (Join-Path $vault "projects\Codex\Obsidian beginner guide.md") -Value "# Obsidian beginner guide`n`nPut notes into inbox first, then review, extract context, then review and extract evidence-based AI context packages." -Encoding UTF8
     Set-Content -Path (Join-Path $vault "projects\knowledge-assistant\Card\AI context package.md") -Value "# AI context package`n`nSource path, compressed summary, safety boundary, and next request should be packaged together for AI." -Encoding UTF8
 
     $config = [ordered]@{
@@ -105,7 +105,7 @@ function New-HumanFixtureConfig {
         hash_duplicate_min_mb = 1
         hash_duplicate_limit = 20
         top_limit = 10
-        review_keywords = @("Obsidian", "AI", "daily action", "context")
+        review_keywords = @("Obsidian", "AI", "context")
     }
     $config | ConvertTo-Json -Depth 8 | Set-Content -Path $ConfigPath -Encoding UTF8
     $script:LocalPath = $fixture

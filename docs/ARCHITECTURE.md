@@ -11,7 +11,7 @@ knowledge_assistant.py
 organize / review / extract
 
 旧能力
-remind / file-radar / obsidian-health / legacy-index / archive-ai-chat
+deprecated non-core tools
 
 输出
 Obsidian 新笔记 / 本地 runtime / AI 上下文包
@@ -43,7 +43,7 @@ Obsidian 新笔记 / 本地 runtime / AI 上下文包
 - 主入口：添加资料、搜索回顾、生成 AI 上下文包，分别位于 `#organize`、`#review`、`#extract`；提取区先预览候选来源，确认后才写入上下文包。
 - 本地文件 / 目录目标：保留在整理区，支持粘贴路径、选择文件、拖放文件。
 - 结果卡：展示状态、做了什么、来源是什么、产物在哪、下一步能点什么；状态区分未完成、找到候选、已生成。
-- 工具维护页：`/advanced` 承载低频诊断和资料入口，例如 `file-radar`、`obsidian-health`、`legacy-index`、`open-guidebook`，不打断首页三主线。
+- 旧工具已降级：诊断、提醒、旧资料索引和打开器不再作为产品入口；保留历史代码时也不得绕过三主闭环。
 
 ## Safety
 

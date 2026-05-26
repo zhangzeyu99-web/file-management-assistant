@@ -21,6 +21,7 @@ REQUIRED_DOCS = [
     "docs/PRODUCT_UI_RESEARCH.md",
     "docs/USER_SCENARIOS.md",
     "docs/CLOSED_LOOP_USAGE.md",
+    "docs/TEST_PRINCIPLE.md",
     "docs/ARCHITECTURE.md",
     "docs/PROJECT_PRINCIPLES.md",
     "docs/SELF_EVOLUTION.md",
@@ -43,11 +44,11 @@ PRINCIPLES = {
     "portable bootstrap": ["scripts/init-assistant.ps1", "demo mode", "一键初始化"],
     "cloud backup boundary": ["GitHub 备份", "个人 Obsidian 内容不进公开仓库", "cloud backup boundary"],
     "closed loop": ["closed loop", "acceptance checks", "闭环验收"],
-    "lightweight daily triage": ["每天 9 点", "最多 3 条行动建议", "不做定时整理"],
+    "core loop only": ["添加资料", "搜索回顾", "生成 AI 上下文包", "只保留三件事"],
     "life study work separation": ["life / study / work", "生活 / 学习 / 工作"],
     "thin gui": ["thin gui", "GUI 只负责展示和调用"],
     "validation harness": ["validation harness", "verify-harness"],
-    "legacy compatibility": ["旧 action 保留兼容", "legacy compatibility"],
+    "deprecated non-core tools": ["旧工具已降级", "deprecated non-core tools"],
 }
 
 FORBIDDEN_PUBLIC_PATHS = [
@@ -168,7 +169,7 @@ def check_project_principles(root: Path) -> dict[str, Any]:
 
 def check_thin_gui_and_non_destructive_code(root: Path) -> dict[str, Any]:
     gui = read_text(root, "gui_server.py")
-    required_imports = ["import file_assistant", "import obsidian_assistant", "import obsidian_manager"]
+    required_imports = ["import knowledge_assistant", "from config_loader import load_config"]
     missing_imports = [item for item in required_imports if item not in gui]
     destructive_hits: list[str] = []
     for pattern in PRODUCTION_GLOBS:
@@ -199,8 +200,8 @@ def check_validation_harness(root: Path) -> dict[str, Any]:
         "feature_contracts",
         "-ReadOnly",
         "secret_scan",
-        "dry_run",
-        "obsidian_manager_dry_run",
+        "core_loop_real",
+        "HarnessCoreLoopEvidence",
         "backup_manifest",
     ]
     missing = [item for item in required if item not in harness]
@@ -256,9 +257,10 @@ def check_scenario_workflow(root: Path) -> dict[str, Any]:
         "review",
         "extract",
         "AI 上下文包",
-        "legacy-index",
-        "file-radar",
-        "obsidian-health",
+        "只保留三件事",
+        "真实入库",
+        "证据检索",
+        "可复制 prompt",
         "默认展示可读结果",
         "不删除、不移动、不重命名、不重写源文件",
     ]

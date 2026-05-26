@@ -86,7 +86,7 @@ These are product UX failures, not backend mechanics failures. The script separa
 - `scripts/run-gui-e2e.ps1` creates an isolated fixture folder and passes it to the browser as `e2eLocalPath`.
 - `scripts/gui-e2e-playwright.js` writes that path into the local target input before clicking buttons.
 - Read-only live smoke tests still click `检查本地目标`, but skip write-producing actions.
-- Strict mode fails on missing feature anchors, `missing-knowledge-feed`, `knowledge-card-detail-missing`, `missing-file-target-section`, `local-target-not-recognized`, `file-radar-did-not-use-local-targets`, raw JSON default output, or missing next-action buttons.
+- Strict mode fails on missing feature anchors, `missing-knowledge-feed`, `knowledge-card-detail-missing`, `missing-file-target-section`, `local-target-not-recognized`, raw JSON default output, or missing next-action buttons.
 
 ## Human Usability Recording
 
@@ -96,7 +96,7 @@ For a more realistic user flow, run the video harness:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-human-usability.ps1 -Headed -StrictUx
 ```
 
-This mode uses a temporary fixture vault and records the interaction to `output/human-usability/<run>/human-usability.webm`. It simulates a desktop user who reads the hero, jumps to the knowledge feed, opens a knowledge card, pastes a local path, runs organize/review/extract, copies the context prompt, and checks the advanced diagnostics area.
+This mode uses a temporary fixture vault and records the interaction to `output/human-usability/<run>/human-usability.webm`. It simulates a desktop user who reads the hero, jumps to the knowledge feed, opens a knowledge card, pastes a local path, runs organize/review/extract, copies the context prompt, and verifies that non-core diagnostics are no longer part of the main workflow.
 
 For the live local GUI without writing test notes into the real vault:
 

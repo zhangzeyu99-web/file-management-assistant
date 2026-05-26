@@ -80,62 +80,72 @@ try {
         return $parsed
     }
 
-    Invoke-Checked "dry_run" {
+    Invoke-Checked "core_loop_real" {
         if ($SkipDryRun) { return "skipped" }
-        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\run-file-assistant.ps1 -Mode Test 2>&1
+        $python = @'
+import json, shutil
+from pathlib import Path
+import knowledge_assistant
+
+root = Path("output") / "harness-core-loop"
+if root.exists():
+    shutil.rmtree(root)
+source = root / "source"
+vault = root / "vault"
+runtime = root / "runtime"
+knowledge_root = vault / "routine" / "knowledge-organizer"
+for path in (source, runtime, knowledge_root):
+    path.mkdir(parents=True, exist_ok=True)
+(source / "evidence.md").write_text("# Evidence\n\nHarnessCoreLoopEvidence: organize review extract.\n", encoding="utf-8")
+config_path = root / "config.json"
+config_path.write_text(json.dumps({
+    "runtime_root": str(runtime),
+    "obsidian_vault": str(vault),
+    "obsidian_run_dir": str(knowledge_root),
+    "knowledge_root": str(knowledge_root),
+    "allowed_open_roots": [str(root)],
+    "obsidian_folders": {"routine": "routine", "projects": "projects", "codex_project": "Codex"},
+    "watch_roots": [{"name": "harness", "path": str(source), "max_depth": 2, "max_files": 100}],
+}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+organize = knowledge_assistant.run_action("organize", {"local_paths": str(source), "text": "HarnessCoreLoopEvidence"}, config_path)
+review = knowledge_assistant.run_action("review", {"query": "HarnessCoreLoopEvidence"}, config_path)
+preview = knowledge_assistant.run_action("extract", {"query": "HarnessCoreLoopEvidence", "request": "Build context.", "mode": "preview"}, config_path)
+generate = knowledge_assistant.run_action("extract", {
+    "query": "HarnessCoreLoopEvidence",
+    "request": "Build context.",
+    "mode": "generate",
+    "source_paths": [item["path"] for item in preview.get("sources", [])],
+}, config_path)
+prompt = next((item.get("content", "") for item in generate.get("artifacts", []) if item.get("type") == "prompt"), "")
+result = {
+    "ok": all([organize.get("ok"), review.get("ok"), preview.get("ok"), generate.get("ok")]) and "HarnessCoreLoopEvidence" in prompt and "\u5148\u5f15\u7528\u6765\u6e90\u8def\u5f84" in prompt,
+    "ingested_files": organize.get("debug", {}).get("scan", {}).get("total_files"),
+    "review_sources": len(review.get("sources", [])),
+    "preview_sources": len(preview.get("sources", [])),
+    "generated_artifacts": [item.get("type") for item in generate.get("artifacts", [])],
+}
+print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+if not result["ok"]:
+    raise SystemExit(1)
+'@
+        $output = $python | python -X utf8 -
         if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
-        $jsonLine = ($output | Where-Object { $_ -match '^\{"ok":' } | Select-Object -Last 1)
-        if (-not $jsonLine) { throw "runner did not return JSON result" }
-        $parsed = $jsonLine | ConvertFrom-Json
-        if (-not $parsed.ok) { throw "runner returned ok=false" }
-        if (-not (Test-Path -LiteralPath $parsed.html_report)) { throw "missing html report: $($parsed.html_report)" }
-        if (-not (Test-Path -LiteralPath $parsed.markdown_report)) { throw "missing markdown report: $($parsed.markdown_report)" }
-        if (-not (Test-Path -LiteralPath $parsed.summary_json)) { throw "missing summary json: $($parsed.summary_json)" }
-        return [ordered]@{
-            total_files = $parsed.total_files
-            html_report = $parsed.html_report
-            summary_json = $parsed.summary_json
-            obsidian_note = $parsed.obsidian_note
-        }
+        $parsed = ($output -join "`n") | ConvertFrom-Json
+        if (-not $parsed.ok) { throw "core loop real test returned ok=false" }
+        return $parsed
     }
 
-    Invoke-Checked "obsidian_manager_dry_run" {
-        if ($SkipDryRun) { return "skipped" }
-        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\run-obsidian-manager.ps1 -Mode Test 2>&1
+    Invoke-Checked "scheduled_task_deprecated" {
+        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduled-task.ps1 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
-        $jsonLine = ($output | Where-Object { $_ -match '^\{"ok":' } | Select-Object -Last 1)
-        if (-not $jsonLine) { throw "obsidian manager did not return JSON result" }
+        $jsonLine = ($output | Where-Object { $_ -match '^\{' } | Select-Object -Last 1)
+        if (-not $jsonLine) { throw "deprecated scheduled task script did not return JSON" }
         $parsed = $jsonLine | ConvertFrom-Json
-        if (-not $parsed.ok) { throw "obsidian manager returned ok=false" }
-        if (-not (Test-Path -LiteralPath $parsed.markdown_report)) { throw "missing obsidian markdown report: $($parsed.markdown_report)" }
-        if (-not (Test-Path -LiteralPath $parsed.summary_json)) { throw "missing obsidian summary json: $($parsed.summary_json)" }
-        if (-not (Test-Path -LiteralPath $parsed.obsidian_note)) { throw "missing obsidian note: $($parsed.obsidian_note)" }
+        if ($parsed.ok -or $parsed.status -ne "deprecated") { throw "scheduled task script should be deprecated" }
         return [ordered]@{
-            total_notes = $parsed.total_notes
-            markdown_report = $parsed.markdown_report
-            summary_json = $parsed.summary_json
-            obsidian_note = $parsed.obsidian_note
-        }
-    }
-
-    Invoke-Checked "scheduled_task" {
-        $task = Get-ScheduledTask -TaskName "Knowledge Organizer Assistant" -TaskPath "\"
-        $action = $task.Actions | Select-Object -First 1
-        if ($task.State -notin @("Ready", "Running")) { throw "unexpected task state: $($task.State)" }
-        if ($action.Arguments -notlike "*run-knowledge-assistant.ps1*" -or $action.Arguments -notlike "*-Action remind*") {
-            throw "scheduled task points to unexpected runner: $($action.Arguments)"
-        }
-        $trigger = $task.Triggers | Select-Object -First 1
-        if ($trigger.StartBoundary -notlike "*T09:00:*") {
-            throw "scheduled task is not configured for 09:00: $($trigger.StartBoundary)"
-        }
-        $info = Get-ScheduledTaskInfo -TaskName "Knowledge Organizer Assistant" -TaskPath "\"
-        return [ordered]@{
-            state = [string]$task.State
-            arguments = [string]$action.Arguments
-            trigger = [string]$trigger.StartBoundary
-            last_task_result = [int]$info.LastTaskResult
-            next_run_time = [string]$info.NextRunTime
+            status = [string]$parsed.status
+            summary = [string]$parsed.summary
         }
     }
 

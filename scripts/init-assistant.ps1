@@ -1,9 +1,6 @@
 param(
     [switch]$Force,
-    [switch]$Demo,
-    [switch]$InstallReminder,
-    [switch]$SkipLegacyIndex,
-    [switch]$SkipInitialReminder
+    [switch]$Demo
 )
 
 $ErrorActionPreference = "Stop"
@@ -116,25 +113,7 @@ try {
         $result.actions += "kept existing config.local.json"
     }
 
-    if (-not $SkipLegacyIndex) {
-        $legacy = python .\knowledge_assistant.py legacy-index --config .\config.json | ConvertFrom-Json
-        if (-not $legacy.ok) { throw "legacy index failed" }
-        $result.legacy_index = $legacy.artifacts[0].path
-        $result.actions += "generated legacy material index"
-    }
-
-    if (-not $SkipInitialReminder) {
-        $remind = python .\knowledge_assistant.py remind --config .\config.json --query "today" | ConvertFrom-Json
-        if (-not $remind.ok) { throw "initial daily action failed" }
-        $result.initial_daily_action = $remind.artifacts[0].path
-        $result.actions += "generated first local daily action note"
-    }
-
-    if ($InstallReminder) {
-        $task = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduled-task.ps1 | ConvertTo-Json -Depth 6
-        $result.scheduled_task = $task
-        $result.actions += "installed 09:00 local daily action task"
-    }
+    $result.actions += "core loop only: initialize config and demo assets; do not run deprecated reminder or legacy index actions"
 
     $result.next = @(
         "powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1",

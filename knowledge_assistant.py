@@ -21,7 +21,8 @@ PRODUCT = {
 }
 
 SAFETY_TEXT = "安全边界：不删除源文件，只读取来源，只写新记录和运行证据；源文件保持原样。"
-CORE_ACTIONS = ["organize", "review", "extract", "remind"]
+CORE_ACTIONS = ["organize", "review", "extract"]
+DEPRECATED_ACTIONS = {"remind", "legacy-index"}
 MAX_REVIEW_ITEMS = 300
 SEARCH_STOP_WORDS = {
     "找到",
@@ -538,8 +539,6 @@ def build_review_index(config: dict[str, Any], limit: int = MAX_REVIEW_ITEMS) ->
             kind = "organize"
         elif "提取" in parts:
             kind = "extract"
-        elif "提醒" in parts or "今日行动" in parts or "remind" in parts:
-            kind = "remind"
         elif "Codex" in parts:
             kind = "legacy-codex"
         items.append(
@@ -669,7 +668,19 @@ def clean_evidence_line(line: str) -> str:
     cleaned = line.strip()
     cleaned = re.sub(r"^[-*]\s*", "", cleaned)
     cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
+    path_match = re.search(r"[A-Za-z]:\\[^`，。；\r\n]+", cleaned)
+    if path_match:
+        path_text = re.split(r"[：，。；]", path_match.group(0), maxsplit=1)[0].strip()
+        if path_text:
+            return path_text
     return cleaned
+
+
+def normalize_openable_paths_in_text(text: str) -> str:
+    def replace_path(match: re.Match[str]) -> str:
+        return re.split(r"[：，。；]", match.group(0), maxsplit=1)[0].strip()
+
+    return re.sub(r"[A-Za-z]:\\[^`，。；\r\n]+", replace_path, text)
 
 
 def extract_direct_answers(query: str, matches: list[dict[str, Any]], limit: int = 4) -> list[str]:
@@ -727,7 +738,7 @@ def best_evidence_score_for_item(query: str, item: dict[str, Any]) -> int:
 
 def source_item_from_review_match(query: str, item: dict[str, Any], why: str = "") -> dict[str, str]:
     evidence = direct_evidence_for_item(query, item)
-    summary = str(item.get("summary") or "")
+    summary = normalize_openable_paths_in_text(str(item.get("summary") or ""))
     if evidence:
         summary = f"直接线索：{'；'.join(evidence)}。{summary}"
     source = source_item(
@@ -738,7 +749,7 @@ def source_item_from_review_match(query: str, item: dict[str, Any], why: str = "
         why or (f"直接线索：{'；'.join(evidence)}" if evidence else f"与“{query}”在标题、路径或正文片段上匹配。"),
     )
     if evidence:
-        source["direct_evidence"] = "；".join(evidence)
+        source["direct_evidence"] = evidence[0]
     return source
 
 
@@ -796,21 +807,19 @@ def sources_from_confirmed_paths(config: dict[str, Any], source_paths: list[str]
 def review(config: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     query = str(payload.get("query") or payload.get("text") or payload.get("question") or "").strip()
-    index = build_review_index(config)
-    ranked = sorted(index, key=lambda item: (score_item(query, item), item.get("modified_at", "")), reverse=True)
-    matches = [item for item in ranked if score_item(query, item) > 0][:8]
-    if not query and not matches and ranked:
-        matches = ranked[:5]
-    sources = [
-        source_item(
-            str(item["title"]),
-            str(item["path"]),
-            str(item["summary"]),
-            str(item["type"]),
-            f"与“{query or '最近内容'}”在标题、路径或正文片段上匹配。",
+    if not query:
+        return unified_result(
+            "review",
+            "请输入关键词或问题。搜索回顾只做证据检索，不会用最近内容伪装成答案。",
+            sources=[],
+            artifacts=[],
+            next_actions=["输入一个关键词", "先添加资料", "描述要生成的 AI 上下文包"],
+            debug={"reason": "empty_query"},
+            ok=False,
         )
-        for item in matches
-    ]
+
+    matches, index_count = context_matches_for_query(config, query, 8)
+    sources = [source_item_from_review_match(query, item) for item in matches]
     if sources:
         lead = "；".join(f"{item['title']}（{item['type']}）" for item in sources[:3])
         direct_answers = extract_direct_answers(query, matches)
@@ -828,7 +837,7 @@ def review(config: dict[str, Any], payload: dict[str, Any] | None = None) -> dic
         sources=sources,
         artifacts=[],
         next_actions=next_actions,
-        debug={"query": query, "index_count": len(index), "tokens": query_tokens(query), "direct_answers": extract_direct_answers(query, matches) if sources else []},
+        debug={"query": query, "index_count": index_count, "tokens": query_tokens(query), "direct_answers": extract_direct_answers(query, matches) if sources else []},
         ok=bool(sources),
     )
 
@@ -961,80 +970,6 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
     )
 
 
-def remind(config: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    payload = payload or {}
-    generated_at = now_local()
-    request = payload_text(payload)
-    index = [item for item in build_review_index(config) if item.get("type") != "remind"]
-    if request:
-        ranked = sorted(index, key=lambda item: (score_item(request, item), item.get("modified_at", "")), reverse=True)
-        picked = dedupe_review_items([item for item in ranked if score_item(request, item) > 0], 3)
-    else:
-        picked = dedupe_review_items(index, 3)
-    sources = [
-        source_item(
-            str(item["title"]),
-            str(item["path"]),
-            str(item["summary"]),
-            str(item["type"]),
-            "今日行动建议优先参考最近整理或与输入目标匹配的内容。",
-        )
-        for item in picked
-    ]
-    if not sources:
-        return unified_result(
-            "remind",
-            "没有可生成今日行动的本地来源。请先整理一条资料、写入一条 Obsidian 记录，或换一个更具体的提醒目标。",
-            sources=[],
-            artifacts=[],
-            next_actions=["先整理一条今天要处理的资料", "用回顾知识查一个关键词", "需要继续问 AI 时生成上下文包"],
-            debug={"scheduled_task_action": "remind", "auto_organize": False, "mode": "daily_action", "reason": "no_sources"},
-            ok=False,
-        )
-    next_actions = [f"先处理：{item['title']}" for item in sources[:3]]
-    source_block = "\n".join(f"- {item['title']}：{item.get('path', '')}" for item in sources)
-    summary = f"今日行动建议已生成：基于 {len(sources)} 条本地来源，最多只给 3 个建议。"
-
-    note = f"""# 今日行动建议
-
-生成时间：{generated_at.strftime("%Y-%m-%d %H:%M:%S %z")}
-
-## 今天最多 3 件事
-
-{chr(10).join(f"- {item}" for item in next_actions)}
-
-## 参考来源
-
-{source_block}
-
-## 使用说明
-
-这不是弹窗通知，也不会自动整理文件；它只根据已整理内容生成一份当天行动建议。需要真正定时触发时，使用 Windows 计划任务运行 `remind`。
-
-## 安全边界
-
-{SAFETY_TEXT}
-"""
-    filename = f"{generated_at.strftime('%Y-%m-%d')} 今日行动建议.md"
-    obsidian_note = write_text(section_dir(config, "今日行动") / filename, note)
-    runtime_md = write_text(run_dir(config, "remind", generated_at) / filename, note)
-    write_json(
-        run_dir(config, "remind", generated_at) / "remind.json",
-        {"next_actions": next_actions, "sources": sources, "request": request, "mode": "daily_action"},
-    )
-    return unified_result(
-        "remind",
-        summary,
-        sources=sources,
-        artifacts=[
-            artifact("obsidian-note", obsidian_note, "打开今日行动建议"),
-            artifact("markdown", runtime_md, "打开 runtime 今日行动"),
-        ],
-        next_actions=next_actions,
-        debug={"scheduled_task_action": "remind", "auto_organize": False, "mode": "daily_action"},
-    )
-
-
 def build_legacy_index(config: dict[str, Any]) -> dict[str, Any]:
     roots = [
         vault_path(config) / folder_name(config, "routine", "04 例行工作") / "知识行动助手",
@@ -1092,18 +1027,18 @@ def run_action(action: str, payload: dict[str, Any] | None, config_path: Path) -
         return review(config, payload)
     if action == "extract":
         return extract(config, payload)
-    if action == "remind":
-        return remind(config, payload)
-    if action == "legacy-index":
-        legacy = build_legacy_index(config)
-        return unified_result(
-            "legacy-index",
-            f"旧资料二次整理索引已生成，共 {legacy['count']} 条。",
-            sources=[source_item(item["title"], item["path"], item["summary"], "legacy") for item in legacy["sources"]],
-            artifacts=[artifact("obsidian-note", Path(legacy["index_note"]), "打开旧资料索引")],
-            next_actions=["回顾旧资料", "提取 AI 上下文包"],
-            debug={"count": legacy["count"]},
+    if action in DEPRECATED_ACTIONS:
+        result = unified_result(
+            action,
+            "这个命令已降级，不再作为产品闭环执行。当前只保留三件事：添加资料、搜索回顾、生成 AI 上下文包。",
+            sources=[],
+            artifacts=[],
+            next_actions=["添加资料", "搜索回顾", "生成 AI 上下文包"],
+            debug={"status": "deprecated", "reason": "core_loop_only"},
+            ok=False,
         )
+        result["status"] = "deprecated"
+        return result
     return unified_result(action, f"unsupported action: {action}", ok=False)
 
 
@@ -1130,8 +1065,8 @@ def cli_payload(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="本地知识整理助手三主操作入口；remind 保留为兼容命令")
-    parser.add_argument("action", choices=[*CORE_ACTIONS, "legacy-index"])
+    parser = argparse.ArgumentParser(description="本地知识整理助手三主操作入口")
+    parser.add_argument("action", choices=CORE_ACTIONS)
     parser.add_argument("--config", default=str(Path(__file__).resolve().with_name("config.json")))
     parser.add_argument("--text", default="")
     parser.add_argument("--query", default="")

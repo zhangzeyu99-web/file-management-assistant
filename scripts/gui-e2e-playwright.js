@@ -187,7 +187,6 @@ async page => {
     "本地文件 / 目录目标",
     "拖放文件到这里",
     "检查本地目标",
-    "工具维护页",
   ];
   for (const phrase of mustHave) {
     if (!bodyText.includes(phrase)) {
@@ -294,44 +293,8 @@ async page => {
       renderScope: "#extract",
       fillInput: false,
     });
-    await page.goto(appPath("/advanced"));
-    await page.waitForLoadState("domcontentloaded");
-    await clickAndCapture({
-      label: "运行文件雷达",
-      expectedAction: "file-radar",
-      input: "",
-      scope: '[data-tool-card="file-radar"]',
-      resultSelector: ".result",
-    });
-    await clickAndCapture({
-      label: "运行知识库体检",
-      expectedAction: "obsidian-health",
-      input: "",
-      scope: '[data-tool-card="obsidian-health"]',
-      resultSelector: ".result",
-    });
-    await clickAndCapture({
-      label: "生成旧资料索引",
-      expectedAction: "legacy-index",
-      input: "",
-      scope: '[data-tool-card="legacy-index"]',
-      resultSelector: ".result",
-    });
   }
-
-  if (includeOpeners) {
-    await page.goto(appPath("/advanced"));
-    await page.waitForLoadState("domcontentloaded");
-    await clickAndCapture({
-      label: "打开 Obsidian",
-      expectedAction: "open-obsidian",
-      input: "",
-      scope: '[data-tool-card="open-obsidian"]',
-      resultSelector: ".result",
-    });
-  } else {
-    report.skipped.push({ label: "打开 Obsidian", action: "open-obsidian", reason: "external opener; use -IncludeOpeners" });
-  }
+  report.skipped.push({ label: "openers", action: "openers", reason: "non-core openers are not part of GUI E2E" });
 
   const localTargetInspect = report.actions.find(item => item.expected_action === "inspect-local-targets");
   if (e2eLocalPath && localTargetInspect && localTargetInspect.response_ok) {
@@ -339,23 +302,6 @@ async page => {
       addIssue("local-target-not-recognized", "local target inspection did not recognize the E2E path", {
         action: "inspect-local-targets",
         e2eLocalPath,
-      });
-    }
-  }
-
-  const fileRadar = report.actions.find(item => item.expected_action === "file-radar");
-  if (fileRadar && fileRadar.response_ok) {
-    const normalizedTarget = e2eLocalPath.toLowerCase();
-    const scannedTarget = collectStrings(fileRadar.response)
-      .some(value => normalizedTarget && value.toLowerCase().startsWith(normalizedTarget));
-    if (e2eLocalPath && !scannedTarget) {
-      addIssue("file-radar-did-not-use-local-targets", "file radar did not use pasted local paths as scan targets", {
-        action: "file-radar",
-      });
-    }
-    if (!/打开|报告|路径|继续|复制|产物|下一步/.test(fileRadar.result_text)) {
-      addIssue("missing-next-action-buttons", "file radar result does not expose clear next action buttons", {
-        action: "file-radar",
       });
     }
   }

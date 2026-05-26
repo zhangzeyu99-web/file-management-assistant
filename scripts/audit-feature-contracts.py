@@ -12,9 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import assistant_evolution
 import knowledge_assistant
-import obsidian_assistant
 
 
 def write_json(path: Path, data: Any) -> Path:
@@ -87,9 +85,6 @@ def run_audit() -> dict[str, Any]:
         source_dir.mkdir()
         (source_dir / "alpha-note.md").write_text("# Audit Alpha\n\nReusable alpha context.", encoding="utf-8")
         (source_dir / "alpha-data.txt").write_text("alpha data for directory scan", encoding="utf-8")
-        source_file = fixture / "card-source.md"
-        source_file.write_text("# Card Source\n\nReusable card conclusion from source.", encoding="utf-8")
-
         cases: list[dict[str, Any]] = []
 
         result = knowledge_assistant.run_action("organize", {}, config_path)
@@ -120,40 +115,9 @@ def run_audit() -> dict[str, Any]:
         has_prompt = any(item.get("type") == "prompt" for item in result.get("artifacts", []))
         cases.append(record("extract_no_match_refused", result, not result["ok"] and not has_prompt, "no fake prompt"))
 
-        result = knowledge_assistant.run_action("remind", {"query": "audit-alpha"}, config_path)
-        cases.append(record("daily_action_with_sources", result, result["ok"] and bool(result["sources"]) and artifact_paths_exist(result, "obsidian-note"), "uses local sources"))
-
-        empty_config_path, _ = make_config(base / "empty")
-        result = knowledge_assistant.run_action("remind", {}, empty_config_path)
-        cases.append(record("daily_action_without_sources_refused", result, not result["ok"] and not result["artifacts"], "no generic placeholder action"))
-
-        result = obsidian_assistant.command_card_note(config, "audit card", "work", str(source_file), "")
-        note_path = Path(result.get("note", ""))
-        note_text = note_path.read_text(encoding="utf-8") if note_path.exists() else ""
-        cases.append(record("card_reads_source_file", result, result.get("ok") and "Reusable card conclusion" in note_text, "card content came from source file"))
-
-        result = obsidian_assistant.command_card_note(config, "empty card", "work", "", "")
-        cases.append(record("card_empty_refused", result, not result.get("ok") and not result.get("note"), "no placeholder card"))
-
-        result = assistant_evolution.build_ai_chat_archive(
-            config,
-            {
-                "title": "audit chat",
-                "background": "Need to archive an AI discussion.",
-                "conclusions": ["Keep traceable sources."],
-                "outputs": ["runtime/audit.md"],
-            },
-        )
-        cases.append(record("ai_chat_archive_with_content", result, result.get("ok") and Path(result.get("note", "")).exists(), "writes archive only when content exists"))
-
-        result = assistant_evolution.build_ai_chat_archive(config, {})
-        cases.append(record("ai_chat_archive_empty_refused", result, not result.get("ok") and not result.get("note"), "no empty chat archive"))
-
-        result = assistant_evolution.build_ai_context(config, "audit-alpha", "Use the audited source.")
-        cases.append(record("ai_context_match_returns_prompt", result, result.get("ok") and bool(result.get("sources")) and bool(result.get("prompt")), "context prompt has sources"))
-
-        result = assistant_evolution.build_ai_context(config, "zzzxxyyqwerty", "Use nonexistent context.")
-        cases.append(record("ai_context_no_match_refused", result, not result.get("ok") and not result.get("prompt") and not result.get("sources"), "no unrelated context fallback"))
+        for deprecated_action in ["remind", "legacy-index"]:
+            result = knowledge_assistant.run_action(deprecated_action, {}, config_path)
+            cases.append(record(f"{deprecated_action}_deprecated", result, not result["ok"] and result.get("status") == "deprecated" and not result["artifacts"], "non-core action is not executed"))
 
     passed = [case for case in cases if case["passed"]]
     failed = [case for case in cases if not case["passed"]]

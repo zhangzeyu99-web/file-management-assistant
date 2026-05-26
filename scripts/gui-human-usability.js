@@ -230,20 +230,8 @@ async page => {
       }
     }
 
-    step("tools page discoverability");
-    await humanClick('a[href="/advanced"]', "open tools page");
-    await page.waitForLoadState("domcontentloaded");
-    await delay(300);
-    if (!page.url().includes("/advanced")) issue("tools-page-not-opened", "tools page link did not navigate to /advanced");
-    if ((await page.locator("[data-tool-card]").count()) !== 6) issue("tool-card-count", "tools page should expose exactly six verified tool cards");
-    for (const textNeedle of ["诊断与维护", "打开资料", "运行文件雷达", "运行知识库体检", "生成旧资料索引"]) {
-      if (!(await page.locator(`text=${textNeedle}`).count())) issue("tools-page-copy-missing", `missing tools page copy: ${textNeedle}`);
-    }
-    if (!report.read_only) {
-      await runAction("obsidian-health", '[data-tool-card="obsidian-health"] button', ".result", "tools obsidian health");
-    } else {
-      report.skipped.push({ action: "obsidian-health", reason: "read-only mode" });
-    }
+    step("non-core tools are not part of the main flow");
+    report.skipped.push({ action: "deprecated-tools", reason: "GUI keeps only add/search/context package" });
 
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
     await delay(150);

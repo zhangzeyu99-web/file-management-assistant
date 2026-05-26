@@ -48,7 +48,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduled-task.ps1
 ```
 
-计划任务只运行兼容 action `remind`，生成今日行动建议笔记；不会触发文件整理、移动、删除或重命名。
+当前上手流程只验证三件事：添加资料写入新记录，搜索回顾返回证据来源，生成 AI 上下文包输出可复制 prompt；计划任务不属于核心闭环。
 
 ## 6. 验证
 

@@ -38,11 +38,11 @@ class ProjectQualityTests(unittest.TestCase):
             "portable bootstrap",
             "cloud backup boundary",
             "closed loop",
-            "lightweight daily triage",
+            "core loop only",
             "life study work separation",
             "thin gui",
             "validation harness",
-            "legacy compatibility",
+            "deprecated non-core tools",
         }
 
         self.assertTrue(principles["ok"], principles)
@@ -149,19 +149,32 @@ class ProjectQualityTests(unittest.TestCase):
         self.assertNotIn("Codex 交接", public_text)
         self.assertNotIn("AI 交接", public_text)
 
-    def test_advanced_tools_page_replaces_home_advanced_area(self) -> None:
+    def test_cli_exposes_only_three_core_actions(self) -> None:
+        runner = (self.repo / "run-knowledge-assistant.ps1").read_text(encoding="utf-8-sig")
+        readme = (self.repo / "README.md").read_text(encoding="utf-8-sig")
+
+        self.assertIn('[string]$Action = "review"', runner)
+        self.assertIn('[ValidateSet("organize", "review", "extract")]', runner)
+        self.assertNotIn("remind", runner)
+        self.assertNotIn("legacy-index", runner)
+        self.assertIn("只保留三件事", readme)
+
+    def test_advanced_tools_are_not_public_product_entrypoints(self) -> None:
         home = (self.repo / "docs" / "assets" / "gui" / "workspace.html").read_text(encoding="utf-8-sig")
         advanced = (self.repo / "docs" / "assets" / "gui" / "advanced.html").read_text(encoding="utf-8-sig")
 
-        self.assertIn('href="/advanced"', home)
-        self.assertIn("tools-entry", home)
+        self.assertNotIn('href="/advanced"', home)
+        self.assertNotIn("tools-entry", home)
+        self.assertNotIn("工具维护页", home)
         self.assertNotIn("高级/诊断", home)
         self.assertNotIn("advanced-grid", home)
         self.assertNotIn("runLegacyAction", home)
         for action in ["file-radar", "obsidian-health", "legacy-index", "open-obsidian", "open-guidebook", "open-interaction-guide"]:
-            self.assertIn(f"runTool('{action}')", advanced)
+            self.assertNotIn(f"runTool('{action}')", advanced)
+            self.assertNotIn(action, home)
         self.assertNotIn("查看高级 JSON", advanced)
         self.assertNotIn("console-output", advanced)
+        self.assertIn("旧工具已降级", advanced)
 
     def test_gui_server_does_not_embed_obsolete_html(self) -> None:
         server = (self.repo / "gui_server.py").read_text(encoding="utf-8-sig")
@@ -251,8 +264,6 @@ class ProjectQualityTests(unittest.TestCase):
             "review no-match",
             "没有命中已整理资料",
             "没有找到已整理内容",
-            "/advanced",
-            "[data-tool-card]",
         ]:
             self.assertIn(phrase, human_script)
 

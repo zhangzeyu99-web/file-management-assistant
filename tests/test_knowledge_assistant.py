@@ -22,7 +22,9 @@ SPEC.loader.exec_module(knowledge_assistant)
 
 class KnowledgeAssistantTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp_root = ROOT / ".tmp-tests"
+        self.tmp_root.mkdir(exist_ok=True)
+        self.tmp = tempfile.TemporaryDirectory(dir=self.tmp_root)
         self.root = Path(self.tmp.name)
         self.runtime = self.root / "runtime"
         self.vault = self.root / "vault"
@@ -107,7 +109,9 @@ class KnowledgeAssistantTests(unittest.TestCase):
         )
         return codex_note
 
-    def test_four_core_actions_return_unified_schema(self) -> None:
+    def test_three_core_actions_return_unified_schema(self) -> None:
+        self.assertEqual(["organize", "review", "extract"], knowledge_assistant.CORE_ACTIONS)
+
         organize = knowledge_assistant.run_action(
             "organize",
             {
@@ -123,13 +127,10 @@ class KnowledgeAssistantTests(unittest.TestCase):
             {"query": "NotebookLM Obsidian", "request": "帮我继续学习 Obsidian"},
             self.config_path,
         )
-        remind = knowledge_assistant.run_action("remind", {}, self.config_path)
 
         self.assertUnifiedResult(organize, "organize")
         self.assertUnifiedResult(review, "review")
         self.assertUnifiedResult(extract, "extract")
-        self.assertUnifiedResult(remind, "remind")
-
         note_paths = [Path(item["path"]) for item in organize["artifacts"] if item.get("type") == "obsidian-note"]
         self.assertTrue(note_paths, organize)
         self.assertTrue(note_paths[0].exists())
@@ -145,9 +146,110 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertTrue(markdown_paths[0].exists())
         self.assertIn("AI 上下文包", markdown_paths[0].read_text(encoding="utf-8"))
 
-        self.assertIn("今日行动建议", remind["summary"])
-        self.assertLessEqual(len(remind["next_actions"]), 3)
-        self.assertTrue(any(item.get("type") == "obsidian-note" and "今日行动" in item.get("label", "") for item in remind["artifacts"]))
+    def test_core_loop_ingests_real_path_reviews_evidence_and_generates_prompt(self) -> None:
+        evidence_dir = self.root / "真实入库资料"
+        evidence_dir.mkdir()
+        evidence_file = evidence_dir / "core-loop-evidence.md"
+        evidence_file.write_text(
+            "# CoreLoopEvidence-20260525\n\n"
+            "添加资料必须真实入库，搜索回顾必须找到已沉淀证据，AI 上下文包必须基于证据生成 prompt。",
+            encoding="utf-8",
+        )
+
+        organize = knowledge_assistant.run_action(
+            "organize",
+            {
+                "kind": "file",
+                "title": "CoreLoopEvidence-20260525 三主闭环资料",
+                "text": "CoreLoopEvidence-20260525 是三主闭环真实测试资料。",
+                "local_paths": str(evidence_dir),
+                "source": "unit-test-real-filesystem",
+            },
+            self.config_path,
+        )
+        self.assertUnifiedResult(organize, "organize")
+        self.assertIn("已扫描 1 个文件", organize["summary"])
+        self.assertTrue(any(item["type"] == "obsidian-note" and Path(item["path"]).exists() for item in organize["artifacts"]))
+        self.assertTrue(any(item["type"] == "markdown" and Path(item["path"]).exists() for item in organize["artifacts"]))
+        self.assertTrue(any(item["type"] == "json" and Path(item["path"]).exists() for item in organize["artifacts"]))
+
+        review = knowledge_assistant.run_action("review", {"query": "CoreLoopEvidence-20260525"}, self.config_path)
+        self.assertUnifiedResult(review, "review")
+        self.assertTrue(review["sources"], review)
+        joined_sources = "\n".join(str(item) for item in review["sources"])
+        self.assertIn("CoreLoopEvidence-20260525", joined_sources)
+        self.assertTrue(any(Path(item["path"]).exists() for item in review["sources"] if item.get("path")), review)
+
+        preview = knowledge_assistant.run_action(
+            "extract",
+            {"query": "CoreLoopEvidence-20260525", "request": "把三主闭环测试资料交给新的 AI 对话", "mode": "preview"},
+            self.config_path,
+        )
+        self.assertUnifiedResult(preview, "extract")
+        self.assertIn("候选来源", preview["summary"])
+        self.assertFalse(preview["artifacts"], preview)
+
+        source_path = preview["sources"][0]["path"]
+        generated = knowledge_assistant.run_action(
+            "extract",
+            {
+                "query": "CoreLoopEvidence-20260525",
+                "request": "把三主闭环测试资料交给新的 AI 对话",
+                "mode": "generate",
+                "source_paths": [source_path],
+            },
+            self.config_path,
+        )
+        self.assertUnifiedResult(generated, "extract")
+        prompt_artifacts = [item for item in generated["artifacts"] if item["type"] == "prompt"]
+        self.assertEqual(1, len(prompt_artifacts), generated)
+        prompt = prompt_artifacts[0]["content"]
+        self.assertIn("CoreLoopEvidence-20260525", prompt)
+        self.assertIn(source_path, prompt)
+        self.assertIn("先引用来源路径", prompt)
+        self.assertTrue(any(item["type"] == "obsidian-note" and Path(item["path"]).exists() for item in generated["artifacts"]))
+
+    def test_review_requires_keyword_or_question(self) -> None:
+        result = knowledge_assistant.run_action("review", {}, self.config_path)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("review", result["action"])
+        self.assertEqual([], result["sources"])
+        self.assertEqual([], result["artifacts"])
+        self.assertIn("请输入关键词或问题", result["summary"])
+
+    def test_review_sources_include_direct_evidence_when_available(self) -> None:
+        self.write_codex_output_index_note()
+
+        result = knowledge_assistant.run_action(
+            "review",
+            {"query": "找到我用来启动codex的流程的github仓库"},
+            self.config_path,
+        )
+
+        self.assertTrue(result["ok"], result)
+        self.assertIn("github.com/zhangzeyu99-web/codex", result["summary"])
+        self.assertIn("direct_evidence", result["sources"][0])
+        self.assertIn("github.com/zhangzeyu99-web/codex", result["sources"][0]["direct_evidence"])
+
+    def test_direct_evidence_keeps_windows_paths_openable(self) -> None:
+        path = str(self.fixture / "AI_Repo")
+        item = {
+            "title": "本地路径整理清单",
+            "path": str(self.fixture / "整理清单.md"),
+            "raw_markdown": f"# 本地路径整理清单\n\n- {path}：directory，4 个文件\n",
+            "summary": f"# 本地路径整理清单 - {path}：directory，4 个文件",
+            "type": "note",
+        }
+
+        evidence = knowledge_assistant.direct_evidence_for_item("AI_Repo 本地路径", item, limit=1)
+
+        self.assertEqual([path], evidence)
+
+        source = knowledge_assistant.source_item_from_review_match("AI_Repo 本地路径", item)
+        self.assertIn(path, source["summary"])
+        self.assertNotIn(f"{path}：directory", source["summary"])
+        self.assertEqual(path, source["direct_evidence"])
 
     def test_review_does_not_fallback_to_unrelated_recent_notes(self) -> None:
         result = knowledge_assistant.run_action("review", {"query": "b站"}, self.config_path)
@@ -342,7 +444,17 @@ class KnowledgeAssistantTests(unittest.TestCase):
         )
 
         self.assertTrue(result["ok"], result)
-        joined = json.dumps(result["sources"], ensure_ascii=False)
+        joined = json.dumps(
+            [
+                {
+                    "summary": item.get("summary", ""),
+                    "direct_evidence": item.get("direct_evidence", ""),
+                    "why": item.get("why", ""),
+                }
+                for item in result["sources"]
+            ],
+            ensure_ascii=False,
+        )
         self.assertIn("github.com/zhangzeyu99-web/file-management-assistant", joined)
         local_path_index = joined.find("D:\\codex\\file-management-assistant")
         if local_path_index != -1:
@@ -396,7 +508,17 @@ class KnowledgeAssistantTests(unittest.TestCase):
             {"query": "找到我用来启动codex的流程的github仓库", "request": "打包给新的 AI 对话", "mode": "preview"},
             self.config_path,
         )
-        joined = json.dumps(result["sources"], ensure_ascii=False)
+        joined = json.dumps(
+            [
+                {
+                    "summary": item.get("summary", ""),
+                    "direct_evidence": item.get("direct_evidence", ""),
+                    "why": item.get("why", ""),
+                }
+                for item in result["sources"]
+            ],
+            ensure_ascii=False,
+        )
 
         self.assertTrue(result["ok"], result)
         self.assertIn("github.com/zhangzeyu99-web/codex", joined)
@@ -521,49 +643,17 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertEqual([], result["artifacts"])
         self.assertIn("没有提供", result["summary"])
 
-    def test_daily_action_dedupes_repeated_source_titles(self) -> None:
-        target = self.vault / "04 例行工作" / "知识整理助手"
-        (target / "gui-a.md").write_text("# GUI 快速记录\n\nGUI 今日行动测试。", encoding="utf-8")
-        (target / "gui-b.md").write_text("# GUI 快速记录\n\nGUI 重复标题。", encoding="utf-8")
-        (target / "gui-c.md").write_text("# GUI 控制台说明\n\nGUI 已改为知识整理入口。", encoding="utf-8")
+    def test_non_core_actions_are_deprecated_at_action_layer(self) -> None:
+        for action in ["remind", "legacy-index"]:
+            with self.subTest(action=action):
+                result = knowledge_assistant.run_action(action, {"query": "GUI"}, self.config_path)
 
-        result = knowledge_assistant.run_action("remind", {"query": "GUI 今日行动"}, self.config_path)
-
-        self.assertUnifiedResult(result, "remind")
-        titles = [item["title"] for item in result["sources"]]
-        self.assertEqual(len(titles), len(set(titles)), result)
-        self.assertLessEqual(len(titles), 3)
-
-        second = knowledge_assistant.run_action("remind", {"query": "GUI 今日行动"}, self.config_path)
-        self.assertUnifiedResult(second, "remind")
-        self.assertNotIn("今日行动建议", [item["title"] for item in second["sources"]])
-
-    def test_daily_action_refuses_to_fake_result_without_sources(self) -> None:
-        with tempfile.TemporaryDirectory() as empty_root_raw:
-            empty_root = Path(empty_root_raw)
-            empty_runtime = empty_root / "runtime"
-            empty_vault = empty_root / "vault"
-            empty_runtime.mkdir()
-            (empty_vault / "04 例行工作" / "知识整理助手").mkdir(parents=True)
-            config_path = empty_root / "config.json"
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "runtime_root": str(empty_runtime),
-                        "obsidian_vault": str(empty_vault),
-                        "obsidian_run_dir": str(empty_vault / "04 例行工作" / "知识整理助手"),
-                    },
-                    ensure_ascii=False,
-                ),
-                encoding="utf-8",
-            )
-
-            result = knowledge_assistant.run_action("remind", {}, config_path)
-
-        self.assertFalse(result["ok"], result)
-        self.assertEqual("remind", result["action"])
-        self.assertEqual([], result["sources"])
-        self.assertEqual([], result["artifacts"])
+                self.assertFalse(result["ok"], result)
+                self.assertEqual(action, result["action"])
+                self.assertEqual("deprecated", result["status"])
+                self.assertEqual([], result["sources"])
+                self.assertEqual([], result["artifacts"])
+                self.assertEqual(["添加资料", "搜索回顾", "生成 AI 上下文包"], result["next_actions"])
 
     def test_legacy_second_pass_indexes_existing_notes_without_moving_them(self) -> None:
         old_paths = [

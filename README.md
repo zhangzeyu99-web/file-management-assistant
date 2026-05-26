@@ -35,7 +35,7 @@ GUI 现在是站点式知识库：首页首屏只说明用途和安全边界，�
 - `生成 AI 上下文包`：在 `#extract` 区先预览候选来源，再确认生成 AI 上下文包，包含来源路径、摘要、安全边界和下一步请求。
 - `知识流`：从已整理内容生成标题 + 描述卡片，点击只展开详情和来源，不触发写入。
 
-低频能力进入 `/advanced` 工具维护页，例如文件雷达、知识库体检、旧资料索引和本地教程入口；首页不再堆诊断按钮。
+旧工具已降级为说明页；产品主线只保留三件事：添加资料必须真实入库，搜索回顾必须返回已沉淀证据，生成 AI 上下文包必须产出可复制 prompt。
 
 ## 界面产品化原则
 
@@ -48,8 +48,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action review -Query "Obsidian 教程"
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action extract -Request "继续优化知识库" -Mode preview
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action extract -Request "继续优化知识库" -Mode generate -SourcePath "C:\YourVault\path\source.md"
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action remind  # 兼容命令名：生成今日行动建议
 ```
+
+命令行和 GUI 只推荐 `organize / review / extract`。旧提醒、文件雷达、知识库体检等入口不再作为产品闭环执行。
 
 ## 迁移与备份
 
