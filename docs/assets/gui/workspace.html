@@ -772,6 +772,99 @@
       line-height: 1.55;
     }
     .result-detail div + div { margin-top: 6px; }
+    .result-document {
+      display: grid;
+      gap: 14px;
+    }
+    .result-summary-card {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+    .result-summary-card p {
+      margin: 8px 0 0;
+      color: #34465c;
+      line-height: 1.68;
+    }
+    .source-card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .source-card,
+    .artifact-card,
+    .prompt-preview {
+      min-width: 0;
+      padding: 13px;
+      border-radius: 15px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .source-card {
+      display: grid;
+      gap: 8px;
+    }
+    .source-card-title,
+    .artifact-card-title {
+      color: #132238;
+      font-weight: 950;
+      line-height: 1.35;
+    }
+    .source-card-meta,
+    .artifact-card-meta {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .source-card-body {
+      color: #34465c;
+      font-size: 13px;
+      line-height: 1.62;
+    }
+    .path-chip {
+      display: block;
+      width: 100%;
+      margin-top: 2px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      color: #445973;
+      background: #f7faff;
+      border: 1px solid #dce7f5;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+    .artifact-shelf {
+      display: grid;
+      gap: 10px;
+    }
+    .artifact-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .prompt-preview {
+      background: linear-gradient(180deg, #ffffff, #f8fbff);
+    }
+    .prompt-preview pre {
+      max-height: 220px;
+      margin: 10px 0 0;
+      padding: 12px;
+      overflow: auto;
+      border-radius: 12px;
+      color: #24364c;
+      background: #f2f6fb;
+      border: 1px solid #dce7f5;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.62;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
     .site-footer {
       padding: 26px 0 40px;
       color: var(--muted);
@@ -780,7 +873,7 @@
       border-top: 1px solid var(--line);
     }
     @media (max-width: 980px) {
-      .feature-strip, .knowledge-grid, .action-grid, .hero-metrics, .result-sections, .detail-grid, .detail-columns {
+      .feature-strip, .knowledge-grid, .action-grid, .hero-metrics, .result-sections, .source-card-grid, .detail-grid, .detail-columns {
         grid-template-columns: 1fr;
       }
       .detail-header {
@@ -1092,9 +1185,7 @@
     function sourceSummary(data, sourceCount) {
       const sources = Array.isArray(data?.sources) ? data.sources : [];
       if (sources.length > 0) {
-        const first = sources[0];
-        const label = first.path || first.title || first.source || first.reason || "已整理来源";
-        return `${sourceCount} 条来源；最近来源：${compact(label, 92)}`;
+        return `${sourceCount} 条来源；可在下方来源卡片查看路径、依据和摘要。`;
       }
       if (data?.scan_targets?.summary?.existing_count) {
         return `本地目标 ${data.scan_targets.summary.existing_count} 个；来源可追溯到粘贴路径。`;
@@ -1112,7 +1203,7 @@
         return `${artifactCount} 个产物；${compact(first.path || first.label || first.type || "已生成", 92)}`;
       }
       const fallback = data?.obsidian_note || data?.note || data?.markdown_report || data?.html_report || data?.summary_json;
-      return fallback ? `产物路径：${compact(fallback, 96)}` : "如需落盘，优先写入新的 Obsidian 记录或本地报告。";
+      return fallback ? `已生成产物：${compact(fallback, 96)}` : "如需落盘，优先写入新的 Obsidian 记录或本地报告。";
     }
 
     function humanSummary(data) {
@@ -1124,17 +1215,83 @@
       return "已生成结果，请查看来源、保存位置和下一步建议。";
     }
 
-    function sourceDetailHtml(data) {
+    function renderSourceCards(data) {
       const sources = Array.isArray(data?.sources) ? data.sources : [];
       if (!sources.length) {
-        return escapeHtml(sourceSummary(data, 0));
+        return `<section class="result-summary-card"><span class="result-label">参考来源</span><p>${escapeHtml(sourceSummary(data, 0))}</p></section>`;
       }
-      return sources.slice(0, 4).map((item, index) => {
-        const title = compact(item.title || `来源 ${index + 1}`, 56);
-        const path = compact(item.path || "无路径", 88);
-        const why = compact(item.why || item.summary || "与当前任务匹配。", 110);
-        return `<div><b>${escapeHtml(title)}</b><br>${escapeHtml(path)}<br>${escapeHtml(why)}</div>`;
-      }).join("");
+      return `
+        <section>
+          <span class="result-label">参考来源</span>
+          <div class="source-card-grid">
+            ${sources.slice(0, 6).map((item, index) => {
+              const title = compact(item.title || `来源 ${index + 1}`, 80);
+              const type = item.type || "来源";
+              const path = item.path || "";
+              const why = item.why || "与当前任务匹配。";
+              const direct = item.direct_evidence ? `直接线索：${item.direct_evidence}` : "";
+              const summary = compact(direct || item.summary || "", 220);
+              return `
+                <article class="source-card">
+                  <div class="source-card-meta">${escapeHtml(type)} · 来源 ${index + 1}</div>
+                  <div class="source-card-title">${escapeHtml(title)}</div>
+                  <div class="source-card-body">${escapeHtml(compact(why, 160))}</div>
+                  ${summary ? `<div class="source-card-body">${escapeHtml(summary)}</div>` : ""}
+                  ${path ? `<code class="path-chip">${escapeHtml(path)}</code>` : ""}
+                  ${path ? `<div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(path)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(path)})'>打开来源</button></div>` : ""}
+                </article>
+              `;
+            }).join("")}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderArtifactShelf(data) {
+      const artifacts = Array.isArray(data?.artifacts) ? data.artifacts : [];
+      if (!artifacts.length) {
+        return `<section class="result-summary-card"><span class="result-label">保存位置</span><p>${escapeHtml(artifactSummary(data, 0))}</p></section>`;
+      }
+      const pathArtifacts = artifacts.filter((item) => item.path).slice(0, 6);
+      if (!pathArtifacts.length) {
+        return `<section class="result-summary-card"><span class="result-label">保存位置</span><p>${escapeHtml(artifactSummary(data, artifacts.length))}</p></section>`;
+      }
+      return `
+        <section>
+          <span class="result-label">保存位置</span>
+          <div class="artifact-shelf">
+            ${pathArtifacts.map((item) => {
+              const path = item.path || "";
+              return `
+                <article class="artifact-card">
+                  <div>
+                    <div class="artifact-card-meta">${escapeHtml(item.type || "artifact")}</div>
+                    <div class="artifact-card-title">${escapeHtml(item.label || "打开产物")}</div>
+                    <code class="path-chip">${escapeHtml(path)}</code>
+                  </div>
+                  <div class="result-actions">
+                    <button class="result-button" onclick='copyText(${inlineString(path)})'>复制路径</button>
+                    <button class="result-button" onclick='openSpecificPath(${inlineString(path)})'>打开产物</button>
+                  </div>
+                </article>
+              `;
+            }).join("")}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderPromptPreview() {
+      if (!lastPrompt) return "";
+      return `
+        <section class="prompt-preview">
+          <span class="result-label">Prompt 预览</span>
+          <pre>${escapeHtml(lastPrompt)}</pre>
+          <div class="result-actions">
+            <button class="result-button primary" onclick="copyPromptFromLast()">复制 prompt</button>
+          </div>
+        </section>
+      `;
     }
 
     function resultTitleFor(data, ok, sourceCount) {
@@ -1155,7 +1312,6 @@
       const label = actionLabel(displayAction);
       const ok = Boolean(data?.ok);
       const sourceCount = Array.isArray(data?.sources) ? data.sources.length : 0;
-      const artifactCount = Array.isArray(data?.artifacts) ? data.artifacts.length : 0;
       const nextActions = (data?.next_actions || []).slice(0, 3);
       const noMatchReview = !ok && displayAction === "review" && sourceCount === 0;
       const previewExtract = ok && displayAction === "extract" && data?.debug?.mode === "preview";
@@ -1165,10 +1321,6 @@
         : noMatchReview
           ? "本次回顾没有命中已整理资料。"
           : ok ? `${label} ${resultTitle}。` : compact(data?.error || data?.summary || "没有完成。", 120);
-      const pathButtons = lastResultPaths.slice(0, 5).map((item, index) =>
-        `<button class="result-button" onclick="openResultPath(${index})">${escapeHtml(item.label)}</button>`
-      ).join("");
-      const promptButton = lastPrompt ? `<button class="result-button primary" onclick="copyPromptFromLast()">复制 prompt</button>` : "";
       const confirmExtractButton = previewExtract
         ? `<button class="result-button primary" onclick="generateExtractFromPreview()">确认生成上下文包</button>`
         : "";
@@ -1182,32 +1334,25 @@
       }
       target.classList.remove("waiting");
       target.innerHTML = `
-        <div class="result-eyebrow">结果 · ${escapeHtml(label)}</div>
-        <h4>${escapeHtml(resultTitle)}</h4>
-        <p>${escapeHtml(compact(humanSummary(data), 240))}</p>
-        <div class="result-sections">
-          <div class="result-section">
+        <article class="result-document result-sections">
+          <section class="result-summary-card">
+            <div class="result-eyebrow">结果 · ${escapeHtml(label)}</div>
+            <h4>${escapeHtml(resultTitle)}</h4>
+            <p>${escapeHtml(compact(humanSummary(data), 360))}</p>
+          </section>
+          <section class="result-section">
             <span class="result-label">完成情况</span>
             <div class="result-detail">${escapeHtml(didWhat)}</div>
-          </div>
-          <div class="result-section">
-            <span class="result-label">参考来源</span>
-            <div class="result-detail">${sourceDetailHtml(data)}</div>
-          </div>
-          <div class="result-section">
-            <span class="result-label">保存位置</span>
-            <div class="result-detail">${escapeHtml(artifactSummary(data, artifactCount))}</div>
-          </div>
-          <div class="result-section">
+          </section>
+          ${renderSourceCards(data)}
+          ${renderArtifactShelf(data)}
+          ${renderPromptPreview()}
+          <section class="result-section">
             <span class="result-label">下一步建议</span>
             <div class="result-detail">${nextItems}</div>
-          </div>
-        </div>
-        <div class="result-actions">
-          ${pathButtons}
-          ${promptButton}
-          ${confirmExtractButton}
-        </div>
+          </section>
+          ${confirmExtractButton ? `<div class="result-actions">${confirmExtractButton}</div>` : ""}
+        </article>
       `;
     }
 
@@ -1262,6 +1407,11 @@
       const item = lastResultPaths[index];
       if (!item) return null;
       return api("open-path", {path: item.path}, lastAction);
+    }
+
+    function openSpecificPath(path) {
+      if (!path) return null;
+      return api("open-path", {path}, lastAction);
     }
 
     async function copyPromptFromLast() {

@@ -24,6 +24,29 @@ SAFETY_TEXT = "安全边界：不删除源文件，只读取来源，只写新�
 CORE_ACTIONS = ["organize", "review", "extract"]
 DEPRECATED_ACTIONS = {"remind", "legacy-index"}
 MAX_REVIEW_ITEMS = 300
+READABLE_FILE_EXTENSIONS = {
+    ".bat",
+    ".cmd",
+    ".conf",
+    ".css",
+    ".csv",
+    ".html",
+    ".ini",
+    ".js",
+    ".json",
+    ".log",
+    ".md",
+    ".ps1",
+    ".py",
+    ".rst",
+    ".toml",
+    ".ts",
+    ".txt",
+    ".xml",
+    ".yaml",
+    ".yml",
+}
+FILE_INDEX_EXCERPT_LIMIT = 12000
 SEARCH_STOP_WORDS = {
     "找到",
     "我用",
@@ -98,6 +121,36 @@ def write_json(path: Path, value: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
+
+
+def readable_file_excerpt(path: Path, limit: int = FILE_INDEX_EXCERPT_LIMIT) -> str:
+    if path.suffix.lower() not in READABLE_FILE_EXTENSIONS:
+        return ""
+    try:
+        raw = path.read_bytes()[: limit + 1024]
+    except OSError:
+        return ""
+    if b"\x00" in raw:
+        return ""
+    for encoding in ("utf-8-sig", "utf-8", "gb18030"):
+        try:
+            text = raw.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        text = raw.decode("utf-8", errors="ignore")
+    text = text.replace("\x00", "").strip()
+    if not text:
+        return ""
+    clipped = text[:limit].rstrip()
+    if len(text) > limit:
+        clipped += "\n\n……（索引摘录已截断，源文件未改动）"
+    return clipped
+
+
+def is_readable_record(record: file_assistant.FileRecord) -> bool:
+    return bool(readable_file_excerpt(Path(record.path), limit=512))
 
 
 def split_local_paths(value: Any) -> list[str]:
@@ -292,6 +345,68 @@ def render_organize_scan_markdown(scan: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_file_index_markdown(
+    record: file_assistant.FileRecord,
+    excerpt: str,
+    organize_note: Path,
+    generated_at: dt.datetime,
+) -> str:
+    source_path = Path(record.path)
+    return f"""# {source_path.stem}
+
+类型：文件索引
+生成时间：{generated_at.strftime("%Y-%m-%d %H:%M:%S %z")}
+来源路径：`{record.path}`
+关联整理记录：`{organize_note}`
+
+## 文件信息
+
+- 文件名：{source_path.name}
+- 扩展名：{record.extension or "无"}
+- 大小：{record.size_mb} MB
+- 修改时间：{record.modified_at}
+
+## 文件摘要
+
+{compact_text(excerpt, 360)}
+
+## 原文摘录
+
+```text
+{excerpt}
+```
+
+## 下次怎么用
+
+- 搜索回顾时可以直接用文件名、路径或摘录里的关键词找到这条索引。
+- 生成 AI 上下文包时优先引用这条索引，再决定是否需要读取源文件全文。
+
+## 安全边界
+
+{SAFETY_TEXT}
+"""
+
+
+def write_file_index_notes(
+    config: dict[str, Any],
+    scan: dict[str, Any],
+    organize_note: Path,
+    generated_at: dt.datetime,
+) -> list[Path]:
+    index_dir = section_dir(config, "文件索引")
+    created: list[Path] = []
+    for index, record in enumerate(scan["records"], start=1):
+        source_path = Path(record.path)
+        excerpt = readable_file_excerpt(source_path)
+        if not excerpt:
+            continue
+        filename = f"{generated_at.strftime('%Y%m%d-%H%M%S')}-{index:03d} {safe_filename(source_path.stem, '文件索引')}.md"
+        note_path = index_dir / filename
+        write_text(note_path, render_file_index_markdown(record, excerpt, organize_note, generated_at))
+        created.append(note_path)
+    return created
+
+
 def unified_result(
     action: str,
     summary: str,
@@ -365,6 +480,7 @@ def organize(config: dict[str, Any], payload: dict[str, Any] | None = None) -> d
     scan: dict[str, Any] | None = None
     scan_report: Path | None = None
     scan_manifest: Path | None = None
+    file_index_notes: list[Path] = []
     if local_paths:
         scan = scan_local_paths(config, local_paths, payload, generated_at)
         existing_targets = [item for item in scan["targets"] if item.get("exists")]
@@ -473,18 +589,38 @@ def organize(config: dict[str, Any], payload: dict[str, Any] | None = None) -> d
 {SAFETY_TEXT}
 """
     write_text(note_path, note)
+    if scan:
+        file_index_notes = write_file_index_notes(config, scan, note_path, generated_at)
+        if scan_manifest:
+            write_json(
+                scan_manifest,
+                {
+                    "targets": scan["targets"],
+                    "counts": scan["counts"],
+                    "classifications": scan["classifications"],
+                    "duplicates": scan["duplicates"],
+                    "warnings": scan["warnings"],
+                    "file_index_notes": [str(path) for path in file_index_notes],
+                },
+            )
     summary = f"整理记录已写入 Obsidian：{title}；建议领域：{domain['name']}。"
     artifacts = [artifact("obsidian-note", note_path, "打开整理记录")]
     debug: dict[str, Any] = {"kind": kind, "domain": domain, "suggestion": suggestion}
     next_actions = ["回顾相关知识", "提取 AI 上下文包", "需要时在 Obsidian 中手动归位"]
     if scan:
         total_files = scan["counts"]["total_files"]
-        summary = f"整理记录已写入 Obsidian：{title}；已扫描 {total_files} 个文件，生成整理清单；默认只建议，不移动源文件。"
+        index_summary = f"生成 {len(file_index_notes)} 条文件索引；" if file_index_notes else ""
+        summary = f"整理记录已写入 Obsidian：{title}；已扫描 {total_files} 个文件，生成整理清单；{index_summary}默认只建议，不移动源文件。"
         if scan_report:
             artifacts.append(artifact("markdown", scan_report, "打开路径整理清单"))
         if scan_manifest:
             artifacts.append(artifact("json", scan_manifest, "打开路径整理 manifest"))
+        if file_index_notes:
+            artifacts.append(artifact("file-index", file_index_notes[0], "打开首条文件索引"))
+            artifacts.append(artifact("file-index-directory", file_index_notes[0].parent, "打开文件索引目录"))
         debug["scan"] = {key: value for key, value in scan["counts"].items()}
+        debug["file_index_count"] = len(file_index_notes)
+        debug["file_index_notes"] = [str(path) for path in file_index_notes]
         next_actions = ["打开路径整理清单", "按建议归档到生活/学习/工作", "需要继续问 AI 时提取上下文包"]
     result = unified_result(
         "organize",
@@ -535,7 +671,9 @@ def build_review_index(config: dict[str, Any], limit: int = MAX_REVIEW_ITEMS) ->
             continue
         kind = "note"
         parts = set(path.parts)
-        if "整理" in parts:
+        if "文件索引" in parts:
+            kind = "file-index"
+        elif "整理" in parts:
             kind = "organize"
         elif "提取" in parts:
             kind = "extract"
@@ -676,6 +814,17 @@ def clean_evidence_line(line: str) -> str:
     return cleaned
 
 
+def is_evidence_metadata_line(line: str) -> bool:
+    stripped = re.sub(r"^[-*]\s*", "", line.strip())
+    return stripped.startswith(("关联整理记录", "生成时间：", "类型："))
+
+
+def format_direct_evidence(line: str) -> str:
+    if re.fullmatch(r"[A-Za-z]:\\.+", line):
+        return line
+    return compact_text(line, 140)
+
+
 def normalize_openable_paths_in_text(text: str) -> str:
     def replace_path(match: re.Match[str]) -> str:
         return re.split(r"[：，。；]", match.group(0), maxsplit=1)[0].strip()
@@ -693,6 +842,8 @@ def extract_direct_answers(query: str, matches: list[dict[str, Any]], limit: int
         title = str(item.get("title") or "来源")
         raw = str(item.get("raw_markdown") or item.get("summary") or "")
         for line in raw.splitlines():
+            if is_evidence_metadata_line(line):
+                continue
             cleaned = clean_evidence_line(line)
             if not cleaned or cleaned.startswith("#") or len(cleaned) < 6:
                 continue
@@ -706,9 +857,9 @@ def extract_direct_answers(query: str, matches: list[dict[str, Any]], limit: int
             if key in seen:
                 continue
             seen.add(key)
-            candidates.append((score, -len(cleaned), title, cleaned))
+            candidates.append((score, -len(cleaned), title, format_direct_evidence(cleaned)))
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
-    return [f"{title}：{compact_text(line, 140)}" for _, _, title, line in candidates[:limit]]
+    return [f"{title}：{format_direct_evidence(line)}" for _, _, title, line in candidates[:limit]]
 
 
 def direct_evidence_for_item(query: str, item: dict[str, Any], limit: int = 2) -> list[str]:
@@ -726,6 +877,8 @@ def best_evidence_score_for_item(query: str, item: dict[str, Any]) -> int:
     entity_tokens = query_entity_tokens(query)
     best = 0
     for line in raw.splitlines():
+        if is_evidence_metadata_line(line):
+            continue
         cleaned = clean_evidence_line(line)
         if not cleaned or cleaned.startswith("#") or len(cleaned) < 6:
             continue

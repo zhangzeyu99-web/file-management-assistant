@@ -484,6 +484,29 @@ tags:
         self.assertNotIn('<button class="result-button" onclick="toggleOutput()">', html)
         self.assertNotIn('<button class="advanced-button" onclick="toggleOutput()">', html)
 
+    def test_result_layout_uses_document_cards_for_sources_paths_prompt_and_artifacts(self) -> None:
+        html = gui_server.HTML
+
+        for required in [
+            "result-document",
+            "result-summary-card",
+            "source-card-grid",
+            "source-card",
+            "path-chip",
+            "artifact-shelf",
+            "artifact-card",
+            "prompt-preview",
+            "renderSourceCards",
+            "renderArtifactShelf",
+            "renderPromptPreview",
+            "复制路径",
+            "复制 prompt",
+            "打开产物",
+        ]:
+            self.assertIn(required, html)
+        self.assertNotIn("最近来源：", html)
+        self.assertNotIn("产物路径：", html)
+
     def test_advanced_page_is_degraded_to_static_notice(self) -> None:
         advanced = (gui_server.ROOT / "docs" / "assets" / "gui" / "advanced.html").read_text(encoding="utf-8-sig")
 

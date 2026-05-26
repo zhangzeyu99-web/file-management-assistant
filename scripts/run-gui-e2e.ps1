@@ -139,6 +139,7 @@ function Get-ResultPaths {
     function Visit($node) {
         if ($null -eq $node) { return }
         if ($node -is [string]) {
+            if ($node.Contains([string][char]0x2026) -or $node.Contains("[e2e-truncated]")) { return }
             if ($node -match '^[A-Za-z]:\\') { $paths.Add($node) }
             return
         }

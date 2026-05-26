@@ -251,6 +251,34 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertNotIn(f"{path}：directory", source["summary"])
         self.assertEqual(path, source["direct_evidence"])
 
+    def test_direct_evidence_does_not_return_truncated_or_metadata_paths_from_file_index(self) -> None:
+        source = self.fixture / "very-long-source-folder-name-for-evidence-check" / "notebooklm-obsidian-tutorial.txt"
+        source.parent.mkdir(parents=True)
+        source.write_text("NotebookLM Obsidian 教程原文", encoding="utf-8")
+        organizer = self.vault / "04 例行工作" / "知识整理助手" / "整理" / (
+            "20260526-101306 NotebookLM 和 Obsidian 教程资料，后续要整理为学习资料并给 AI 复用.md"
+        )
+        item = {
+            "title": "notebooklm-obsidian-tutorial",
+            "path": str(self.vault / "04 例行工作" / "知识整理助手" / "文件索引" / "notebooklm-obsidian-tutorial.md"),
+            "raw_markdown": "\n".join(
+                [
+                    "# notebooklm-obsidian-tutorial",
+                    f"关联整理记录：`{organizer}`",
+                    f"来源路径：`{source}`",
+                    "NotebookLM Obsidian 教程原文",
+                ]
+            ),
+            "summary": "",
+            "type": "file-index",
+        }
+
+        evidence = knowledge_assistant.direct_evidence_for_item("Obsidian 教程", item, limit=2)
+
+        self.assertTrue(evidence, item)
+        self.assertFalse(any("…" in value for value in evidence), evidence)
+        self.assertFalse(any(str(organizer) in value for value in evidence), evidence)
+
     def test_review_does_not_fallback_to_unrelated_recent_notes(self) -> None:
         result = knowledge_assistant.run_action("review", {"query": "b站"}, self.config_path)
 
@@ -610,6 +638,42 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertIn("AI_Decision.html", note_text)
         self.assertIn("AI 调研报告.pdf", note_text)
         self.assertIn("不会移动源文件", note_text)
+
+    def test_organize_creates_independent_index_notes_for_each_readable_file(self) -> None:
+        source_dir = self.fixture / "独立索引资料"
+        source_dir.mkdir()
+        alpha = source_dir / "Alpha Spec.md"
+        beta = source_dir / "Beta Notes.txt"
+        binary = source_dir / "raw-data.bin"
+        alpha.write_text(
+            "# Alpha Spec\n\nPerFileIndexAlpha-20260526：添加资料时必须为每个可读文件生成独立索引条目。",
+            encoding="utf-8",
+        )
+        beta.write_text(
+            "PerFileIndexBeta-20260526：搜索回顾应该能直接命中 Beta Notes 的独立文件索引。",
+            encoding="utf-8",
+        )
+        binary.write_bytes(b"\x00\x01\x02not-readable")
+
+        result = knowledge_assistant.run_action("organize", {"local_paths": str(source_dir)}, self.config_path)
+
+        self.assertUnifiedResult(result, "organize")
+        self.assertIn("生成 2 条文件索引", result["summary"])
+        index_dir = self.vault / "04 例行工作" / "知识整理助手" / "文件索引"
+        index_notes = sorted(index_dir.glob("*.md"))
+        self.assertEqual(2, len(index_notes), [str(path) for path in index_notes])
+        joined = "\n".join(path.read_text(encoding="utf-8") for path in index_notes)
+        self.assertIn(str(alpha), joined)
+        self.assertIn(str(beta), joined)
+        self.assertIn("PerFileIndexAlpha-20260526", joined)
+        self.assertIn("PerFileIndexBeta-20260526", joined)
+        self.assertNotIn("raw-data.bin\n\n## 原文摘录", joined)
+
+        review = knowledge_assistant.run_action("review", {"query": "PerFileIndexBeta-20260526"}, self.config_path)
+
+        self.assertUnifiedResult(review, "review")
+        self.assertTrue(any("文件索引" in item.get("path", "") for item in review["sources"]), review)
+        self.assertTrue(any("Beta Notes" in item.get("title", "") for item in review["sources"]), review)
 
     def test_organize_refuses_missing_local_path_without_text(self) -> None:
         missing = self.fixture / "missing-folder"

@@ -85,6 +85,28 @@ async page => {
     return values;
   }
 
+  function trimForReport(value, limit = 3000) {
+    const text = String(value || "");
+    return text.length > limit ? `${text.slice(0, limit)}…[e2e-truncated]` : text;
+  }
+
+  function sanitizeForReport(node, key = "") {
+    if (node === null || node === undefined) return node;
+    if (typeof node === "string") {
+      if (key === "content") return trimForReport(node, 800);
+      return trimForReport(node, 1800);
+    }
+    if (Array.isArray(node)) return node.map(item => sanitizeForReport(item));
+    if (typeof node === "object") {
+      const output = {};
+      for (const [childKey, childValue] of Object.entries(node)) {
+        output[childKey] = sanitizeForReport(childValue, childKey);
+      }
+      return output;
+    }
+    return node;
+  }
+
   function buttonLocator(label, scope = "body") {
     return page
       .locator(scope)
@@ -128,15 +150,16 @@ async page => {
       item.http_status = response.status();
       const requestData = response.request().postDataJSON();
       item.request_action = requestData.action || null;
-      item.response = await response.json();
-      item.response_ok = Boolean(item.response && item.response.ok);
+      const responseJson = await response.json();
+      item.response = sanitizeForReport(responseJson);
+      item.response_ok = Boolean(responseJson && responseJson.ok);
       await page.waitForTimeout(250);
       item.output_visible = await isOutputVisible();
       const outputText = await visibleText("#out");
       item.output_looks_like_json = /^\s*\{[\s\S]*\}\s*$/.test(outputText);
       item.result_text = resultSelector
-        ? await visibleText(resultSelector)
-        : await visibleText(`${renderScope} .site-action-result`);
+        ? trimForReport(await visibleText(resultSelector))
+        : trimForReport(await visibleText(`${renderScope} .site-action-result`));
       item.ok = item.http_status >= 200 && item.http_status < 400 && item.response_ok && item.request_action === expectedAction;
 
       if (!item.ok) {
