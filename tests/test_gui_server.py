@@ -358,7 +358,7 @@ tags:
                 self.assertIn(key, result, result)
         self.assertIn("AI 上下文包", extract["summary"])
 
-    def test_html_exposes_three_primary_operations_without_product_drift(self) -> None:
+    def test_html_exposes_only_three_primary_operations_without_knowledge_feed(self) -> None:
         html = gui_server.HTML
 
         for label in [
@@ -367,7 +367,6 @@ tags:
             "搜索回顾",
             "生成 AI 上下文包",
             "AI 上下文包",
-            "知识流",
             "本地文件 / 目录目标",
             "粘贴本地路径",
             "拖放文件到这里",
@@ -385,19 +384,6 @@ tags:
             'href="#organize"',
             'href="#review"',
             'href="#extract"',
-            'id="knowledgeFeed"',
-            "renderKnowledgeFeed",
-            "openKnowledgeDetail",
-            "一句话结论",
-            "适用场景",
-            "关键结论",
-            "继续使用",
-            "关联内容",
-            "可追问问题",
-            "renderDetailSections",
-            "renderRelatedItems",
-            "renderThinkingPrompts",
-            "data-knowledge-card",
             "action-section",
             "site-action-result",
             "只生成建议和新记录",
@@ -414,14 +400,16 @@ tags:
             "确认生成上下文包",
             "inspect-local-targets",
             "readLocalTargets()",
+            "一句话答案",
+            "命中证据",
+            "命中词",
+            "证据摘录",
+            "加入上下文包",
         ]:
             self.assertIn(required, html)
         for productized in [
-            "向下浏览",
             "来源可追溯",
-            "完成情况",
-            "参考来源",
-            "保存位置",
+            "命中证据",
             "下一步建议",
             "result-sections",
             "noMatchReview",
@@ -458,6 +446,12 @@ tags:
         self.assertNotIn("首页不再堆功能", html)
         self.assertNotIn("每次点击后", html)
         self.assertNotIn("hero-kicker", html)
+        self.assertNotIn("知识流", html)
+        self.assertNotIn('id="knowledgeFeed"', html)
+        self.assertNotIn("renderKnowledgeFeed", html)
+        self.assertNotIn("openKnowledgeDetail", html)
+        self.assertNotIn("完成情况", html)
+        self.assertNotIn("保存位置", html)
         self.assertNotIn("boundary-grid", html)
         self.assertNotIn("boundary-card", html)
         self.assertNotIn("hero-illustration.png", html)

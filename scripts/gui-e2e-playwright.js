@@ -184,7 +184,7 @@ async page => {
           action: expectedAction,
         });
       }
-      if (!/完成情况|参考来源|保存位置|下一步建议|本地目标|来源可追溯|已完成/.test(item.result_text)) {
+      if (!/一句话答案|命中证据|生成产物|下一步建议|本地目标|来源可追溯|已完成|未完成/.test(item.result_text)) {
         addIssue("unclear-result-card", "result card does not clearly explain outcome, sources, artifacts, or next steps", {
           label,
           action: expectedAction,
@@ -203,7 +203,6 @@ async page => {
   const bodyText = await page.locator("body").innerText();
   const mustHave = [
     "本地知识整理助手",
-    "知识流",
     "添加资料",
     "搜索回顾",
     "生成 AI 上下文包",
@@ -240,23 +239,7 @@ async page => {
     }
   }
 
-  const cardCount = await page.locator("[data-knowledge-card]").count();
-  report.knowledge_detail.card_count = cardCount;
-  if (cardCount < 1) {
-    addIssue("missing-knowledge-feed", "knowledge feed did not render any source-backed card");
-  } else {
-    await page.locator("[data-knowledge-card]").first().evaluate(el => el.click());
-    await page.waitForTimeout(300);
-    const detailText = await visibleText("#knowledgeDetail");
-    report.knowledge_detail.detail_visible = detailText.length > 0;
-    report.knowledge_detail.has_summary = detailText.includes("一句话结论");
-    report.knowledge_detail.has_related = detailText.includes("关联内容");
-    report.knowledge_detail.has_prompts = detailText.includes("可追问问题");
-    report.knowledge_detail.has_source = detailText.includes("来源");
-    if (!report.knowledge_detail.detail_visible || !report.knowledge_detail.has_summary || !report.knowledge_detail.has_related || !report.knowledge_detail.has_prompts || !report.knowledge_detail.has_source) {
-      addIssue("knowledge-card-detail-missing", "knowledge card click did not expose readable detail, source, related items, and thinking prompts", report.knowledge_detail);
-    }
-  }
+  report.knowledge_detail.card_count = 0;
 
   const fileInputCount = await page.locator("input[type=file]").count();
   const localPathInputCount = await page.locator("#localPaths").count();
@@ -280,7 +263,7 @@ async page => {
     await clickAndCapture({
       label: "搜索回顾",
       expectedAction: "review",
-      input: "Obsidian 教程和 AI 上下文包怎么用？",
+      input: "Obsidian 教程",
       scope: "#review",
       renderScope: "#review",
     });
@@ -305,7 +288,7 @@ async page => {
     await clickAndCapture({
       label: "预览候选来源",
       expectedAction: "extract",
-      input: "继续优化本地知识整理助手，需要已有 Obsidian 教程和 GUI 测试上下文。",
+      input: "Obsidian 教程",
       scope: "#extract",
       renderScope: "#extract",
     });

@@ -1,54 +1,17 @@
-# Architecture
+# 架构说明
 
-本地知识整理助手采用薄 GUI + 统一 action 内核。
+产品主线收敛为三个动作：`organize`、`review`、`extract`。
 
-```text
-输入
-文本 / 本地路径 / AI 对话 / Obsidian 笔记 / 历史报告
+## 数据流
 
-内核
-knowledge_assistant.py
-organize / review / extract
+- `organize`：读取文本或真实本地路径，写 Obsidian 整理记录、索引清单和每文件索引。
+- `review`：从 Obsidian、文件索引、Codex 会话索引、历史报告中检索证据，返回答案、命中词、证据摘录和来源路径。
+- `extract`：复用 `review` 的候选证据，预览后生成 AI 上下文包 Markdown 和 prompt。
 
-旧能力
-deprecated non-core tools
+## GUI
 
-输出
-Obsidian 新笔记 / 本地 runtime / AI 上下文包
-```
+GUI 只负责输入、展示和调用 action。首页不再展示知识流、提醒、诊断或旧功能入口。
 
-## Core Action Layer
+## 安全边界
 
-所有推荐入口都返回统一结构：
-
-```json
-{
-  "ok": true,
-  "action": "organize",
-  "summary": "做了什么",
-  "sources": [],
-  "artifacts": [],
-  "next_actions": [],
-  "safety": "不删除、不移动、不重命名、不重写源文件",
-  "debug": {}
-}
-```
-
-## GUI Layer
-
-`docs/assets/gui/workspace.html` 只负责展示和调用 API：
-
-- 首屏：站点式 hero，说明用途、安全边界和三个锚点入口。
-- 知识流：从 `/api/status.knowledge_feed` 渲染标题 + 描述卡片，点击只展开详情和来源。
-- 主入口：添加资料、搜索回顾、生成 AI 上下文包，分别位于 `#organize`、`#review`、`#extract`；提取区先预览候选来源，确认后才写入上下文包。
-- 本地文件 / 目录目标：保留在整理区，支持粘贴路径、选择文件、拖放文件。
-- 结果卡：展示状态、做了什么、来源是什么、产物在哪、下一步能点什么；状态区分未完成、找到候选、已生成。
-- 旧工具已降级：诊断、提醒、旧资料索引和打开器不再作为产品入口；保留历史代码时也不得绕过三主闭环。
-
-## Safety
-
-The default behavior does not delete, move, rename, or rewrite source files. Write actions only create new Obsidian notes or runtime evidence.
-
-## Backup Boundary
-
-GitHub stores project code, docs, templates, tests, config samples, and scripts. Personal Obsidian vaults and `config.local.json` remain private.
+默认不删除、不移动、不重命名、不重写源文件；只写新的 Obsidian 笔记和运行证据。

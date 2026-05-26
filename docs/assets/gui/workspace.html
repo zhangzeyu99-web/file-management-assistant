@@ -759,6 +759,11 @@
       border-radius: 14px;
       background: #fff;
     }
+    .result-wide,
+    .artifact-shelf,
+    .prompt-preview {
+      grid-column: 1 / -1;
+    }
     .result-label {
       display: block;
       margin-bottom: 6px;
@@ -789,7 +794,7 @@
     }
     .source-card-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 10px;
     }
     .source-card,
@@ -834,8 +839,10 @@
       font-family: var(--mono);
       font-size: 12px;
       line-height: 1.5;
-      overflow-wrap: anywhere;
-      white-space: normal;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overflow-wrap: normal;
+      white-space: nowrap;
     }
     .artifact-shelf {
       display: grid;
@@ -904,7 +911,6 @@
           <span>本地知识整理助手</span>
         </a>
         <div class="nav-links">
-          <a href="#knowledge">知识流</a>
           <a href="#organize">添加资料</a>
           <a href="#review">搜索回顾</a>
           <a href="#extract">AI 上下文包</a>
@@ -917,11 +923,11 @@
         <p class="hero-copy">把你丢进来的资料、Obsidian 笔记和 AI 会话，沉淀成可归档、可回顾、可提取给 AI 续用的个人知识系统。</p>
         <div class="safe-pill"><span class="safe-dot">✓</span>只生成建议和新记录，不改动你的源文件</div>
         <div class="hero-actions">
-          <a class="hero-button primary" href="#knowledge">向下浏览知识流</a>
-          <a class="hero-button" href="#organize">添加资料</a>
+          <a class="hero-button primary" href="#organize">添加资料</a>
+          <a class="hero-button" href="#review">搜索回顾</a>
         </div>
         <div class="hero-metrics" aria-label="当前状态">
-          <div class="hero-metric"><span class="metric-value" id="statFeed">-</span><span class="metric-label">知识卡片</span></div>
+          <div class="hero-metric"><span class="metric-value" id="statFeed">-</span><span class="metric-label">已整理来源</span></div>
           <div class="hero-metric"><span class="metric-value" id="statFiles">-</span><span class="metric-label">扫描文件</span></div>
           <div class="hero-metric"><span class="metric-value" id="statNotes">-</span><span class="metric-label">Obsidian 笔记</span></div>
           <div class="hero-metric"><span class="metric-value" id="statRefresh">--:--</span><span class="metric-label">最近刷新</span></div>
@@ -951,19 +957,6 @@
     </section>
 
     <main class="content">
-      <section id="knowledge" class="section-card">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">最近内容</p>
-            <h2 class="section-title">知识流</h2>
-            <p class="section-copy">最近整理过的笔记、AI 对话和报告会沉淀在这里。点开卡片可以查看摘要、来源和后续可用的线索。</p>
-          </div>
-          <button class="site-button" onclick="refreshStatus()">刷新知识流</button>
-        </div>
-        <div id="knowledgeFeed" class="knowledge-grid" aria-live="polite"></div>
-        <article id="knowledgeDetail" class="knowledge-detail" aria-live="polite"></article>
-      </section>
-
       <section class="section-card">
         <div class="section-head">
           <div>
@@ -1053,7 +1046,6 @@
     let selectedLocalFiles = [];
     let lastResultPaths = [];
     let lastPrompt = "";
-    let lastKnowledgeFeed = [];
     let lastAction = "organize";
     let lastExtractPreview = null;
 
@@ -1203,7 +1195,7 @@
         return `${artifactCount} 个产物；${compact(first.path || first.label || first.type || "已生成", 92)}`;
       }
       const fallback = data?.obsidian_note || data?.note || data?.markdown_report || data?.html_report || data?.summary_json;
-      return fallback ? `已生成产物：${compact(fallback, 96)}` : "如需落盘，优先写入新的 Obsidian 记录或本地报告。";
+      return fallback ? `已生成产物：${compact(fallback, 96)}` : "本次没有生成文件产物。";
     }
 
     function humanSummary(data) {
@@ -1212,33 +1204,36 @@
         return `本地目标检查完成：${data.summary.existing_count || 0} 个存在，${data.summary.target_count || 0} 个目标，${data.summary.selected_file_count || 0} 个选择/拖放文件。`;
       }
       if (data?.error) return data.error;
-      return "已生成结果，请查看来源、保存位置和下一步建议。";
+      return "已生成结果，请查看答案、证据和下一步建议。";
     }
 
     function renderSourceCards(data) {
       const sources = Array.isArray(data?.sources) ? data.sources : [];
       if (!sources.length) {
-        return `<section class="result-summary-card"><span class="result-label">参考来源</span><p>${escapeHtml(sourceSummary(data, 0))}</p></section>`;
+        return `<section class="result-summary-card"><span class="result-label">命中证据</span><p>${escapeHtml(sourceSummary(data, 0))}</p></section>`;
       }
       return `
-        <section>
-          <span class="result-label">参考来源</span>
+        <section class="result-wide">
+          <span class="result-label">命中证据</span>
           <div class="source-card-grid">
             ${sources.slice(0, 6).map((item, index) => {
               const title = compact(item.title || `来源 ${index + 1}`, 80);
               const type = item.type || "来源";
               const path = item.path || "";
               const why = item.why || "与当前任务匹配。";
-              const direct = item.direct_evidence ? `直接线索：${item.direct_evidence}` : "";
+              const terms = Array.isArray(item.matched_terms) ? item.matched_terms.join(" / ") : "";
+              const evidence = item.evidence_excerpt || item.direct_evidence || "";
+              const direct = evidence ? `证据摘录：${evidence}` : "";
               const summary = compact(direct || item.summary || "", 220);
               return `
                 <article class="source-card">
                   <div class="source-card-meta">${escapeHtml(type)} · 来源 ${index + 1}</div>
                   <div class="source-card-title">${escapeHtml(title)}</div>
+                  ${terms ? `<div class="source-card-body"><strong>命中词：</strong>${escapeHtml(terms)}</div>` : ""}
                   <div class="source-card-body">${escapeHtml(compact(why, 160))}</div>
                   ${summary ? `<div class="source-card-body">${escapeHtml(summary)}</div>` : ""}
                   ${path ? `<code class="path-chip">${escapeHtml(path)}</code>` : ""}
-                  ${path ? `<div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(path)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(path)})'>打开来源</button></div>` : ""}
+                  ${path ? `<div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(path)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(path)})'>打开来源</button><button class="result-button" onclick='seedExtractFromSource(${inlineString(path)})'>加入上下文包</button></div>` : ""}
                 </article>
               `;
             }).join("")}
@@ -1250,15 +1245,15 @@
     function renderArtifactShelf(data) {
       const artifacts = Array.isArray(data?.artifacts) ? data.artifacts : [];
       if (!artifacts.length) {
-        return `<section class="result-summary-card"><span class="result-label">保存位置</span><p>${escapeHtml(artifactSummary(data, 0))}</p></section>`;
+        return `<section class="result-summary-card"><span class="result-label">生成产物</span><p>${escapeHtml(artifactSummary(data, 0))}</p></section>`;
       }
       const pathArtifacts = artifacts.filter((item) => item.path).slice(0, 6);
       if (!pathArtifacts.length) {
-        return `<section class="result-summary-card"><span class="result-label">保存位置</span><p>${escapeHtml(artifactSummary(data, artifacts.length))}</p></section>`;
+        return `<section class="result-summary-card"><span class="result-label">生成产物</span><p>${escapeHtml(artifactSummary(data, artifacts.length))}</p></section>`;
       }
       return `
-        <section>
-          <span class="result-label">保存位置</span>
+        <section class="result-wide">
+          <span class="result-label">生成产物</span>
           <div class="artifact-shelf">
             ${pathArtifacts.map((item) => {
               const path = item.path || "";
@@ -1341,8 +1336,8 @@
             <p>${escapeHtml(compact(humanSummary(data), 360))}</p>
           </section>
           <section class="result-section">
-            <span class="result-label">完成情况</span>
-            <div class="result-detail">${escapeHtml(didWhat)}</div>
+            <span class="result-label">一句话答案</span>
+            <div class="result-detail">${escapeHtml(data?.answer || didWhat)}</div>
           </section>
           ${renderSourceCards(data)}
           ${renderArtifactShelf(data)}
@@ -1424,185 +1419,15 @@
       if (paragraph) paragraph.textContent = "prompt 已复制。把它粘到 AI 对话里，就能带着已整理上下文继续。";
     }
 
-    function renderKnowledgeFeed(items) {
-      lastKnowledgeFeed = Array.isArray(items) ? items : [];
-      const feed = $("knowledgeFeed");
-      if (!feed) return;
-      if (lastKnowledgeFeed.length === 0) {
-        feed.innerHTML = `
-          <article class="knowledge-card">
-            <div class="card-meta"><span class="tag">空状态</span></div>
-            <h3>还没有可展示的知识卡</h3>
-            <p>先使用“添加资料”写入一条 Obsidian 记录，知识流会在刷新后出现。</p>
-            <div class="source-line">等待整理</div>
-          </article>
-        `;
-        return;
-      }
-      feed.innerHTML = lastKnowledgeFeed.map((item, index) => `
-        <button class="knowledge-card" data-knowledge-card="${index}" onclick="openKnowledgeDetail(${index})">
-          <div class="card-meta">
-            ${(item.tags || [item.type || "笔记"]).slice(0, 2).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
-            <span>${escapeHtml(item.updated_at || "")}</span>
-          </div>
-          <h3>${escapeHtml(compact(item.title || "未命名知识", 68))}</h3>
-          <p>${escapeHtml(compact(item.takeaway || item.description || "没有摘要，点击查看来源。", 118))}</p>
-          <div class="source-line">打开阅读卡片</div>
-        </button>
-      `).join("");
-    }
-
     function inlineString(value) {
       return JSON.stringify(String(value || "")).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
     }
 
-    function detailList(items, fallback) {
-      const values = Array.isArray(items) ? items.filter(Boolean).slice(0, 4) : [];
-      if (!values.length) return `<p class="empty-list">${escapeHtml(fallback)}</p>`;
-      return `<ul class="detail-list">${values.map((item) => `<li>${escapeHtml(compact(String(item), 140))}</li>`).join("")}</ul>`;
-    }
-
-    function detailTextList(value, fallback) {
-      const textValue = String(value || "").trim();
-      if (!textValue) return `<p class="empty-list">${escapeHtml(fallback)}</p>`;
-      const parts = textValue.split(/[；;]/).map((item) => item.trim()).filter(Boolean);
-      if (parts.length >= 2) {
-        return `<ul class="detail-list">${parts.slice(0, 4).map((item) => `<li>${escapeHtml(compact(item, 150))}</li>`).join("")}</ul>`;
-      }
-      return `<p>${escapeHtml(textValue)}</p>`;
-    }
-
-    function tagPills(item) {
-      const tags = Array.isArray(item.tags) ? item.tags.slice(0, 3) : [];
-      return tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
-    }
-
-    function sourceItems(item) {
-      const rawSources = Array.isArray(item.source_items) ? item.source_items : [];
-      const sources = rawSources.length ? rawSources : [{label: "当前笔记", path: item.source_path || ""}];
-      return sources.slice(0, 4).map((source) => {
-        const label = source.label || "来源";
-        const path = source.path || item.source_path || "";
-        return `
-          <div class="source-item">
-            <div>
-              <span class="source-label">${escapeHtml(label)}</span>
-              <div class="source-path">${escapeHtml(path || "无来源路径")}</div>
-            </div>
-            <button class="result-button" onclick='copyText(${inlineString(path)})'>复制</button>
-          </div>
-        `;
-      }).join("");
-    }
-
-    function renderDetailSections(item) {
-      const sections = Array.isArray(item.detail_sections) ? item.detail_sections : [];
-      if (!sections.length) {
-        return `
-          <div class="detail-columns">
-            <section class="detail-section">
-              <h4>适用场景</h4>
-              ${detailTextList(item.scenario || item.description, "暂无适用场景。")}
-            </section>
-            <section class="detail-section">
-              <h4>关键结论</h4>
-              ${detailList(item.conclusions, "这张卡还没有提炼出关键结论。")}
-            </section>
-          </div>
-        `;
-      }
-      return `
-        <div class="detail-columns">
-          ${sections.map((section) => `
-            <section class="detail-section">
-              <h4>${escapeHtml(section.title || "内容")}</h4>
-              ${Array.isArray(section.items) && section.items.length
-                ? detailList(section.items, section.body || "暂无内容。")
-                : detailTextList(section.body || "", "暂无内容。")}
-            </section>
-          `).join("")}
-        </div>
-      `;
-    }
-
-    function renderRelatedItems(item) {
-      const related = Array.isArray(item.related_items) ? item.related_items.slice(0, 3) : [];
-      if (!related.length) {
-        return `<p class="empty-list">还没有发现强关联卡片。后续添加更多知识后会自动补齐。</p>`;
-      }
-      return `
-        <div class="related-stack">
-          ${related.map((relatedItem) => `
-            <article class="related-item">
-              <strong>${escapeHtml(relatedItem.title || "未命名知识")}</strong>
-              <span>${escapeHtml((relatedItem.type || "笔记") + " · " + (relatedItem.why || "主题相关"))}</span>
-              ${relatedItem.source_path ? `<code>${escapeHtml(compact(relatedItem.source_path, 120))}</code>` : ""}
-            </article>
-          `).join("")}
-        </div>
-      `;
-    }
-
-    function renderThinkingPrompts(item) {
-      const prompts = Array.isArray(item.thinking_prompts) ? item.thinking_prompts.slice(0, 4) : [];
-      if (!prompts.length) {
-        return `<p class="empty-list">暂时没有可追问问题。</p>`;
-      }
-      return `
-        <div class="thinking-stack">
-          ${prompts.map((prompt) => `<div class="thinking-prompt">${escapeHtml(prompt)}</div>`).join("")}
-        </div>
-      `;
-    }
-
-    function openKnowledgeDetail(index) {
-      const item = lastKnowledgeFeed[index];
-      const detail = $("knowledgeDetail");
-      if (!item || !detail) return;
-      const type = item.type || "笔记";
-      const title = item.title || "未命名知识";
-      const takeaway = item.takeaway || item.description || "暂无结论。";
-      const actionHint = item.action_hint || "可打开来源继续阅读";
-      const sourcePath = item.source_path || "";
-      detail.classList.add("visible");
-      detail.innerHTML = `
-        <article class="detail-document">
-          <header class="detail-header">
-            <div>
-              <p class="detail-eyebrow">${escapeHtml(type)} · ${escapeHtml(item.updated_at || "最近更新")}</p>
-              <h3 class="detail-title">${escapeHtml(title)}</h3>
-            </div>
-            <div class="detail-pill-row">${tagPills(item)}</div>
-          </header>
-          <section class="detail-callout">
-            <span>一句话结论</span>
-            <p>${escapeHtml(takeaway)}</p>
-          </section>
-          ${renderDetailSections(item)}
-          <section class="detail-section detail-section-wide">
-            <h4>继续使用</h4>
-            <p>${escapeHtml(actionHint)}</p>
-          </section>
-          <div class="detail-columns">
-            <section class="detail-section">
-              <h4>关联内容</h4>
-              ${renderRelatedItems(item)}
-            </section>
-            <section class="detail-section">
-              <h4>可追问问题</h4>
-              ${renderThinkingPrompts(item)}
-            </section>
-          </div>
-          <section class="detail-section">
-            <h4>来源</h4>
-            <div class="source-stack">${sourceItems(item)}</div>
-          </section>
-          <div class="result-actions">
-            <button class="result-button primary" onclick='copyText(${inlineString(sourcePath)})'>复制主路径</button>
-          </div>
-        </article>
-      `;
-      detail.scrollIntoView({behavior: "smooth", block: "nearest"});
+    function seedExtractFromSource(path) {
+      const input = $("extractInput");
+      if (input) input.value = input.value || inputForAction("review") || "基于已选来源生成 AI 上下文包";
+      lastExtractPreview = {sources: [{path}]};
+      document.getElementById("extract")?.scrollIntoView({behavior: "smooth", block: "start"});
     }
 
     async function copyText(value) {
@@ -1621,7 +1446,6 @@
       $("statFiles").textContent = formatNumber(fileSummary.total_files);
       $("statNotes").textContent = formatNumber(obsidianSummary.total_notes);
       $("statRefresh").textContent = nowTime();
-      renderKnowledgeFeed(feed);
       return status;
     }
 
@@ -1630,7 +1454,6 @@
     refreshStatus().catch((error) => {
       const data = {ok: false, action: "status", error: String(error)};
       renderOutput(data, {show: false});
-      renderKnowledgeFeed([]);
       renderActionResult("review", data);
     });
   </script>

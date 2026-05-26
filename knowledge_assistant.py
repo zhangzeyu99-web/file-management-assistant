@@ -23,7 +23,7 @@ PRODUCT = {
 SAFETY_TEXT = "安全边界：不删除源文件，只读取来源，只写新记录和运行证据；源文件保持原样。"
 CORE_ACTIONS = ["organize", "review", "extract"]
 DEPRECATED_ACTIONS = {"remind", "legacy-index"}
-MAX_REVIEW_ITEMS = 300
+MAX_REVIEW_ITEMS = 1200
 READABLE_FILE_EXTENSIONS = {
     ".bat",
     ".cmd",
@@ -59,6 +59,15 @@ SEARCH_STOP_WORDS = {
     "如何",
     "需要",
     "帮我",
+    "继续",
+    "当前",
+    "任务",
+    "资料",
+    "内容",
+    "问题",
+    "哪里",
+    "在哪里",
+    "是什么",
 }
 
 
@@ -657,14 +666,41 @@ def iter_markdown_notes(config: dict[str, Any]) -> list[Path]:
                 continue
             seen.add(key)
             notes.append(path)
-            if len(notes) >= MAX_REVIEW_ITEMS:
-                return notes
+    return notes
+
+
+def iter_watch_markdown_notes(config: dict[str, Any]) -> list[Path]:
+    notes: list[Path] = []
+    seen: set[str] = set()
+    for root_config in config.get("watch_roots", []):
+        root = Path(str(root_config.get("path") or "")).expanduser()
+        if not root.exists() or not root.is_dir():
+            continue
+        max_depth = int(root_config.get("max_depth") or 3)
+        max_files = int(root_config.get("max_files") or 500)
+        count = 0
+        base_depth = len(root.parts)
+        for path in sorted(root.rglob("*"), key=lambda item: item.stat().st_mtime if item.exists() else 0, reverse=True):
+            if count >= max_files:
+                break
+            if not path.is_file() or path.suffix.lower() not in {".md", ".txt"}:
+                continue
+            if len(path.parts) - base_depth > max_depth:
+                continue
+            key = str(path.resolve())
+            if key in seen:
+                continue
+            seen.add(key)
+            notes.append(path)
+            count += 1
     return notes
 
 
 def build_review_index(config: dict[str, Any], limit: int = MAX_REVIEW_ITEMS) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    for path in iter_markdown_notes(config)[:limit]:
+    for path in [*iter_markdown_notes(config), *iter_watch_markdown_notes(config)]:
+        if len(items) >= limit:
+            break
         try:
             text = path.read_text(encoding="utf-8-sig", errors="ignore")
         except OSError:
@@ -679,6 +715,8 @@ def build_review_index(config: dict[str, Any], limit: int = MAX_REVIEW_ITEMS) ->
             kind = "extract"
         elif "Codex" in parts:
             kind = "legacy-codex"
+        elif any(str(path).startswith(str(Path(str(root.get("path") or "")).expanduser())) for root in config.get("watch_roots", [])):
+            kind = "external-file"
         items.append(
             {
                 "title": markdown_title(text, path.stem),
@@ -729,16 +767,240 @@ def query_tokens(query: str) -> list[str]:
     return tokens
 
 
-def score_item(query: str, item: dict[str, Any]) -> int:
-    if not query.strip():
-        return 1
-    haystack = "\n".join(str(item.get(key, "")) for key in ("title", "path", "summary", "type", "raw_markdown")).lower()
+def normalize_match_text(value: str) -> str:
+    return re.sub(r"\s+", "", value.lower())
+
+
+def split_mixed_token(token: str) -> list[str]:
+    parts: list[str] = []
+    parts.extend(re.findall(r"[一-鿿]{2,}", token))
+    parts.extend(re.findall(r"[a-z0-9_.#@+-]{2,}", token.lower()))
+    return parts or [token.lower()]
+
+
+def compact_query_text(query: str) -> str:
+    return normalize_match_text(re.sub(r"[？?。！!，,；;：:（）()【】\\[\\]\"'`]+", "", query))
+
+
+def is_short_mixed_query(query: str) -> bool:
+    compacted = compact_query_text(query)
+    return bool(re.fullmatch(r"[一-鿿]{2,}[a-z0-9_.#@+-]{2,}|[a-z0-9_.#@+-]{2,}[一-鿿]{2,}", compacted))
+
+
+def important_query_terms(query: str) -> list[str]:
     tokens = query_tokens(query)
-    score = 0
-    for token in tokens:
-        if token in haystack:
-            score += 5 if token in str(item.get("title", "")).lower() else 2
+    query_lower = query.lower()
+    keep_keywords = {
+        "github",
+        "codex",
+        "obsidian",
+        "notebooklm",
+        "sop",
+        "启动",
+        "脚本",
+        "仓库",
+        "可执行",
+        "路径",
+        "简历",
+        "线程",
+        "运营",
+        "助手",
+        "上下文",
+        "入库",
+        "记忆仓",
+        "学习",
+        "教程",
+    }
+    terms: list[str] = []
+    def add_term(raw: str) -> None:
+        lowered = raw.lower().strip()
+        lowered = re.sub(r"(是什么|在哪里|在哪|哪里|怎么用|如何用)$", "", lowered)
+        lowered = re.sub(r"^(继续|帮我|请|找到|搜索|回顾|查找)", "", lowered)
+        lowered = lowered.strip("的了吗呢啊")
+        if lowered in SEARCH_STOP_WORDS:
+            return
+        if lowered in {"地址", "位置", "流程", "文件", "记录"}:
+            return
+        if re.fullmatch(r"[a-z0-9_.#@+-]{2,}", lowered):
+            terms.append(lowered)
+            return
+        if "文件管理助手" in lowered:
+            terms.append("文件管理助手")
+            terms.append("file-management-assistant")
+            return
+        found_keyword = False
+        for keyword in sorted(keep_keywords, key=len, reverse=True):
+            if keyword in lowered:
+                terms.append(keyword)
+                found_keyword = True
+        if found_keyword:
+            return
+        return
+
+    source_tokens = split_mixed_token(compact_query_text(query)) if is_short_mixed_query(query) else tokens
+    for token in source_tokens:
+        lowered = token.lower()
+        if re.search(r"[一-鿿]", lowered) and re.search(r"[a-z0-9_.#@+-]", lowered):
+            for part in split_mixed_token(lowered):
+                add_term(part)
+            continue
+        add_term(lowered)
+    for phrase, aliases in {
+        "文件管理助手": ["文件管理助手", "file-management-assistant"],
+        "知识整理助手": ["文件管理助手", "file-management-assistant"],
+        "知识行动助手": ["文件管理助手", "file-management-assistant"],
+    }.items():
+        if phrase in query_lower:
+            terms.extend(aliases)
+    reduced: list[str] = []
+    for term in sorted(dict.fromkeys(terms), key=len, reverse=True):
+        if any(term != other and term in other for other in reduced):
+            continue
+        reduced.append(term)
+    return sorted(reduced, key=lambda item: tokens.index(item) if item in tokens else 999)
+
+
+def text_contains_term(text: str, term: str) -> bool:
+    lowered_text = text.lower()
+    if term in {"路径", "地址", "位置"} and (re.search(r"[A-Za-z]:\\", text) or re.search(r"https?://", lowered_text)):
+        return True
+    if term == "可执行" and ".exe" in lowered_text:
+        return True
+    if term == "教程" and re.search(r"\b(tutorial|guide|getting-started)\b", lowered_text):
+        return True
+    if re.fullmatch(r"[a-z0-9_.#@+-]+", term):
+        return term in lowered_text
+    return normalize_match_text(term) in normalize_match_text(text)
+
+
+def matched_terms_in_text(terms: list[str], text: str) -> list[str]:
+    return [term for term in terms if text_contains_term(text, term)]
+
+
+def query_wants_path_evidence(terms: list[str]) -> bool:
+    return any(term in {"路径", "地址", "位置", "仓库", "github", "可执行", "启动", "脚本"} for term in terms)
+
+
+def evidence_units(item: dict[str, Any]) -> list[tuple[str, str, int]]:
+    units: list[tuple[str, str, int]] = [
+        ("标题", str(item.get("title") or ""), 35),
+        ("路径", str(item.get("path") or ""), 22),
+    ]
+    raw = str(item.get("raw_markdown") or item.get("summary") or "")
+    for line in raw.splitlines():
+        cleaned = clean_evidence_line(line)
+        if not cleaned or cleaned.startswith("#") or is_evidence_metadata_line(cleaned):
+            continue
+        units.append(("正文", cleaned, 16))
+    summary = str(item.get("summary") or "")
+    if summary:
+        units.append(("摘要", summary, 8))
+    return units
+
+
+def is_negated_evidence(text: str, terms: list[str]) -> bool:
+    normalized = normalize_match_text(text)
+    for term in terms:
+        term_text = normalize_match_text(term)
+        if f"没有{term_text}" in normalized or f"无{term_text}" in normalized or f"不是{term_text}" in normalized:
+            return True
+    return False
+
+
+def source_priority(item: dict[str, Any]) -> int:
+    path = str(item.get("path") or "").lower()
+    kind = str(item.get("type") or "")
+    score = {
+        "file-index": 28,
+        "legacy-codex": 22,
+        "organize": 18,
+        "extract": 14,
+        "external-file": 12,
+        "note": 10,
+    }.get(kind, 8)
+    if "\\runs\\" in path or "/runs/" in path:
+        score -= 18
+    if "旧资料二次整理索引" in path or "report.md" in path:
+        score -= 8
+    if "\\文件索引\\" in path or "/文件索引/" in path:
+        score += 10
+    if "\\02 项目\\codex\\" in path or "/02 项目/codex/" in path:
+        score += 8
     return score
+
+
+def strict_match_for_item(query: str, item: dict[str, Any]) -> dict[str, Any] | None:
+    terms = important_query_terms(query)
+    if not terms:
+        return None
+    full_text = "\n".join(str(item.get(key, "")) for key in ("title", "path", "summary", "raw_markdown"))
+    document_terms = matched_terms_in_text(terms, full_text)
+    if set(document_terms) != set(terms):
+        return None
+    short_mixed = is_short_mixed_query(query)
+    query_phrase = compact_query_text(query) if short_mixed else ""
+    wants_path_evidence = query_wants_path_evidence(terms)
+    candidates: list[dict[str, Any]] = []
+    for field, text, base_score in evidence_units(item):
+        if short_mixed and field == "摘要":
+            continue
+        if not wants_path_evidence and (field == "路径" or re.search(r"[A-Za-z]:\\", text)):
+            continue
+        unit_terms = matched_terms_in_text(terms, text)
+        if not unit_terms:
+            continue
+        if is_negated_evidence(text, terms):
+            continue
+        normalized_unit = normalize_match_text(text)
+        has_exact_phrase = bool(query_phrase and query_phrase in normalized_unit)
+        has_all_terms_in_unit = set(unit_terms) == set(terms)
+        if short_mixed and not (has_exact_phrase or has_all_terms_in_unit):
+            continue
+        score = base_score + source_priority(item) + len(unit_terms) * 12
+        if has_exact_phrase:
+            score += 80
+        if has_all_terms_in_unit:
+            score += 45
+        if field == "正文" and len(text) >= 18:
+            score += 70
+        if field == "正文" and (re.search(r"\d", text) or re.search(r"[A-Za-z]:\\", text)):
+            score += 18
+        wants_executable_path = "可执行" in terms or "exe" in terms or ("codex" in terms and "路径" in terms)
+        if wants_executable_path and ".exe" in text.lower():
+            score += 180
+        elif wants_executable_path and field == "正文" and "真实 exe" in text.lower():
+            score -= 90
+        elif wants_executable_path and field == "正文" and ".exe" not in text.lower() and not re.search(r"[A-Za-z]:\\", text):
+            score -= 45
+        if field == "标题" and len(text) <= 24:
+            score -= 30
+        score += evidence_line_score(query, text)
+        candidates.append(
+            {
+                "score": score,
+                "field": field,
+                "text": format_direct_evidence(text),
+                "matched_terms": unit_terms,
+                "has_exact_phrase": has_exact_phrase,
+            }
+        )
+    if not candidates:
+        return None
+    candidates.sort(key=lambda value: (value["score"], -len(value["text"])), reverse=True)
+    best = candidates[0]
+    return {
+        "score": int(best["score"]),
+        "matched_terms": document_terms,
+        "evidence_terms": best["matched_terms"],
+        "evidence_excerpt": best["text"],
+        "evidence_field": best["field"],
+        "has_exact_phrase": bool(best["has_exact_phrase"]),
+    }
+
+
+def score_item(query: str, item: dict[str, Any]) -> int:
+    match = strict_match_for_item(query, item)
+    return int(match["score"]) if match else 0
 
 
 def evidence_line_score(query: str, line: str) -> int:
@@ -863,6 +1125,9 @@ def extract_direct_answers(query: str, matches: list[dict[str, Any]], limit: int
 
 
 def direct_evidence_for_item(query: str, item: dict[str, Any], limit: int = 2) -> list[str]:
+    strict = strict_match_for_item(query, item)
+    if strict and strict.get("evidence_excerpt"):
+        return [str(strict["evidence_excerpt"])]
     title = str(item.get("title") or "来源")
     prefix = f"{title}："
     evidence: list[str] = []
@@ -872,6 +1137,9 @@ def direct_evidence_for_item(query: str, item: dict[str, Any], limit: int = 2) -
 
 
 def best_evidence_score_for_item(query: str, item: dict[str, Any]) -> int:
+    strict = strict_match_for_item(query, item)
+    if strict:
+        return int(strict["score"])
     title = str(item.get("title") or "来源")
     raw = str(item.get("raw_markdown") or item.get("summary") or "")
     entity_tokens = query_entity_tokens(query)
@@ -890,6 +1158,7 @@ def best_evidence_score_for_item(query: str, item: dict[str, Any]) -> int:
 
 
 def source_item_from_review_match(query: str, item: dict[str, Any], why: str = "") -> dict[str, str]:
+    strict = strict_match_for_item(query, item) or {}
     evidence = direct_evidence_for_item(query, item)
     summary = normalize_openable_paths_in_text(str(item.get("summary") or ""))
     if evidence:
@@ -903,23 +1172,24 @@ def source_item_from_review_match(query: str, item: dict[str, Any], why: str = "
     )
     if evidence:
         source["direct_evidence"] = evidence[0]
+    if strict:
+        source["matched_terms"] = list(strict.get("matched_terms") or [])
+        source["evidence_excerpt"] = str(strict.get("evidence_excerpt") or evidence[0] if evidence else "")
+        source["evidence_field"] = str(strict.get("evidence_field") or "")
+        source["match_score"] = str(strict.get("score") or "")
     return source
 
 
 def context_matches_for_query(config: dict[str, Any], query: str, limit: int = 8) -> tuple[list[dict[str, Any]], int]:
     index = build_review_index(config)
-    ranked = sorted(index, key=lambda item: (score_item(query, item), item.get("modified_at", "")), reverse=True)
-    matches = [item for item in ranked if score_item(query, item) > 0][:limit]
-    if not query and not matches and ranked:
-        matches = ranked[: min(5, limit)]
-    evidence_matches = [item for item in matches if direct_evidence_for_item(query, item)]
-    if evidence_matches:
-        matches = sorted(
-            evidence_matches,
-            key=lambda item: (best_evidence_score_for_item(query, item), score_item(query, item), item.get("modified_at", "")),
-            reverse=True,
-        )[:limit]
-    return matches, len(index)
+    scored: list[tuple[int, str, dict[str, Any]]] = []
+    for item in index:
+        score = score_item(query, item)
+        if score <= 0:
+            continue
+        scored.append((score, str(item.get("modified_at", "")), item))
+    ranked = [item for _, _, item in sorted(scored, key=lambda value: (value[0], value[1]), reverse=True)]
+    return dedupe_review_items(ranked, limit), len(index)
 
 
 def dedupe_review_items(items: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
@@ -961,7 +1231,7 @@ def review(config: dict[str, Any], payload: dict[str, Any] | None = None) -> dic
     payload = payload or {}
     query = str(payload.get("query") or payload.get("text") or payload.get("question") or "").strip()
     if not query:
-        return unified_result(
+        result = unified_result(
             "review",
             "请输入关键词或问题。搜索回顾只做证据检索，不会用最近内容伪装成答案。",
             sources=[],
@@ -970,29 +1240,45 @@ def review(config: dict[str, Any], payload: dict[str, Any] | None = None) -> dic
             debug={"reason": "empty_query"},
             ok=False,
         )
+        result["status"] = "not_found"
+        result["answer"] = "没有找到：请输入关键词或问题。"
+        return result
 
     matches, index_count = context_matches_for_query(config, query, 8)
     sources = [source_item_from_review_match(query, item) for item in matches]
     if sources:
-        lead = "；".join(f"{item['title']}（{item['type']}）" for item in sources[:3])
-        direct_answers = extract_direct_answers(query, matches)
-        if direct_answers:
-            summary = f"本地摘要：找到 {len(sources)} 条相关内容。直接线索：{'；'.join(direct_answers)}。优先查看：{lead}。"
-        else:
-            summary = f"本地摘要：找到 {len(sources)} 条相关内容。优先查看：{lead}。"
-        next_actions = ["打开匹配来源", "提取 AI 上下文包", "整理新的补充资料"]
+        first = sources[0]
+        evidence = first.get("evidence_excerpt") or first.get("direct_evidence") or first.get("summary", "")
+        answer = f"找到的是：{first['title']}。关键依据：{compact_text(evidence, 180)}"
+        lead = "；".join(f"{index + 1}. {item['title']}" for index, item in enumerate(sources[:5]))
+        matched = "、".join(str(term) for term in first.get("matched_terms", []))
+        summary = f"{answer}。命中词：{matched or query}。推荐阅读顺序：{lead}。"
+        next_actions = ["基于这些证据生成 AI 上下文包", "打开首条来源核对", "添加补充资料"]
+        status = "found_answer"
     else:
-        summary = "本地摘要：没有找到已整理内容。建议先使用“整理资料”写入一条记录。"
-        next_actions = ["换一个更具体的关键词", "整理一条相关资料", "检查 Obsidian 是否已有对应笔记"]
-    return unified_result(
+        answer = f"没有找到：已整理资料中没有命中“{query}”的可靠证据。"
+        summary = f"{answer} 建议先添加相关资料，或换一个更具体的关键词。"
+        next_actions = ["换一个更具体的关键词", "添加一条相关资料", "检查 Obsidian 是否已有对应笔记"]
+        status = "not_found"
+    result = unified_result(
         "review",
         summary,
         sources=sources,
         artifacts=[],
         next_actions=next_actions,
-        debug={"query": query, "index_count": index_count, "tokens": query_tokens(query), "direct_answers": extract_direct_answers(query, matches) if sources else []},
+        debug={
+            "query": query,
+            "index_count": index_count,
+            "tokens": query_tokens(query),
+            "important_terms": important_query_terms(query),
+            "reading_order": [item.get("path", "") for item in sources],
+            "direct_answers": extract_direct_answers(query, matches) if sources else [],
+        },
         ok=bool(sources),
     )
+    result["status"] = status
+    result["answer"] = answer
+    return result
 
 
 def render_context_markdown(request: str, sources: list[dict[str, Any]], prompt: str, generated_at: dt.datetime) -> str:
@@ -1036,7 +1322,7 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
     if source_paths:
         sources = sources_from_confirmed_paths(config, source_paths, query)
         if not sources:
-            return unified_result(
+            result = unified_result(
                 "extract",
                 "没有找到已确认来源。请重新预览来源，或确认传入的来源路径仍在知识库中。",
                 sources=[],
@@ -1045,6 +1331,9 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
                 debug={"query": query, "request": request, "mode": mode, "source_paths": source_paths, "reason": "confirmed_sources_not_found"},
                 ok=False,
             )
+            result["status"] = "not_found"
+            result["answer"] = "没有找到已确认来源，不能生成 AI 上下文包。"
+            return result
     else:
         matches, _index_count = context_matches_for_query(config, query, 8)
         sources = [
@@ -1052,7 +1341,7 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
             for item in matches
         ]
     if not sources:
-        return unified_result(
+        result = unified_result(
             "extract",
             f"没有找到可用上下文：{safe_filename(query, '当前任务')}。请先整理相关资料、换更具体的关键词，或在回顾结果中确认来源。",
             sources=[],
@@ -1061,10 +1350,14 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
             debug={"query": query, "request": request, "mode": mode, "reason": "no_matching_sources"},
             ok=False,
         )
+        result["status"] = "not_found"
+        result["answer"] = f"没有找到可用于“{safe_filename(query, '当前任务')}”的证据来源。"
+        return result
     if mode == "preview":
-        return unified_result(
+        first = sources[0]
+        result = unified_result(
             "extract",
-            f"找到 {len(sources)} 条候选来源。请先检查来源是否相关，再确认生成 AI 上下文包。",
+            f"找到 {len(sources)} 条候选来源。首选来源：{first.get('title', '未命名来源')}。请先检查来源是否相关，再确认生成 AI 上下文包。",
             sources=sources,
             artifacts=[],
             next_actions=["确认生成上下文包", "调整关键词重新预览", "先打开来源核对内容"],
@@ -1076,6 +1369,9 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
                 "direct_answers": [item.get("direct_evidence") for item in sources if item.get("direct_evidence")],
             },
         )
+        result["status"] = "candidate_only"
+        result["answer"] = f"候选来源已找到：{first.get('title', '未命名来源')}。"
+        return result
     compressed = "\n".join(
         f"- {item['title']}："
         f"{('直接线索：' + item['direct_evidence'] + '。') if item.get('direct_evidence') else ''}"
@@ -1103,7 +1399,7 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
     runtime_md = write_text(run_dir(config, "extract", generated_at) / filename, markdown)
     obsidian_md = write_text(section_dir(config, "提取") / filename, markdown)
     write_json(run_dir(config, "extract", generated_at) / "context-package.json", {"request": request, "sources": sources, "prompt": prompt, "mode": "generate"})
-    return unified_result(
+    result = unified_result(
         "extract",
         f"AI 上下文包已生成：{safe_filename(query, '当前任务')}。",
         sources=sources,
@@ -1121,6 +1417,9 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
             "direct_answers": [item.get("direct_evidence") for item in sources if item.get("direct_evidence")],
         },
     )
+    result["status"] = "generated"
+    result["answer"] = f"AI 上下文包已生成，已引用 {len(sources)} 条证据来源。"
+    return result
 
 
 def build_legacy_index(config: dict[str, Any]) -> dict[str, Any]:

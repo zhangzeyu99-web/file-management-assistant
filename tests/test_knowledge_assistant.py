@@ -136,7 +136,9 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertTrue(note_paths[0].exists())
         self.assertIn("生活 / 学习 / 工作", note_paths[0].read_text(encoding="utf-8"))
 
-        self.assertIn("本地摘要", review["summary"])
+        self.assertIn("找到的是", review["summary"])
+        self.assertEqual("found_answer", review["status"])
+        self.assertIn("answer", review)
         self.assertTrue(any("NotebookLM" in item.get("title", "") or "NotebookLM" in item.get("summary", "") for item in review["sources"]))
 
         self.assertIn("AI 上下文包", extract["summary"])
@@ -287,6 +289,54 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertEqual([], result["sources"])
         self.assertIn("没有找到", result["summary"])
         self.assertNotIn("找到 5 条", result["summary"])
+
+    def test_review_requires_all_meaningful_terms_for_mixed_chinese_english_query(self) -> None:
+        (self.vault / "02 项目" / "Codex" / "简历 SOP.md").write_text(
+            "# 简历 SOP\n\n这里只记录简历主线，没有运营内容。",
+            encoding="utf-8",
+        )
+        (self.vault / "02 项目" / "Codex" / "运营公告.md").write_text(
+            "# 运营公告\n\n这里只记录运营更新，没有 SOP 内容。",
+            encoding="utf-8",
+        )
+
+        result = knowledge_assistant.run_action("review", {"query": "运营sop"}, self.config_path)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("not_found", result["status"])
+        self.assertEqual([], result["sources"])
+        self.assertIn("没有找到", result["answer"])
+
+    def test_review_returns_answer_and_evidence_cards_for_opex_sop_query(self) -> None:
+        good = self.vault / "02 项目" / "Codex" / "08 运营SOP主库.md"
+        good.write_text(
+            "# 运营SOP主库\n\n"
+            "线程 ID：019da997-deca-7870-a059-b24ee8e005e1\n"
+            "线程名：运营SOP主库\n"
+            "关键结论：根据运营 SOP 为知识库投喂训练 AI 智能体，抓取 162 个 SOP 页面。\n"
+            "产物路径：D:\\codex\\output\\doc\\sop_rag_delivery_20260420\\README.md\n",
+            encoding="utf-8",
+        )
+        noise = self.vault / "02 项目" / "Codex" / "OpenClaw 飞书腾讯知识归档.md"
+        noise.write_text(
+            "# OpenClaw 飞书腾讯知识归档\n\n"
+            "这里提到 SOP 派生交付包，但不是运营 SOP 主线程。",
+            encoding="utf-8",
+        )
+
+        result = knowledge_assistant.run_action("review", {"query": "运营sop"}, self.config_path)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("found_answer", result["status"])
+        self.assertIn("运营SOP主库", result["answer"])
+        self.assertIn("运营SOP主库", result["summary"])
+        self.assertEqual("运营SOP主库", result["sources"][0]["title"])
+        self.assertIn("运营", result["sources"][0]["matched_terms"])
+        self.assertIn("sop", [term.lower() for term in result["sources"][0]["matched_terms"]])
+        self.assertIn("162", result["sources"][0]["evidence_excerpt"])
+        self.assertIn(str(good), result["sources"][0]["path"])
+        self.assertIn("reading_order", result["debug"])
+        self.assertNotEqual("OpenClaw 飞书腾讯知识归档", result["sources"][0]["title"])
 
     def test_review_no_match_is_not_reported_as_completed(self) -> None:
         result = knowledge_assistant.run_action("review", {"query": "zzzxxyyqwerty"}, self.config_path)
@@ -487,6 +537,33 @@ class KnowledgeAssistantTests(unittest.TestCase):
         local_path_index = joined.find("D:\\codex\\file-management-assistant")
         if local_path_index != -1:
             self.assertLess(joined.find("github.com/zhangzeyu99-web/file-management-assistant"), local_path_index, joined)
+
+    def test_extract_preview_reuses_strict_review_evidence_for_sop_context(self) -> None:
+        good = self.vault / "02 项目" / "Codex" / "08 运营SOP主库.md"
+        good.write_text(
+            "# 运营SOP主库\n\n"
+            "线程 ID：019da997-deca-7870-a059-b24ee8e005e1\n"
+            "关键结论：运营 SOP 知识库智能体抓取 162 个 SOP 页面。\n"
+            "产物路径：D:\\codex\\output\\doc\\sop_rag_delivery_20260420\\README.md\n",
+            encoding="utf-8",
+        )
+        (self.vault / "02 项目" / "Codex" / "简历 SOP.md").write_text(
+            "# 简历 SOP\n\n这里只记录简历项目。",
+            encoding="utf-8",
+        )
+
+        result = knowledge_assistant.run_action(
+            "extract",
+            {"query": "运营sop", "request": "把运营 SOP 项目打包给新的 AI 对话", "mode": "preview"},
+            self.config_path,
+        )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("candidate_only", result["status"])
+        self.assertEqual("运营SOP主库", result["sources"][0]["title"])
+        self.assertIn("evidence_excerpt", result["sources"][0])
+        self.assertIn("matched_terms", result["sources"][0])
+        self.assertNotIn("简历 SOP", json.dumps(result["sources"], ensure_ascii=False))
 
     def test_extract_generate_keeps_direct_evidence_for_confirmed_sources(self) -> None:
         project_note = self.vault / "02 项目" / "Codex" / "09 文件管理助手流程归档.md"

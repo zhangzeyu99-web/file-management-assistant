@@ -223,14 +223,10 @@ class ProjectQualityTests(unittest.TestCase):
 
         for phrase in [
             ".feature-anchor",
-            "#knowledgeDetail",
-            "data-knowledge-card",
-            "knowledge_detail",
-            "has_related",
-            "has_prompts",
-            "一句话结论",
-            "关联内容",
-            "可追问问题",
+            "一句话答案",
+            "命中证据",
+            "生成产物",
+            "Obsidian 教程",
             "#localPaths",
             "#fileDropZone",
             "inspect-local-targets",
