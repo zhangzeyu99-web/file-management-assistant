@@ -86,6 +86,16 @@ class GuiServerTests(unittest.TestCase):
             self.assertIn(key, first_card)
         self.assertTrue(first_card["source_path"].endswith("AI 上下文取用.md"))
 
+    def test_status_counts_obsidian_markdown_notes_for_home_metric(self) -> None:
+        (self.vault / "01 今日日志" / "2026-05-26.md").write_text("# 今日笔记", encoding="utf-8")
+        (self.vault / "00 收件箱" / "clip.md").write_text("# 收件箱资料", encoding="utf-8")
+        (self.vault / ".obsidian").mkdir()
+        (self.vault / ".obsidian" / "appearance.json").write_text("{}", encoding="utf-8")
+
+        status = gui_server.build_status(self.config_path)
+
+        self.assertEqual(3, status["metrics"]["obsidian_notes"])
+
     def test_knowledge_feed_dedupes_repeated_titles(self) -> None:
         cards_dir = self.vault / "02 项目" / "知识行动助手" / "Card"
         for index in range(2):
@@ -405,6 +415,7 @@ tags:
             "命中词",
             "证据摘录",
             "加入上下文包",
+            "metrics?.obsidian_notes",
         ]:
             self.assertIn(required, html)
         for productized in [

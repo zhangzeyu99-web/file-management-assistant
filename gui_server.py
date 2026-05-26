@@ -491,6 +491,18 @@ def build_knowledge_feed(config: dict[str, Any], limit: int = 8) -> list[dict[st
     return attach_related_feed_items(feed)
 
 
+def count_obsidian_notes(config: dict[str, Any]) -> int:
+    vault = knowledge_assistant.vault_path(config)
+    if not vault.exists():
+        return 0
+    count = 0
+    for path in vault.rglob("*.md"):
+        if any(part.startswith(".") for part in path.relative_to(vault).parts):
+            continue
+        count += 1
+    return count
+
+
 def build_status(config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     config = load_config(config_path)
     return {
@@ -500,6 +512,9 @@ def build_status(config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
         "vault": str(knowledge_assistant.vault_path(config)),
         "runtime_root": str(knowledge_assistant.runtime_root(config)),
         "knowledge_feed": build_knowledge_feed(config),
+        "metrics": {
+            "obsidian_notes": count_obsidian_notes(config),
+        },
         "safety": knowledge_assistant.SAFETY_TEXT,
     }
 

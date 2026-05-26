@@ -1440,11 +1440,11 @@
       const response = await fetch("/api/status");
       const status = await response.json();
       const fileSummary = status.file_report?.summary || {};
-      const obsidianSummary = status.obsidian_report?.summary || {};
+      const metrics = status.metrics || {};
       const feed = status.knowledge_feed || [];
       $("statFeed").textContent = formatNumber(feed.length);
       $("statFiles").textContent = formatNumber(fileSummary.total_files);
-      $("statNotes").textContent = formatNumber(obsidianSummary.total_notes);
+      $("statNotes").textContent = formatNumber(metrics?.obsidian_notes);
       $("statRefresh").textContent = nowTime();
       return status;
     }
