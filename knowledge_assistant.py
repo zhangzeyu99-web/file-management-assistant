@@ -456,6 +456,53 @@ def write_file_index_notes(
     return created
 
 
+def add_unique_term(terms: list[str], seen: set[str], value: str) -> None:
+    term = re.sub(r"\s+", " ", str(value or "")).strip(" `[]()（）。，；:：")
+    if len(term) < 3 or len(term) > 80:
+        return
+    key = term.lower()
+    if key in seen:
+        return
+    seen.add(key)
+    terms.append(term)
+
+
+def recommended_search_terms_for_organize(title: str, text: str, scan: dict[str, Any] | None = None, limit: int = 8) -> list[str]:
+    terms: list[str] = []
+    seen: set[str] = set()
+    add_unique_term(terms, seen, title)
+    if scan:
+        for record in scan.get("records", []):
+            source_path = Path(record.path)
+            add_unique_term(terms, seen, source_path.stem)
+            excerpt = readable_file_excerpt(source_path)
+            for match in re.findall(r"[A-Za-z][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)+", excerpt):
+                add_unique_term(terms, seen, match)
+                if len(terms) >= limit:
+                    return terms[:limit]
+    for match in re.findall(r"[A-Za-z][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)+", text or ""):
+        add_unique_term(terms, seen, match)
+        if len(terms) >= limit:
+            break
+    return terms[:limit]
+
+
+def render_recommended_search_terms_markdown(terms: list[str]) -> str:
+    if not terms:
+        return ""
+    lines = ["", "## 推荐搜索词", ""]
+    lines.extend(f"- `{term}`" for term in terms)
+    return "\n".join(lines) + "\n"
+
+
+def render_file_index_backlinks_markdown(file_index_notes: list[Path]) -> str:
+    if not file_index_notes:
+        return ""
+    lines = ["", "## 关联文件索引", ""]
+    lines.extend(f"- `{path}`" for path in file_index_notes)
+    return "\n".join(lines) + "\n"
+
+
 def build_obsidian_locations(
     config: dict[str, Any],
     organize_note: Path,
@@ -667,7 +714,6 @@ def organize(config: dict[str, Any], payload: dict[str, Any] | None = None) -> d
 
 {SAFETY_TEXT}
 """
-    write_text(note_path, note)
     if scan:
         file_index_notes = write_file_index_notes(config, scan, note_path, generated_at)
         if scan_manifest:
@@ -682,12 +728,20 @@ def organize(config: dict[str, Any], payload: dict[str, Any] | None = None) -> d
                     "file_index_notes": [str(path) for path in file_index_notes],
                 },
             )
+    recommended_terms = recommended_search_terms_for_organize(title, text, scan)
+    note = (
+        note
+        + render_recommended_search_terms_markdown(recommended_terms)
+        + render_file_index_backlinks_markdown(file_index_notes)
+    )
+    write_text(note_path, note)
     summary = f"整理记录已写入 Obsidian：{title}；建议领域：{domain['name']}。"
     artifacts = [
         artifact("obsidian-note", note_path, "打开整理记录"),
         artifact("obsidian-directory", section_dir(config, "整理"), "打开整理目录"),
     ]
     debug: dict[str, Any] = {"kind": kind, "domain": domain, "suggestion": suggestion}
+    debug["recommended_search_terms"] = recommended_terms
     next_actions = ["回顾相关知识", "提取 AI 上下文包", "需要时在 Obsidian 中手动归位"]
     if scan:
         total_files = scan["counts"]["total_files"]

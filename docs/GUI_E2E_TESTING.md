@@ -77,6 +77,8 @@ The E2E audit now verifies these product-level behaviors:
 - the harness fills `e2eLocalPath`, clicks `检查本地目标`, and verifies `inspect-local-targets`
 - after `添加资料`, the result must show `在 Obsidian 里怎么找` and `文件索引目录`
 - the organize response must include structured `debug.obsidian_locations`
+- after `添加资料`, the result must show `推荐搜索词`
+- the organize response must include non-empty `debug.recommended_search_terms`
 - after `搜索回顾`, the user can click `加入上下文包` from a source card
 - the extract section must then show `已加入上下文包候选`
 - the harness clicks `确认生成上下文包` from the selected review source before running the preview flow

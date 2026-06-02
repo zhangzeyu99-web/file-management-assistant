@@ -364,6 +364,9 @@ class ProjectQualityTests(unittest.TestCase):
             "extract_findability",
             "上下文包在 Obsidian 里怎么找",
             "上下文包目录",
+            "recommended_search_terms",
+            "推荐搜索词",
+            "organize_recommended_search_terms",
         ]:
             self.assertIn(phrase, script)
         self.assertIn("e2eLocalPath", runner)

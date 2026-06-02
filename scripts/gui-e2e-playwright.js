@@ -18,6 +18,7 @@ async page => {
       anchors_checked: 0,
       has_local_target_input: false,
       obsidian_findability: false,
+      organize_recommended_search_terms: false,
       extract_findability: false,
       preview_before_generate: false,
       seeded_context_from_review: false,
@@ -300,9 +301,12 @@ async page => {
     if (organized && organized.response_ok) {
       const resultText = organized.result_text || "";
       const locations = organized.response?.debug?.obsidian_locations || {};
+      const recommendedTerms = organized.response?.debug?.recommended_search_terms || [];
       const hasLocationCopy = resultText.includes("在 Obsidian 里怎么找") && resultText.includes("文件索引目录");
       const hasLocationData = Boolean(locations.organize_note && locations.organize_dir && locations.file_index_dir);
+      const hasRecommendedTerms = resultText.includes("推荐搜索词") && Array.isArray(recommendedTerms) && recommendedTerms.length > 0;
       report.three_operations.obsidian_findability = hasLocationCopy && hasLocationData;
+      report.three_operations.organize_recommended_search_terms = hasRecommendedTerms;
       if (!hasLocationCopy) {
         addIssue("organize-missing-obsidian-findability", "organize result does not tell the user where to find the new Obsidian notes", {
           result_text: resultText,
@@ -311,6 +315,12 @@ async page => {
       if (!hasLocationData) {
         addIssue("organize-missing-obsidian-location-data", "organize response is missing structured Obsidian location data", {
           obsidian_locations: locations,
+        });
+      }
+      if (!hasRecommendedTerms) {
+        addIssue("organize-missing-recommended-search-terms", "organize result does not expose recommended_search_terms that can be reused in review", {
+          result_text: resultText,
+          recommended_search_terms: recommendedTerms,
         });
       }
     }

@@ -888,6 +888,33 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertTrue(any("文件索引" in item.get("path", "") for item in review["sources"]), review)
         self.assertTrue(any("Beta Notes" in item.get("title", "") for item in review["sources"]), review)
 
+    def test_organize_adds_recommended_search_terms_and_file_index_backlinks(self) -> None:
+        source_dir = self.fixture / "推荐搜索词资料"
+        source_dir.mkdir()
+        source_file = source_dir / "Launch SOP.md"
+        source_file.write_text(
+            "# Launch SOP\n\nLaunchSOP-20260602：添加资料后要给用户可直接搜索回顾的推荐词。",
+            encoding="utf-8",
+        )
+
+        result = knowledge_assistant.run_action("organize", {"local_paths": str(source_dir)}, self.config_path)
+
+        self.assertUnifiedResult(result, "organize")
+        terms = result["debug"].get("recommended_search_terms")
+        self.assertIsInstance(terms, list, result)
+        self.assertIn("Launch SOP", terms)
+        self.assertIn("LaunchSOP-20260602", terms)
+        note_path = next(Path(item["path"]) for item in result["artifacts"] if item.get("type") == "obsidian-note")
+        note_text = note_path.read_text(encoding="utf-8")
+        self.assertIn("## 推荐搜索词", note_text)
+        self.assertIn("LaunchSOP-20260602", note_text)
+        self.assertIn("## 关联文件索引", note_text)
+        first_index_note = Path(result["debug"]["file_index_notes"][0])
+        self.assertIn(str(first_index_note), note_text)
+        index_text = first_index_note.read_text(encoding="utf-8")
+        self.assertIn("关联整理记录", index_text)
+        self.assertIn(str(note_path), index_text)
+
     def test_organize_exposes_obsidian_findability_locations(self) -> None:
         source_dir = self.fixture / "Obsidian找回资料"
         source_dir.mkdir()

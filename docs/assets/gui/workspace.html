@@ -1368,6 +1368,23 @@
       `;
     }
 
+    function renderRecommendedSearchTerms(data) {
+      const terms = Array.isArray(data?.debug?.recommended_search_terms) ? data.debug.recommended_search_terms.slice(0, 8) : [];
+      if (!terms.length) return "";
+      return `
+        <section class="result-wide">
+          <span class="result-label">推荐搜索词</span>
+          <div class="source-card">
+            <div class="source-card-title">点击复制后，可直接粘到搜索回顾里</div>
+            <div class="source-card-body">这些词来自文件名、来源路径或可读文件摘录，用来快速找回刚入库的资料。</div>
+            <div class="result-actions">
+              ${terms.map((term) => `<button class="result-button" onclick='copyText(${inlineString(term)})'>${escapeHtml(term)}</button>`).join("")}
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
     function renderExtractLocation(data) {
       if (data?.action !== "extract" || data?.debug?.mode !== "generate") return "";
       const locations = data?.debug?.extract_locations || {};
@@ -1511,6 +1528,7 @@
           </section>
           ${renderSourceCards(data)}
           ${renderObsidianLocation(data)}
+          ${renderRecommendedSearchTerms(data)}
           ${renderExtractLocation(data)}
           ${renderArtifactShelf(data)}
           ${renderPromptPreview()}

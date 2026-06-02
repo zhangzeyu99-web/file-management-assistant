@@ -576,6 +576,17 @@ tags:
         ]:
             self.assertIn(required, html)
 
+    def test_html_shows_recommended_search_terms_after_organize(self) -> None:
+        html = gui_server.HTML
+
+        for required in [
+            "renderRecommendedSearchTerms",
+            "推荐搜索词",
+            "点击复制后，可直接粘到搜索回顾里",
+            "recommended_search_terms",
+        ]:
+            self.assertIn(required, html)
+
     def test_html_explains_where_to_find_generated_context_packages(self) -> None:
         html = gui_server.HTML
 
