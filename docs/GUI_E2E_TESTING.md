@@ -136,3 +136,19 @@ This is not a GUI click test. It uses the active config and real local Obsidian 
 - a dynamic `__no_such_topic_<timestamp>__` no-match query
 
 The script writes `output/real-query-qa/<run>/real-query-qa-result.json` and `output/real-query-qa/<run>/summary.md`. It only runs `review` and `extract` preview, so it does not generate an AI context package or modify source files.
+
+## Real Query GUI QA
+
+For the same fixed Chinese queries through the actual page, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-real-query-gui-qa.ps1 -StrictUx
+```
+
+This starts the GUI with `config.local.json`, types the real queries into `#reviewInput`, then runs `extract` in preview-only mode. It writes:
+
+- `output/real-query-gui-qa/<run>/gui-real-query-qa-result.json`
+- `output/real-query-gui-qa/<run>/gui-real-query-qa-summary.md`
+- `output/real-query-gui-qa/<run>/final-page.png`
+
+Strict mode requires 5/5 query cases, no UX issues, no mechanics failures, and no console errors. If `config.local.json` is missing, the harness skips this check because there is no real local vault to validate.

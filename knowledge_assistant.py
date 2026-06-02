@@ -218,6 +218,26 @@ def split_source_paths(value: Any) -> list[str]:
     return split_local_paths(value)
 
 
+def extract_search_query(raw_query: str) -> str:
+    query = str(raw_query or "").strip()
+    if not query:
+        return ""
+    quoted_patterns = [
+        r"为[“\"'](.+?)[”\"']生成\s*(?:AI\s*)?上下文包",
+        r"为[“\"'](.+?)[”\"'](?:打包|提取|制作).*(?:上下文|prompt)",
+        r"[“\"']([^“”\"']{2,80})[”\"']",
+    ]
+    for pattern in quoted_patterns:
+        match = re.search(pattern, query, flags=re.IGNORECASE)
+        if match:
+            candidate = match.group(1).strip()
+            if candidate:
+                return candidate
+    cleaned = re.sub(r"^(为|给|把)", "", query).strip()
+    cleaned = re.sub(r"(?:生成|制作|打包|提取)?\s*(?:AI\s*)?上下文包$", "", cleaned, flags=re.IGNORECASE).strip()
+    return cleaned or query
+
+
 def payload_text(payload: dict[str, Any]) -> str:
     for key in ("text", "body", "conversation", "content", "request", "query"):
         value = payload.get(key)
@@ -1542,7 +1562,8 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
     mode = str(payload.get("mode") or "generate").strip().lower()
     if mode not in {"preview", "generate"}:
         mode = "generate"
-    query = str(payload.get("query") or payload.get("text") or payload.get("request") or "当前任务").strip()
+    raw_query = str(payload.get("query") or payload.get("text") or payload.get("request") or "当前任务").strip()
+    query = extract_search_query(raw_query)
     request = str(payload.get("request") or payload.get("text") or query).strip()
     source_paths = split_source_paths(payload.get("source_paths") or payload.get("confirmed_source_paths"))
     if source_paths:

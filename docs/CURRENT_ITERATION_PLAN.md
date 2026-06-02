@@ -143,6 +143,45 @@
 - 真实查询 QA 通过：5/5 passed。
 - 总 harness 通过，并包含 `real_query_qa`。
 
+### 9. 真实 GUI 中文查询缺少逐项验收
+
+问题：后端真实查询 QA 通过，不等于用户在网页里能看懂、能点击、能继续提取上下文。之前真实页面暴露过“结果看不懂、关键词不相关、点击无反应”的问题，但没有单独的 GUI 查询验收。
+
+修复：
+
+- 新增 `scripts/gui-real-query-qa.js`，直接在 GUI 中输入 `运营sop`、`github仓库`、`简历线程`、`Obsidian助手` 和动态不存在词。
+- 新增 `scripts/run-real-query-gui-qa.ps1`，启动真实本地 GUI，保存 JSON、Markdown 和截图。
+- `verify-harness.ps1` 接入 `real_query_gui_qa`；有 `config.local.json` 时自动跑，缺少本地 vault 配置时跳过。
+- GUI QA 只执行 `review` 和 `extract preview`，不生成上下文包，不改源文件。
+
+验收：
+
+- 每个命中案例必须在页面里看到一句话答案、命中证据、命中词、证据摘录和来源路径。
+- `extract preview` 必须复用搜索回顾的首条证据，且不写 artifacts。
+- 无匹配查询必须显示未完成，不显示伪来源。
+
+已验证：
+
+- RED：首次真实 GUI 查询 5 个案例只有 1 个通过，失败集中在提取区没有复用搜索回顾首条证据。
+- GREEN：`run-real-query-gui-qa.ps1 -StrictUx` 通过，5/5 passed，`ux_issues=0`，`mechanics_failures=0`，`console=0`。
+
+### 10. 提取区被“生成 AI 上下文包”通用词带偏
+
+问题：用户在提取区输入 `为“github仓库”生成 AI 上下文包` 时，后端会把 `AI`、`上下文` 也当作检索词，导致首选来源偏向泛上下文包或测试记录，而不是搜索回顾刚找到的证据。
+
+修复：
+
+- 新增 `extract_search_query()`，把 `为“X”生成 AI 上下文包`、`为“X”打包上下文` 等表达规范化为检索主题 `X`。
+- `request` 保留完整用户任务，`query` 只用于证据检索和排序。
+- 正常业务未命中 `status=not_found` 改为 HTTP 200 + `ok=false`，避免浏览器控制台把“未找到”当资源错误。
+- 真人 GUI 脚本同步把 no-match 预期改为 200 + `ok=false`。
+
+验收：
+
+- 单测覆盖：`extract preview` 对 `为“github仓库”生成 AI 上下文包` 必须复用 `review("github仓库")` 的首条证据。
+- GUI 真实查询覆盖：`运营sop`、`github仓库`、`简历线程`、`Obsidian助手` 的 preview 首条必须复用 review 首条。
+- 未命中结果不制造 console error。
+
 ## 下一轮优先级
 
 ### P0：真实 GUI 走读

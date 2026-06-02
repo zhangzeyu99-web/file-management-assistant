@@ -272,6 +272,14 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
     return {"ok": False, "error": f"unsupported action: {action}"}
 
 
+def http_status_for_action_result(result: dict[str, Any]) -> int:
+    if result.get("ok"):
+        return 200
+    if result.get("status") == "not_found":
+        return 200
+    return 400
+
+
 def configured_open_roots(config: dict[str, Any]) -> list[Path]:
     roots = config.get("allowed_open_roots")
     if not roots:
@@ -372,7 +380,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             result = run_gui_action(str(data.get("action") or ""), data.get("payload") or {}, self.config_path)
-            self._json(result, 200 if result.get("ok") else 400)
+            self._json(result, http_status_for_action_result(result))
         except Exception as exc:  # pragma: no cover - defensive HTTP boundary
             self._json({"ok": False, "error": str(exc)}, 500)
 

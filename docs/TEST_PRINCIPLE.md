@@ -39,6 +39,7 @@
 
 ```powershell
 python -X utf8 scripts\run-real-query-qa.py
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-real-query-gui-qa.ps1 -StrictUx
 ```
 
 合格标准：
@@ -48,3 +49,5 @@ python -X utf8 scripts\run-real-query-qa.py
 - 无匹配查询必须返回未找到，不能用最近笔记伪装成结果。
 - `Obsidian助手` 这类查询不能让迭代日志、QA 记录或测试报告排到首条；应优先教程、指南、知识卡或真实工作记录。
 - 同一文件不能因为同时来自 vault 和 watch root 而在索引里重复出现。
+- GUI 真实查询必须在页面层看到证据卡，并且 `extract preview` 复用 `review` 首条来源。
+- 未命中是业务结果：HTTP 200 + `ok=false`，不能制造浏览器 console error。

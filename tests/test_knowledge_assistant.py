@@ -648,6 +648,35 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertIn("matched_terms", result["sources"][0])
         self.assertNotIn("简历 SOP", json.dumps(result["sources"], ensure_ascii=False))
 
+    def test_extract_preview_uses_quoted_task_topic_instead_of_packaging_words(self) -> None:
+        good = self.vault / "02 项目" / "Codex" / "09 文件管理助手流程归档.md"
+        good.write_text(
+            "# 文件管理助手流程归档\n\n"
+            "GitHub 仓库：https://github.com/zhangzeyu99-web/file-management-assistant\n",
+            encoding="utf-8",
+        )
+        noise = self.vault / "04 例行工作" / "知识整理助手" / "AI 上下文包.md"
+        noise.write_text(
+            "# AI 上下文包\n\n"
+            "生成 AI 上下文包时可以引用 GitHub 仓库，但这不是具体仓库答案。\n",
+            encoding="utf-8",
+        )
+
+        review = knowledge_assistant.run_action("review", {"query": "github仓库"}, self.config_path)
+        self.assertEqual("文件管理助手流程归档", review["sources"][0]["title"])
+
+        result = knowledge_assistant.run_action(
+            "extract",
+            {"query": "为“github仓库”生成 AI 上下文包", "request": "为“github仓库”生成 AI 上下文包", "mode": "preview"},
+            self.config_path,
+        )
+
+        self.assertUnifiedResult(result, "extract")
+        self.assertEqual("preview", result["debug"]["mode"])
+        self.assertEqual("github仓库", result["debug"]["query"])
+        self.assertEqual("文件管理助手流程归档", result["sources"][0]["title"])
+        self.assertIn(str(good), result["sources"][0]["path"])
+
     def test_extract_preview_reports_available_ai_identity_files(self) -> None:
         identity_root = self.vault / "04 例行工作" / "知识整理助手" / "AI 身份文件"
         identity_root.mkdir(parents=True)

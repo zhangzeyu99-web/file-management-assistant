@@ -200,7 +200,7 @@ async page => {
 
     step("review no-match behavior");
     await humanFill("#review textarea[data-action-input]", "__no_such_topic_20260508__", "review no-match query");
-    await runAction("review", "#review .action-buttons .site-button.primary", "#reviewResult", "review no-match", { expectedStatus: 400, expectedResponseOk: false });
+    await runAction("review", "#review .action-buttons .site-button.primary", "#reviewResult", "review no-match", { expectedStatus: 200, expectedResponseOk: false });
     const noMatchText = await text("#reviewResult", 2500);
     const hasNoMatchState = noMatchText.includes("未完成")
       && (noMatchText.includes("没有命中已整理资料")

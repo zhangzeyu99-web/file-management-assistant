@@ -490,6 +490,42 @@ class ProjectQualityTests(unittest.TestCase):
         ]:
             self.assertIn(phrase, script)
 
+    def test_real_query_gui_qa_clicks_true_user_queries(self) -> None:
+        script_path = self.repo / "scripts" / "gui-real-query-qa.js"
+        runner_path = self.repo / "scripts" / "run-real-query-gui-qa.ps1"
+        harness_path = self.repo / "scripts" / "verify-harness.ps1"
+
+        self.assertTrue(script_path.exists(), script_path)
+        self.assertTrue(runner_path.exists(), runner_path)
+        script = script_path.read_text(encoding="utf-8-sig")
+        runner = runner_path.read_text(encoding="utf-8-sig")
+        harness = harness_path.read_text(encoding="utf-8-sig")
+
+        for phrase in [
+            "运营sop",
+            "github仓库",
+            "简历线程",
+            "Obsidian助手",
+            "MISSING_QUERY_PREFIX",
+            "#reviewInput",
+            "data-source-evidence-card",
+            "matched_terms",
+            "evidence_excerpt",
+            "preview-only",
+            "gui-real-query-qa-result.json",
+            "gui-real-query-qa-summary.md",
+        ]:
+            self.assertIn(phrase, script)
+        for phrase in [
+            "config.local.json",
+            "gui-real-query-qa.js",
+            "real-query-gui-qa",
+            "screenshot",
+            "review + extract preview only",
+        ]:
+            self.assertIn(phrase, runner)
+        self.assertIn("real_query_gui_qa", harness)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -96,6 +96,23 @@ try {
         return $parsed
     }
 
+    Invoke-Checked "real_query_gui_qa" {
+        if (-not (Test-Path -LiteralPath ".\config.local.json")) {
+            return [ordered]@{
+                status = "skipped"
+                reason = "config.local.json not found; real local GUI query QA requires a configured local vault"
+            }
+        }
+        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-real-query-gui-qa.ps1 -StrictUx 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
+        $parsed = $output -join "`n" | ConvertFrom-Json
+        if (-not $parsed.ok -or -not $parsed.strict_ok) { throw "real query GUI QA returned failing result" }
+        if (-not (Test-Path -LiteralPath $parsed.json)) { throw "missing real query GUI QA json: $($parsed.json)" }
+        if (-not (Test-Path -LiteralPath $parsed.markdown)) { throw "missing real query GUI QA markdown: $($parsed.markdown)" }
+        if (-not (Test-Path -LiteralPath $parsed.screenshot)) { throw "missing real query GUI QA screenshot: $($parsed.screenshot)" }
+        return $parsed
+    }
+
     Invoke-Checked "core_loop_real" {
         if ($SkipDryRun) { return "skipped" }
         $python = @'

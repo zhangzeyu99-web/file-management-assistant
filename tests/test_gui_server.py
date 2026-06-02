@@ -100,6 +100,10 @@ class GuiServerTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("unsupported", result["error"])
 
+    def test_not_found_action_results_use_http_200_for_clean_gui_console(self) -> None:
+        self.assertEqual(200, gui_server.http_status_for_action_result({"ok": False, "status": "not_found"}))
+        self.assertEqual(400, gui_server.http_status_for_action_result({"ok": False, "error": "unsupported action"}))
+
     def test_non_core_gui_actions_are_deprecated(self) -> None:
         for action in [
             "today",
