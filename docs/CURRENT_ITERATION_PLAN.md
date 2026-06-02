@@ -123,6 +123,26 @@
 - 真人式 GUI QA 严格模式通过：actions=6，mechanics_failures=0，ux_issues=0，console=0。
 - 输出保留视频、最终截图、JSON 和 Markdown summary，方便下一轮复盘。
 
+### 8. 真实查询 QA 缺失，且过程日志会污染搜索结果
+
+问题：GUI 与 isolated E2E 已能证明三操作按钮可走通，但真实中文查询集没有固定脚本。手工跑 `Obsidian助手` 时发现，最新迭代记录会因为包含测试关键词而排到首条，压过真正的学习指南；索引还会把同一文件从 vault 和 watch root 重复加入，浪费索引容量并污染排序。
+
+修复：
+
+- 新增 `scripts/run-real-query-qa.py`，固定跑 `运营sop`、`github仓库`、`简历线程`、`Obsidian助手`、无匹配查询。
+- QA 同时验证 `review` 和 `extract preview`：必须有命中词、证据摘录、来源路径；preview 不写上下文包文件。
+- `build_review_index_uncached` 增加全局路径去重，同一文件只入索引一次。
+- 普通知识查询下降权 `迭代记录` / `iteration-logs` / `真人式 GUI QA` 来源；如果用户查询本身包含迭代、测试、QA、harness、验证等词，则不降权。
+- 教程型来源在标题或路径命中全部查询词时加权，避免日记里的 wiki 链接压过实际指南。
+- `verify-harness.ps1` 已接入 `real_query_qa`；有 `config.local.json` 时自动跑真实查询 QA。
+
+验收：
+
+- RED：`Obsidian助手` 首条曾为 `2026-06-02 真人式 GUI QA 证据闭环`。
+- GREEN：`Obsidian助手` 首条变为 `2026-04-27 Obsidian 助手学习指南`。
+- 真实查询 QA 通过：5/5 passed。
+- 总 harness 通过，并包含 `real_query_qa`。
+
 ## 下一轮优先级
 
 ### P0：真实 GUI 走读
@@ -142,6 +162,7 @@
 
 - 质量测试覆盖真人式 GUI QA 脚本必须使用证据驱动查询。
 - `run-gui-human-usability.ps1 -StrictUx` 覆盖添加资料、路径检查、搜索命中、搜索未命中、上下文包预览和生成。
+- `scripts/run-real-query-qa.py` 覆盖真实中文查询集，防止迭代日志、QA 记录和重复索引污染搜索首条结果。
 
 ### P1：真实 Obsidian 可找回路径
 

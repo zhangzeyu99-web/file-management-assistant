@@ -864,9 +864,14 @@ def review_index_cache_key(config: dict[str, Any], limit: int) -> str:
 
 def build_review_index_uncached(config: dict[str, Any], limit: int = MAX_REVIEW_ITEMS) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    seen_paths: set[str] = set()
     for path in [*iter_markdown_notes(config), *iter_watch_markdown_notes(config)]:
         if len(items) >= limit:
             break
+        key = str(path.resolve())
+        if key in seen_paths:
+            continue
+        seen_paths.add(key)
         try:
             text = path.read_text(encoding="utf-8-sig", errors="ignore")
         except OSError:
@@ -1108,6 +1113,29 @@ def source_priority(item: dict[str, Any]) -> int:
     return score
 
 
+def is_iteration_or_qa_item(item: dict[str, Any]) -> bool:
+    path = str(item.get("path") or "").lower()
+    title = str(item.get("title") or "").lower()
+    return (
+        "\\迭代记录\\" in path
+        or "/迭代记录/" in path
+        or "\\iteration-logs\\" in path
+        or "/iteration-logs/" in path
+        or "真人式 gui qa" in title
+    )
+
+
+def query_wants_iteration_or_qa(query: str) -> bool:
+    lowered = query.lower()
+    normalized = normalize_match_text(lowered)
+    return any(token in normalized for token in ["迭代", "测试", "验证", "回归", "日志", "计划", "qa", "harness", "e2e"])
+
+
+def is_user_guide_item(item: dict[str, Any]) -> bool:
+    text = f"{item.get('title') or ''}\n{item.get('path') or ''}".lower()
+    return any(token in text for token in ["指南", "教程", "学习指南", "使用指南", "guide", "tutorial", "getting-started"])
+
+
 def strict_match_for_item(query: str, item: dict[str, Any]) -> dict[str, Any] | None:
     terms = important_query_terms(query)
     if not terms:
@@ -1154,6 +1182,11 @@ def strict_match_for_item(query: str, item: dict[str, Any]) -> dict[str, Any] | 
         if field == "标题" and len(text) <= 24:
             score -= 30
         score += evidence_line_score(query, text)
+        title_path = f"{item.get('title') or ''}\n{item.get('path') or ''}"
+        if is_user_guide_item(item) and set(matched_terms_in_text(terms, title_path)) == set(terms):
+            score += 120
+        if is_iteration_or_qa_item(item) and not query_wants_iteration_or_qa(query):
+            score -= 180
         candidates.append(
             {
                 "score": score,

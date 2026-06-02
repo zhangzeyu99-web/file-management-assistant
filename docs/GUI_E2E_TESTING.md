@@ -118,3 +118,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-human-usab
 ```
 
 The human harness records `human-usability.webm`, `final-page.png`, `human-usability-result.json`, and `human-usability-summary.md`.
+
+## Real Query QA
+
+For real local knowledge retrieval, run:
+
+```powershell
+python -X utf8 scripts\run-real-query-qa.py
+```
+
+This is not a GUI click test. It uses the active config and real local Obsidian / report sources to verify the search and context-preview loop for fixed user queries:
+
+- `运营sop`
+- `github仓库`
+- `简历线程`
+- `Obsidian助手`
+- a dynamic `__no_such_topic_<timestamp>__` no-match query
+
+The script writes `output/real-query-qa/<run>/real-query-qa-result.json` and `output/real-query-qa/<run>/summary.md`. It only runs `review` and `extract` preview, so it does not generate an AI context package or modify source files.

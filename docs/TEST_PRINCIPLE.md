@@ -34,3 +34,17 @@
 - `简历线程`
 - `Obsidian助手`
 - `不存在的测试关键词`
+
+运行：
+
+```powershell
+python -X utf8 scripts\run-real-query-qa.py
+```
+
+合格标准：
+
+- `review` 必须返回答案、命中词、证据摘录和来源路径。
+- `extract` 只能跑 preview，不生成上下文包文件。
+- 无匹配查询必须返回未找到，不能用最近笔记伪装成结果。
+- `Obsidian助手` 这类查询不能让迭代日志、QA 记录或测试报告排到首条；应优先教程、指南、知识卡或真实工作记录。
+- 同一文件不能因为同时来自 vault 和 watch root 而在索引里重复出现。

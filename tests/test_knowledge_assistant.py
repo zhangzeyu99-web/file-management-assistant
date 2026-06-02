@@ -382,6 +382,24 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertEqual(1, knowledge_assistant.review_index_cache_stats()["misses"])
         self.assertEqual(0, knowledge_assistant.review_index_cache_stats()["hits"])
 
+    def test_review_index_dedupes_notes_seen_from_vault_and_watch_roots(self) -> None:
+        shared = self.vault / "02 项目" / "Codex" / "Shared Review Note.md"
+        shared.write_text("# Shared Review Note\n\nObsidian助手 shared evidence.", encoding="utf-8")
+        config = knowledge_assistant.load_config(self.config_path)
+        config["watch_roots"] = [
+            {
+                "name": "Vault",
+                "path": str(self.vault),
+                "max_depth": 5,
+                "max_files": 100,
+            }
+        ]
+
+        index = knowledge_assistant.build_review_index_uncached(config, limit=200)
+        paths = [item["path"] for item in index]
+
+        self.assertEqual(1, paths.count(str(shared)))
+
     def test_review_finds_codex_startup_github_note_despite_recent_noise(self) -> None:
         self.write_codex_output_index_note()
         noise_root = self.vault / "04 例行工作" / "知识整理助手" / "噪音"
@@ -403,6 +421,35 @@ class KnowledgeAssistantTests(unittest.TestCase):
         joined = "\n".join(item.get("summary", "") + "\n" + item.get("path", "") for item in result["sources"])
         self.assertIn("github.com/zhangzeyu99-web/codex", joined)
         self.assertIn("github.com/zhangzeyu99-web/codex", result["summary"])
+
+    def test_review_prioritizes_user_guides_over_iteration_logs_for_obsidian_assistant(self) -> None:
+        guide = self.vault / "04 例行工作" / "文件管理助手" / "2026-04-27 Obsidian 助手学习指南.md"
+        guide.parent.mkdir(parents=True, exist_ok=True)
+        guide.write_text(
+            "# Obsidian 助手学习指南\n\n"
+            "开始使用 Obsidian助手 时，先打开教程 PDF，再用添加资料、搜索回顾和生成 AI 上下文包练习。",
+            encoding="utf-8",
+        )
+        daily = self.vault / "01 今日日志" / "2026-04-27.md"
+        daily.write_text(
+            "# 2026-04-27\n\n"
+            "开始按 [[04 例行工作/文件管理助手/2026-04-27 Obsidian 助手学习指南]] 学习 Obsidian 助手。",
+            encoding="utf-8",
+        )
+        iteration_log = self.vault / "02 项目" / "Codex" / "迭代记录" / "2026-06-02 真人式 GUI QA 证据闭环.md"
+        iteration_log.parent.mkdir(parents=True, exist_ok=True)
+        iteration_log.write_text(
+            "# 2026-06-02 真人式 GUI QA 证据闭环\n\n"
+            "用真实中文查询集继续压测：运营sop、github仓库、简历线程、Obsidian助手、不存在关键词。",
+            encoding="utf-8",
+        )
+
+        result = knowledge_assistant.run_action("review", {"query": "Obsidian助手"}, self.config_path)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("Obsidian 助手学习指南", result["sources"][0]["title"])
+        self.assertIn(str(guide), result["sources"][0]["path"])
+        self.assertNotIn("真人式 GUI QA", result["sources"][0]["title"])
 
     def test_review_extracts_direct_answers_for_similar_codex_questions(self) -> None:
         self.write_codex_output_index_note()

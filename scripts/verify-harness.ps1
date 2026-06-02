@@ -80,6 +80,22 @@ try {
         return $parsed
     }
 
+    Invoke-Checked "real_query_qa" {
+        if (-not (Test-Path -LiteralPath ".\config.local.json")) {
+            return [ordered]@{
+                status = "skipped"
+                reason = "config.local.json not found; real local Obsidian query QA requires a configured local vault"
+            }
+        }
+        $output = python -X utf8 .\scripts\run-real-query-qa.py 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
+        $parsed = $output -join "`n" | ConvertFrom-Json
+        if (-not $parsed.ok) { throw "real query QA returned ok=false" }
+        if (-not (Test-Path -LiteralPath $parsed.json)) { throw "missing real query QA json: $($parsed.json)" }
+        if (-not (Test-Path -LiteralPath $parsed.markdown)) { throw "missing real query QA markdown: $($parsed.markdown)" }
+        return $parsed
+    }
+
     Invoke-Checked "core_loop_real" {
         if ($SkipDryRun) { return "skipped" }
         $python = @'

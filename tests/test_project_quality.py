@@ -469,6 +469,27 @@ class ProjectQualityTests(unittest.TestCase):
             self.assertIn(phrase, human_script)
         self.assertNotIn('const requiredResultLabels = ["result-section", "result-actions"]', human_script)
 
+    def test_real_query_qa_script_tracks_true_user_queries(self) -> None:
+        script = (self.repo / "scripts" / "run-real-query-qa.py").read_text(encoding="utf-8-sig")
+
+        for phrase in [
+            "运营sop",
+            "github仓库",
+            "简历线程",
+            "Obsidian助手",
+            "MISSING_QUERY_PREFIX",
+            "__no_such_topic_",
+            "review",
+            "extract",
+            "mode\": \"preview\"",
+            "must_not_match_top",
+            "matched_terms",
+            "evidence_excerpt",
+            "summary.md",
+            "real-query-qa-result.json",
+        ]:
+            self.assertIn(phrase, script)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
