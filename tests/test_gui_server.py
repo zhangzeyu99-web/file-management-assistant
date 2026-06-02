@@ -454,6 +454,26 @@ class GuiServerTests(unittest.TestCase):
         ]:
             self.assertIn(required, html)
 
+    def test_result_cards_explain_reading_order_paths_and_prompt_usage(self) -> None:
+        html = gui_server.HTML
+
+        for required in [
+            "阅读顺序",
+            "为什么相关",
+            "证据摘录",
+            "来源路径",
+            "操作",
+            "怎么使用这个 prompt",
+            "先复制 prompt，再粘贴到新的 AI 对话",
+            "路径不会被截断",
+            "生成产物",
+            "打开产物",
+        ]:
+            self.assertIn(required, html)
+        self.assertIn(".site-action-result", html)
+        self.assertIn("grid-column: 1 / -1;", html)
+        self.assertNotIn("grid-column: 2;\n      grid-row: 1 / span 5;", html)
+
     def test_advanced_page_is_degraded_to_static_notice(self) -> None:
         advanced = (gui_server.ROOT / "docs" / "assets" / "gui" / "advanced.html").read_text(encoding="utf-8-sig")
 

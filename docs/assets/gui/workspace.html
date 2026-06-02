@@ -722,9 +722,8 @@
     }
     .site-action-result {
       min-height: 140px;
-      grid-column: 2;
-      grid-row: 1 / span 5;
-      margin-top: 0;
+      grid-column: 1 / -1;
+      margin-top: 8px;
       padding: 18px;
       border-radius: 18px;
       border: 1px solid var(--line);
@@ -857,6 +856,24 @@
       font-size: 13px;
       line-height: 1.62;
     }
+    .source-field {
+      padding: 9px 10px;
+      border-radius: 12px;
+      background: #f8fbff;
+      border: 1px solid #edf2f8;
+    }
+    .source-field-label {
+      display: block;
+      margin-bottom: 4px;
+      color: #274469;
+      font-size: 12px;
+      font-weight: 950;
+    }
+    .source-actions-label {
+      color: #274469;
+      font-size: 12px;
+      font-weight: 950;
+    }
     .path-chip {
       display: block;
       width: 100%;
@@ -886,6 +903,21 @@
     }
     .prompt-preview {
       background: linear-gradient(180deg, #ffffff, #f8fbff);
+    }
+    .prompt-usage {
+      margin: 10px 0 0;
+      padding: 11px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--mint-line);
+      background: var(--mint-soft);
+      color: #0f5e42;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .prompt-usage strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #087a52;
     }
     .prompt-preview pre {
       max-height: 220px;
@@ -1321,13 +1353,13 @@
               const summary = compact(direct || item.summary || "", 220);
               return `
                 <article class="source-card" data-source-evidence-card="true">
-                  <div class="source-card-meta">${escapeHtml(type)} · 来源 ${index + 1}</div>
+                  <div class="source-card-meta">${escapeHtml(type)} · 阅读顺序 ${index + 1}</div>
                   <div class="source-card-title">${escapeHtml(title)}</div>
-                  ${terms ? `<div class="source-card-body"><strong>命中词：</strong>${escapeHtml(terms)}</div>` : ""}
-                  <div class="source-card-body">${escapeHtml(compact(why, 160))}</div>
-                  ${summary ? `<div class="source-card-body">${escapeHtml(summary)}</div>` : ""}
-                  ${path ? `<code class="path-chip">${escapeHtml(path)}</code>` : ""}
-                  ${path ? `<div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(path)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(path)})'>打开来源</button><button class="result-button" onclick='seedExtractFromSource(${inlineString(path)})'>加入上下文包</button></div>` : ""}
+                  ${terms ? `<div class="source-field"><span class="source-field-label">命中词</span><div class="source-card-body">${escapeHtml(terms)}</div></div>` : ""}
+                  <div class="source-field"><span class="source-field-label">为什么相关</span><div class="source-card-body">${escapeHtml(compact(why, 160))}</div></div>
+                  ${summary ? `<div class="source-field"><span class="source-field-label">证据摘录</span><div class="source-card-body">${escapeHtml(summary)}</div></div>` : ""}
+                  ${path ? `<div class="source-field"><span class="source-field-label">来源路径</span><div class="source-card-body">路径不会被截断，可横向滚动后复制。</div><code class="path-chip">${escapeHtml(path)}</code></div>` : ""}
+                  ${path ? `<div><span class="source-actions-label">操作</span><div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(path)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(path)})'>打开来源</button><button class="result-button" onclick='seedExtractFromSource(${inlineString(path)})'>加入上下文包</button></div></div>` : ""}
                 </article>
               `;
             }).join("")}
@@ -1466,7 +1498,7 @@
                   <div>
                     <div class="artifact-card-meta">${escapeHtml(item.type || "artifact")}</div>
                     <div class="artifact-card-title">${escapeHtml(item.label || "打开产物")}</div>
-                    <code class="path-chip">${escapeHtml(path)}</code>
+                    <div class="source-field"><span class="source-field-label">来源路径</span><div class="source-card-body">路径不会被截断，可横向滚动后复制。</div><code class="path-chip">${escapeHtml(path)}</code></div>
                   </div>
                   <div class="result-actions">
                     <button class="result-button" onclick='copyText(${inlineString(path)})'>复制路径</button>
@@ -1485,6 +1517,7 @@
       return `
         <section class="prompt-preview">
           <span class="result-label">Prompt 预览</span>
+          <div class="prompt-usage"><strong>怎么使用这个 prompt</strong>先复制 prompt，再粘贴到新的 AI 对话；如果要继续查证，先让 AI 引用来源路径，不要直接改写结论。</div>
           <pre>${escapeHtml(lastPrompt)}</pre>
           <div class="result-actions">
             <button class="result-button primary" onclick="copyPromptFromLast()">复制 prompt</button>
