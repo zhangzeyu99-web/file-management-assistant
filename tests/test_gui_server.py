@@ -582,7 +582,8 @@ tags:
         for required in [
             "renderRecommendedSearchTerms",
             "推荐搜索词",
-            "点击复制后，可直接粘到搜索回顾里",
+            "点击后会自动填入搜索回顾并执行",
+            "runReviewForTerm",
             "recommended_search_terms",
         ]:
             self.assertIn(required, html)

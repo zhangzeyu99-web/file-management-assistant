@@ -367,6 +367,9 @@ class ProjectQualityTests(unittest.TestCase):
             "recommended_search_terms",
             "推荐搜索词",
             "organize_recommended_search_terms",
+            "recommended_search_term_review",
+            "runReviewForTerm",
+            "推荐词一键搜索回顾",
         ]:
             self.assertIn(phrase, script)
         self.assertIn("e2eLocalPath", runner)

@@ -79,6 +79,8 @@ The E2E audit now verifies these product-level behaviors:
 - the organize response must include structured `debug.obsidian_locations`
 - after `添加资料`, the result must show `推荐搜索词`
 - the organize response must include non-empty `debug.recommended_search_terms`
+- clicking a recommended term must fill `搜索回顾` and execute review
+- the strict report must set `three_operations.recommended_search_term_review=true`
 - after `搜索回顾`, the user can click `加入上下文包` from a source card
 - the extract section must then show `已加入上下文包候选`
 - the harness clicks `确认生成上下文包` from the selected review source before running the preview flow

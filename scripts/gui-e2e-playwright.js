@@ -19,6 +19,7 @@ async page => {
       has_local_target_input: false,
       obsidian_findability: false,
       organize_recommended_search_terms: false,
+      recommended_search_term_review: false,
       extract_findability: false,
       preview_before_generate: false,
       seeded_context_from_review: false,
@@ -322,6 +323,53 @@ async page => {
           result_text: resultText,
           recommended_search_terms: recommendedTerms,
         });
+      }
+      if (hasRecommendedTerms) {
+        logStep("推荐词一键搜索回顾");
+        const term = recommendedTerms.find(item => typeof item === "string" && item.trim());
+        const termButton = term ? buttonLocator(term, "#organize") : page.locator("__missing__").first();
+        if (!term || (await termButton.count()) === 0) {
+          addIssue("runReviewForTerm-missing", "recommended term button is missing or not wired to runReviewForTerm", {
+            recommended_search_terms: recommendedTerms,
+          });
+        } else {
+          try {
+            const responsePromise = page.waitForResponse(
+              response => response.url().includes("/api/action") && response.request().method() === "POST",
+              { timeout: 12000 },
+            );
+            await termButton.scrollIntoViewIfNeeded({ timeout: 3000 });
+            await termButton.evaluate(el => el.click());
+            const response = await responsePromise;
+            const requestData = response.request().postDataJSON();
+            const responseJson = await response.json();
+            await page.waitForTimeout(250);
+            const reviewInputValue = await page.locator("#reviewInput").inputValue();
+            const reviewText = await visibleText("#reviewResult");
+            const ok = response.status() >= 200
+              && response.status() < 400
+              && requestData.action === "review"
+              && Boolean(responseJson?.ok)
+              && reviewInputValue === term
+              && reviewText.includes("结果 · 搜索回顾");
+            report.three_operations.recommended_search_term_review = ok;
+            if (!ok) {
+              addIssue("recommended-term-review-failed", "recommended search term did not fill and execute review", {
+                term,
+                request_action: requestData.action || null,
+                http_status: response.status(),
+                response_ok: Boolean(responseJson?.ok),
+                review_input_value: reviewInputValue,
+                result_text: reviewText,
+              });
+            }
+          } catch (error) {
+            addIssue("recommended-term-review-failed", "recommended search term click failed", {
+              term,
+              error: String(error && error.message ? error.message : error),
+            });
+          }
+        }
       }
     }
     logStep("review");

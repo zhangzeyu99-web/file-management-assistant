@@ -1375,10 +1375,10 @@
         <section class="result-wide">
           <span class="result-label">推荐搜索词</span>
           <div class="source-card">
-            <div class="source-card-title">点击复制后，可直接粘到搜索回顾里</div>
+            <div class="source-card-title">点击后会自动填入搜索回顾并执行</div>
             <div class="source-card-body">这些词来自文件名、来源路径或可读文件摘录，用来快速找回刚入库的资料。</div>
             <div class="result-actions">
-              ${terms.map((term) => `<button class="result-button" onclick='copyText(${inlineString(term)})'>${escapeHtml(term)}</button>`).join("")}
+              ${terms.map((term) => `<button class="result-button" onclick='runReviewForTerm(${inlineString(term)})'>${escapeHtml(term)}</button>`).join("")}
             </div>
           </div>
         </section>
@@ -1566,6 +1566,20 @@
 
     function runCoreAction(action) {
       return api(action, payloadForAction(action), action);
+    }
+
+    function runReviewForTerm(term) {
+      const value = String(term || "");
+      const input = $("reviewInput");
+      if (input) input.value = value;
+      document.getElementById("review")?.scrollIntoView({behavior: "smooth", block: "start"});
+      return api("review", {
+        kind: "text",
+        text: value,
+        query: value,
+        request: value,
+        source: "GUI 推荐搜索词"
+      }, "review");
     }
 
     function extractPayload(mode) {
