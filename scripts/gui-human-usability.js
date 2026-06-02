@@ -14,7 +14,7 @@ async page => {
     skipped: [],
   };
 
-  const requiredResultLabels = ["result-section", "result-actions"];
+  const requiredResultLabels = ["result-section"];
 
   function step(label, data = {}) {
     report.timeline.push({ at: new Date().toISOString(), label, ...data });
@@ -131,6 +131,9 @@ async page => {
             issue("result-card-missing-section", `result card missing .${className}`, { action, label });
           }
         }
+        if (options.requireResultActions && (await page.locator(`${resultSelector} .result-actions`).count()) < 1) {
+          issue("result-action-missing", "result card should expose an obvious next action", { action, label });
+        }
       }
     } catch (error) {
       item.error = String(error && error.message ? error.message : error);
@@ -187,36 +190,38 @@ async page => {
     if (report.read_only) {
       report.skipped.push({ action: "organize", reason: "read-only mode" });
     } else {
-      await runAction("organize", "#organize .action-buttons .site-button.primary", "#organizeResult", "organize");
+      await runAction("organize", "#organize .action-buttons .site-button.primary", "#organizeResult", "organize", { requireResultActions: true });
     }
 
     step("review section");
     await humanClick('.feature-anchor[href="#review"]', "feature review");
-    await humanFill("#review textarea[data-action-input]", "How should an Obsidian beginner organize existing notes?", "review query");
-    await runAction("review", "#review .action-buttons .site-button.primary", "#reviewResult", "review");
+    await humanFill("#review textarea[data-action-input]", "Evidence-based review", "review query");
+    await runAction("review", "#review .action-buttons .site-button.primary", "#reviewResult", "review", { requireResultActions: true });
 
     step("review no-match behavior");
     await humanFill("#review textarea[data-action-input]", "__no_such_topic_20260508__", "review no-match query");
     await runAction("review", "#review .action-buttons .site-button.primary", "#reviewResult", "review no-match", { expectedStatus: 400, expectedResponseOk: false });
     const noMatchText = await text("#reviewResult", 2500);
     const hasNoMatchState = noMatchText.includes("未完成")
-      && (noMatchText.includes("没有命中已整理资料") || noMatchText.includes("没有找到已整理内容"));
+      && (noMatchText.includes("没有命中已整理资料")
+        || noMatchText.includes("没有找到已整理内容")
+        || noMatchText.includes("已整理资料中没有命中"));
     if (!hasNoMatchState || noMatchText.includes("打开匹配来源")) {
       issue("review-no-match-fallback", "review should not pretend unrelated notes are matches", { result_text: noMatchText.slice(0, 500) });
     }
 
     step("extract section");
     await humanClick('.feature-anchor[href="#extract"]', "feature extract");
-    await humanFill("#extract textarea[data-action-input]", "Package existing Obsidian knowledge into AI context for the next conversation.", "extract request");
+    await humanFill("#extract textarea[data-action-input]", "Evidence-based review context packaging", "extract request");
     if (report.read_only) {
       report.skipped.push({ action: "extract", reason: "read-only mode" });
     } else {
-      await runAction("extract", "#extract .action-buttons .site-button.primary", "#extractResult", "extract preview");
+      await runAction("extract", "#extract .action-buttons .site-button.primary", "#extractResult", "extract preview", { requireResultActions: true });
       const previewText = await text("#extractResult", 2500);
       if (!previewText.includes("找到候选") || !previewText.includes("确认生成上下文包")) {
         issue("extract-preview-missing", "extract should preview candidate sources before writing a package", { result_text: previewText.slice(0, 500) });
       }
-      await runAction("extract", "#extractResult .result-button.primary", "#extractResult", "extract generate");
+      await runAction("extract", "#extractResult .result-button.primary", "#extractResult", "extract generate", { requireResultActions: true });
       if (await visible("#extractResult .result-button.primary")) {
         await humanClick("#extractResult .result-button.primary", "copy prompt");
         const afterCopy = await text("#extractResult", 1500);

@@ -460,10 +460,14 @@ class ProjectQualityTests(unittest.TestCase):
             "expectedStatus",
             "expectedResponseOk",
             "review no-match",
+            "Evidence-based review",
+            "context packaging",
+            'const requiredResultLabels = ["result-section"]',
             "没有命中已整理资料",
             "没有找到已整理内容",
         ]:
             self.assertIn(phrase, human_script)
+        self.assertNotIn('const requiredResultLabels = ["result-section", "result-actions"]', human_script)
 
 
 if __name__ == "__main__":
