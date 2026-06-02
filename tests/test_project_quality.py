@@ -188,6 +188,9 @@ class ProjectQualityTests(unittest.TestCase):
             for path in [
                 "README.md",
                 "DESIGN.md",
+                "docs/PRODUCT_UI_RESEARCH.md",
+                "docs/PRODUCT_RETROSPECTIVE_AND_NEXT_PLAN.md",
+                "docs/KNOWLEDGE_DISPLAY_METHOD.md",
                 "docs/GUI_E2E_TESTING.md",
                 "docs/CLOSED_LOOP_USAGE.md",
             ]
@@ -196,6 +199,13 @@ class ProjectQualityTests(unittest.TestCase):
         self.assertNotIn("持续更新的知识流", active_docs)
         self.assertNotIn("下滑后可以浏览", active_docs)
         self.assertNotIn("知识流不是文件列表", active_docs)
+        self.assertNotIn("浅色知识流", active_docs)
+        self.assertNotIn("下滑增加知识流", active_docs)
+        self.assertNotIn("展示当前知识流", active_docs)
+        self.assertNotIn("把知识流做成可持续入口", active_docs)
+        self.assertNotIn("知识流摘要质量", active_docs)
+        self.assertNotIn("用户进入知识流", active_docs)
+        self.assertNotIn("知识流卡片", active_docs)
         self.assertNotIn("knowledge-card details", active_docs)
         self.assertNotIn("jumps to the knowledge feed", active_docs)
         self.assertNotIn("opens a knowledge card", active_docs)

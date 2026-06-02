@@ -71,6 +71,23 @@
 
 - GUI 静态测试检查 `renderSeededExtractSource`、`已加入上下文包候选` 和 `确认生成上下文包`。
 
+### 5. 活跃产品文档仍残留旧方向
+
+问题：README 和 GUI 已经收敛到三操作闭环，但部分仍在维护和引用的产品文档还残留旧的首页内容流、资料浏览入口和卡片浏览叙事。继续保留这些表达，会让后续迭代误把产品拉回“展示很多内容”的方向。
+
+修复：
+
+- `docs/PRODUCT_UI_RESEARCH.md` 改成三操作 UI 研究摘记，强调首屏只讲用途、安全边界和三个入口。
+- `docs/PRODUCT_RETROSPECTIVE_AND_NEXT_PLAN.md` 改成三操作闭环迭代计划，不再把内容浏览作为下一阶段主线。
+- `docs/KNOWLEDGE_DISPLAY_METHOD.md` 改成搜索结果和上下文包的展示方法，不再按列表卡片浏览设计。
+- `tests/test_project_quality.py` 扩大活跃文档质量检查，防止旧方向重新进入公共产品文档。
+
+验收：
+
+- 目标质量测试 `test_public_docs_do_not_promote_knowledge_feed_as_core_flow` 通过。
+- 活跃产品文档继续只主推 `添加资料 / 搜索回顾 / 生成 AI 上下文包`。
+- 旧内容浏览、提醒、诊断和伪控制台只留在历史资料或维护语境，不回到用户主线。
+
 ## 下一轮优先级
 
 ### P0：真实 GUI 走读
