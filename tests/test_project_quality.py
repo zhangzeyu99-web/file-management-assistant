@@ -370,6 +370,8 @@ class ProjectQualityTests(unittest.TestCase):
             "recommended_search_term_review",
             "runReviewForTerm",
             "推荐词一键搜索回顾",
+            "review_source_cards_visible_max_four",
+            "data-source-evidence-card",
         ]:
             self.assertIn(phrase, script)
         self.assertIn("e2eLocalPath", runner)

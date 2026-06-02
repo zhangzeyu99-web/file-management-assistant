@@ -20,6 +20,7 @@ async page => {
       obsidian_findability: false,
       organize_recommended_search_terms: false,
       recommended_search_term_review: false,
+      review_source_cards_visible_max_four: false,
       extract_findability: false,
       preview_before_generate: false,
       seeded_context_from_review: false,
@@ -380,6 +381,13 @@ async page => {
       scope: "#review",
       renderScope: "#review",
     });
+    const reviewSourceCardCount = await page.locator('#review [data-source-evidence-card="true"]').count();
+    report.three_operations.review_source_cards_visible_max_four = reviewSourceCardCount > 0 && reviewSourceCardCount <= 4;
+    if (!report.three_operations.review_source_cards_visible_max_four) {
+      addIssue("review-source-cards-too-many", "visible source cards should stay within four strong evidence cards", {
+        visible_source_cards: reviewSourceCardCount,
+      });
+    }
     logStep("seed-context-from-review");
     const seedButton = buttonLocator("加入上下文包", "#review");
     if ((await seedButton.count()) === 0) {

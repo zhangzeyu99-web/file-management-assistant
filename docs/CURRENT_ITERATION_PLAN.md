@@ -105,11 +105,19 @@
 
 目标：搜索结果更像知识卡，不像接口日志。
 
+状态：已完成第一版。GUI 现在默认只展示前 4 条强证据，更多来源折叠成提示，不再把 6 条来源一起堆在结果区。
+
 验收：
 
-- 首屏最多展示 3-5 条强相关证据。
+- 首屏最多展示 3-5 条强相关证据。已实现：默认展示 4 条。
 - 每条证据固定结构：标题、命中词、为什么相关、摘录、来源路径、操作。
 - 弱相关或泛索引不能排在强证据前。
+
+已验证：
+
+- GUI 静态测试覆盖 `sources.slice(0, 4)`、`data-source-evidence-card`、`hiddenSourceCount` 和 `source-more-card`。
+- E2E 报告字段 `review_source_cards_visible_max_four=true`。
+- `run-gui-e2e.ps1 -StrictUx` 通过，`mechanics_failures=0`，`ux_issues=0`。
 
 ## 暂不做
 

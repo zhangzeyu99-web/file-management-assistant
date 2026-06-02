@@ -531,6 +531,10 @@ tags:
             "result-summary-card",
             "source-card-grid",
             "source-card",
+            "data-source-evidence-card",
+            "visibleSources",
+            "hiddenSourceCount",
+            "source-more-card",
             "path-chip",
             "artifact-shelf",
             "artifact-card",
@@ -543,6 +547,8 @@ tags:
             "打开产物",
         ]:
             self.assertIn(required, html)
+        self.assertIn("sources.slice(0, 4)", html)
+        self.assertNotIn("sources.slice(0, 6)", html)
         self.assertNotIn("最近来源：", html)
         self.assertNotIn("产物路径：", html)
 
