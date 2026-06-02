@@ -119,6 +119,18 @@
 - E2E 报告字段 `review_source_cards_visible_max_four=true`。
 - `run-gui-e2e.ps1 -StrictUx` 通过，`mechanics_failures=0`，`ux_issues=0`。
 
+### P3：教程资料包不再误导到旧知识流
+
+目标：新手导入 NotebookLM 或阅读 PDF 时，只学到当前三步闭环，不再看到旧知识流、提醒或四入口叙事。
+
+状态：已完成第一版。`scripts/generate-guidebook-assets.py` 已改为三步闭环教程，并重新生成 7 页 PNG 与 PDF。
+
+验收：
+
+- 教程脚本必须包含添加资料、搜索回顾、生成 AI 上下文包、推荐搜索词、最多 4 条强证据、加入上下文包。
+- 教程脚本不得再包含 `知识流怎么用`、`向下看知识流`、`四入口`、`需要提醒时`。
+- `docs/guidebook/README.md` 页码说明与新教程一致。
+
 ## 暂不做
 
 - 不恢复提醒功能。

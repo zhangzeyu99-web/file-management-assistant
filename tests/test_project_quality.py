@@ -332,6 +332,26 @@ class ProjectQualityTests(unittest.TestCase):
         ]:
             self.assertNotIn(obsolete, public_text)
 
+    def test_generated_guidebook_script_matches_three_operation_positioning(self) -> None:
+        script = (self.repo / "scripts" / "generate-guidebook-assets.py").read_text(encoding="utf-8-sig")
+
+        for phrase in [
+            "添加资料",
+            "搜索回顾",
+            "生成 AI 上下文包",
+            "推荐搜索词",
+            "最多 4 条强证据",
+            "加入上下文包",
+        ]:
+            self.assertIn(phrase, script)
+        for obsolete in [
+            "知识流怎么用",
+            "向下看知识流",
+            "四入口",
+            "需要提醒时",
+        ]:
+            self.assertNotIn(obsolete, script)
+
     def test_gui_harness_verifies_local_target_workbench(self) -> None:
         script = (self.repo / "scripts" / "gui-e2e-playwright.js").read_text(encoding="utf-8-sig")
         runner = (self.repo / "scripts" / "run-gui-e2e.ps1").read_text(encoding="utf-8-sig")

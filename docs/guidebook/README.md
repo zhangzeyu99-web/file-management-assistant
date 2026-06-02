@@ -6,12 +6,12 @@
 
 - [knowledge-action-assistant-tutorial.pdf](knowledge-action-assistant-tutorial.pdf)：7 页 PDF 教程，覆盖从 demo mode 到 AI 上下文包的完整流程。
 - [slides/page-01.png](slides/page-01.png)：这个工具是干什么的。
-- [slides/page-02.png](slides/page-02.png)：三个主入口。
+- [slides/page-02.png](slides/page-02.png)：三步闭环怎么走。
 - [slides/page-03.png](slides/page-03.png)：添加资料。
 - [slides/page-04.png](slides/page-04.png)：搜索回顾。
-- [slides/page-05.png](slides/page-05.png)：提取 AI 上下文包。
-- [slides/page-06.png](slides/page-06.png)：安全边界与高级工具。
-- [slides/page-07.png](slides/page-07.png)：一周使用节奏。
+- [slides/page-05.png](slides/page-05.png)：生成 AI 上下文包。
+- [slides/page-06.png](slides/page-06.png)：在 Obsidian 里怎么找。
+- [slides/page-07.png](slides/page-07.png)：安全边界与 QA 节奏。
 
 ## 建议用法
 
