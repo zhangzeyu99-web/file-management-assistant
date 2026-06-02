@@ -354,6 +354,15 @@ class ProjectQualityTests(unittest.TestCase):
             "if ((await output.count()) === 0) return false",
         ]:
             self.assertIn(phrase, script)
+        for phrase in [
+            "obsidian_findability",
+            "在 Obsidian 里怎么找",
+            "文件索引目录",
+            "seeded_context_from_review",
+            "已加入上下文包候选",
+            "确认生成已选上下文包",
+        ]:
+            self.assertIn(phrase, script)
         self.assertIn("e2eLocalPath", runner)
         self.assertIn("LocalPathForE2E", runner)
         self.assertIn("[string]$Browser", runner)

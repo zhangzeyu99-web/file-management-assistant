@@ -17,7 +17,9 @@ async page => {
     three_operations: {
       anchors_checked: 0,
       has_local_target_input: false,
+      obsidian_findability: false,
       preview_before_generate: false,
+      seeded_context_from_review: false,
     },
   };
 
@@ -115,7 +117,7 @@ async page => {
       .first();
   }
 
-  async function clickAndCapture({ label, expectedAction, input = "", scope = "body", renderScope = scope, resultSelector = "", fillInput = true }) {
+  async function clickAndCapture({ label, buttonLabel = label, expectedAction, input = "", scope = "body", renderScope = scope, resultSelector = "", fillInput = true }) {
     const item = {
       label,
       expected_action: expectedAction,
@@ -140,9 +142,9 @@ async page => {
       if (fillInput && await actionInput.count()) {
         await actionInput.fill(input);
       }
-      const button = buttonLocator(label, scope);
+      const button = buttonLocator(buttonLabel, scope);
       if ((await button.count()) === 0) {
-        throw new Error(`button not found: ${label}`);
+        throw new Error(`button not found: ${buttonLabel}`);
       }
       await button.scrollIntoViewIfNeeded({ timeout: 3000 });
       const responsePromise = page.waitForResponse(
@@ -293,6 +295,24 @@ async page => {
       scope: "#organize",
       renderScope: "#organize",
     });
+    const organized = report.actions.find(item => item.label === "添加资料");
+    if (organized && organized.response_ok) {
+      const resultText = organized.result_text || "";
+      const locations = organized.response?.debug?.obsidian_locations || {};
+      const hasLocationCopy = resultText.includes("在 Obsidian 里怎么找") && resultText.includes("文件索引目录");
+      const hasLocationData = Boolean(locations.organize_note && locations.organize_dir && locations.file_index_dir);
+      report.three_operations.obsidian_findability = hasLocationCopy && hasLocationData;
+      if (!hasLocationCopy) {
+        addIssue("organize-missing-obsidian-findability", "organize result does not tell the user where to find the new Obsidian notes", {
+          result_text: resultText,
+        });
+      }
+      if (!hasLocationData) {
+        addIssue("organize-missing-obsidian-location-data", "organize response is missing structured Obsidian location data", {
+          obsidian_locations: locations,
+        });
+      }
+    }
     logStep("review");
     await clickAndCapture({
       label: "搜索回顾",
@@ -301,6 +321,32 @@ async page => {
       scope: "#review",
       renderScope: "#review",
     });
+    logStep("seed-context-from-review");
+    const seedButton = buttonLocator("加入上下文包", "#review");
+    if ((await seedButton.count()) === 0) {
+      addIssue("review-missing-seed-context-button", "review result does not expose an add-to-context action for matched evidence");
+    } else {
+      await seedButton.scrollIntoViewIfNeeded({ timeout: 3000 });
+      await seedButton.evaluate(el => el.click());
+      await page.waitForTimeout(350);
+      const seededText = await visibleText("#extractResult");
+      report.three_operations.seeded_context_from_review = seededText.includes("已加入上下文包候选") && seededText.includes("确认生成上下文包");
+      if (!report.three_operations.seeded_context_from_review) {
+        addIssue("review-seed-context-missing", "clicking add-to-context did not make the selected source visible in the extract section", {
+          result_text: seededText,
+        });
+      } else {
+        logStep("extract-generate-selected");
+        await clickAndCapture({
+          label: "确认生成已选上下文包",
+          buttonLabel: "确认生成上下文包",
+          expectedAction: "extract",
+          scope: "#extract",
+          renderScope: "#extract",
+          fillInput: false,
+        });
+      }
+    }
     logStep("extract-preview");
     await clickAndCapture({
       label: "预览候选来源",
@@ -311,7 +357,8 @@ async page => {
     });
     logStep("extract-generate");
     await clickAndCapture({
-      label: "确认生成上下文包",
+      label: "确认生成预览上下文包",
+      buttonLabel: "确认生成上下文包",
       expectedAction: "extract",
       scope: "#extract",
       renderScope: "#extract",
@@ -326,7 +373,7 @@ async page => {
         });
       }
     }
-    const generated = report.actions.find(item => item.label === "确认生成上下文包");
+    const generated = report.actions.find(item => item.label === "确认生成预览上下文包");
     report.three_operations.preview_before_generate = Boolean(preview && generated);
     if (generated && generated.response_ok) {
       const joined = collectStrings(generated.response).join("\n");

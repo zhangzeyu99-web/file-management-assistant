@@ -75,6 +75,11 @@ The E2E audit now verifies these product-level behaviors:
 - the public status API does not expose the deprecated `knowledge_feed`
 - the organize section exposes `#localPaths`, file picker, folder picker, and drag/drop zone
 - the harness fills `e2eLocalPath`, clicks `检查本地目标`, and verifies `inspect-local-targets`
+- after `添加资料`, the result must show `在 Obsidian 里怎么找` and `文件索引目录`
+- the organize response must include structured `debug.obsidian_locations`
+- after `搜索回顾`, the user can click `加入上下文包` from a source card
+- the extract section must then show `已加入上下文包候选`
+- the harness clicks `确认生成上下文包` from the selected review source before running the preview flow
 - extract flow clicks `预览候选来源` first, then clicks `确认生成上下文包`
 - in full isolated mode, local target inspection must use `custom-local-paths` when a local path is provided
 - result cards expose readable answers, evidence, artifacts, and next-action buttons without default JSON
@@ -86,7 +91,7 @@ These are product UX failures, not backend mechanics failures. The script separa
 - `scripts/run-gui-e2e.ps1` creates an isolated fixture folder and passes it to the browser as `e2eLocalPath`.
 - `scripts/gui-e2e-playwright.js` writes that path into the local target input before clicking buttons.
 - Read-only live smoke tests still click `检查本地目标`, but skip write-producing actions.
-- Strict mode fails on missing feature anchors, missing local target inputs, `local-target-not-recognized`, raw JSON default output, missing preview-before-generate flow, or missing next-action buttons.
+- Strict mode fails on missing feature anchors, missing local target inputs, `local-target-not-recognized`, raw JSON default output, missing Obsidian findability, missing review-to-context selection, missing preview-before-generate flow, or missing next-action buttons.
 
 ## Human Usability Recording
 
