@@ -46,7 +46,7 @@ GUI 不是 Codex 本体，也不是文件清理器。它只负责三件可验证
 
 ## 界面产品化原则
 
-首页按知识站点的信息架构收敛：首屏只讲清用途和安全边界；三个操作作为导航入口；结果卡固定展示“答案是什么 / 证据在哪 / 产物在哪 / 下一步”。详见 [Product UI Research](docs/PRODUCT_UI_RESEARCH.md)、[Portable AI System Iteration Plan](docs/PORTABLE_AI_SYSTEM_ITERATION_PLAN.md) 和 [Product Retrospective And Next Plan](docs/PRODUCT_RETROSPECTIVE_AND_NEXT_PLAN.md)。
+首页按知识站点的信息架构收敛：首屏只讲清用途和安全边界；三个操作作为导航入口；结果卡固定展示“答案是什么 / 证据在哪 / 产物在哪 / 下一步”。详见 [Current Iteration Plan](docs/CURRENT_ITERATION_PLAN.md)、[Product UI Research](docs/PRODUCT_UI_RESEARCH.md)、[Portable AI System Iteration Plan](docs/PORTABLE_AI_SYSTEM_ITERATION_PLAN.md) 和 [Product Retrospective And Next Plan](docs/PRODUCT_RETROSPECTIVE_AND_NEXT_PLAN.md)。
 
 ## 命令行入口
 

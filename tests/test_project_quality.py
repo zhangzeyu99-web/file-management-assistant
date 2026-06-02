@@ -55,6 +55,16 @@ class ProjectQualityTests(unittest.TestCase):
 
         self.assertTrue(mojibake["ok"], mojibake)
 
+    def test_quality_scan_ignores_test_temp_directory(self) -> None:
+        temp_dir = self.repo / ".tmp-tests" / "vanishing"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_file = temp_dir / "config.json"
+        temp_file.write_text("temporary test fixture", encoding="utf-8")
+
+        files = project_quality.iter_public_text_files(self.repo)
+
+        self.assertNotIn(temp_file, files)
+
     def test_guidebook_assets_are_published(self) -> None:
         result = project_quality.run_checks(self.repo)
         guidebook = next(item for item in result["checks"] if item["name"] == "guidebook_assets")

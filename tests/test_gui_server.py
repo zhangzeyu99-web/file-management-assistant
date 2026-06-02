@@ -546,6 +546,23 @@ tags:
         self.assertNotIn("最近来源：", html)
         self.assertNotIn("产物路径：", html)
 
+    def test_html_shows_pending_indexing_and_non_destructive_source_actions(self) -> None:
+        html = gui_server.HTML
+
+        for required in [
+            "renderPendingAction",
+            "正在建立索引",
+            "首查会建立本地索引",
+            "openPathWithoutReplacingResult",
+            "showInlineStatus",
+            "打开来源中",
+            "renderSeededExtractSource",
+            "已加入上下文包候选",
+            "确认生成上下文包",
+        ]:
+            self.assertIn(required, html)
+        self.assertNotIn("openSpecificPath(path) {\n      if (!path) return null;\n      return api(\"open-path\"", html)
+
     def test_advanced_page_is_degraded_to_static_notice(self) -> None:
         advanced = (gui_server.ROOT / "docs" / "assets" / "gui" / "advanced.html").read_text(encoding="utf-8-sig")
 

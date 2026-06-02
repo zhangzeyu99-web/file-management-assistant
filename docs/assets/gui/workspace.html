@@ -792,6 +792,27 @@
       color: #34465c;
       line-height: 1.68;
     }
+    .inline-status {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid #cfe1f7;
+      color: #274469;
+      background: #f1f7ff;
+      font-size: 13px;
+      font-weight: 850;
+      line-height: 1.55;
+    }
+    .inline-status.ok {
+      border-color: var(--mint-line);
+      color: #087a52;
+      background: var(--mint-soft);
+    }
+    .inline-status.error {
+      border-color: #f3c7c7;
+      color: #a23a3a;
+      background: #fff5f5;
+    }
     .source-card-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1207,6 +1228,68 @@
       return "已生成结果，请查看答案、证据和下一步建议。";
     }
 
+    function pendingMessage(action) {
+      if (action === "review") {
+        return {
+          title: "正在建立索引",
+          body: "首查会建立本地索引；后续连续搜索会复用缓存。请等待结果，不会编造当前状态。"
+        };
+      }
+      if (action === "extract") {
+        return {
+          title: "正在检索候选来源",
+          body: "先从已整理证据里找候选来源；预览阶段不会写入上下文包。"
+        };
+      }
+      if (action === "inspect-local-targets") {
+        return {
+          title: "正在检查本地目标",
+          body: "只检查路径是否存在、文件数量和可读边界，不改动源文件。"
+        };
+      }
+      return {
+        title: "正在添加资料",
+        body: "正在写入新的 Obsidian 记录和索引清单；不会删除、移动或重命名源文件。"
+      };
+    }
+
+    function renderPendingAction(targetKey, action) {
+      const target = $(`${targetKey}Result`) || $("reviewResult");
+      if (!target) return;
+      const pending = pendingMessage(action);
+      target.classList.remove("waiting");
+      target.innerHTML = `
+        <article class="result-document result-sections">
+          <section class="result-summary-card">
+            <div class="result-eyebrow">处理中 · ${escapeHtml(actionLabel(action))}</div>
+            <h4>${escapeHtml(pending.title)}</h4>
+            <p>${escapeHtml(pending.body)}</p>
+          </section>
+          <section class="result-section">
+            <span class="result-label">当前动作</span>
+            <div class="result-detail">正在读取本地资料和 Obsidian 记录，请等待服务端返回结果。</div>
+          </section>
+          <section class="result-section">
+            <span class="result-label">安全边界</span>
+            <div class="result-detail">本工具只读源文件；需要写入时只生成新记录或新报告。</div>
+          </section>
+        </article>
+      `;
+    }
+
+    function showInlineStatus(targetKey, message, state = "info") {
+      const target = $(`${targetKey}Result`) || $("reviewResult");
+      if (!target) return;
+      const host = target.querySelector(".result-document") || target;
+      let status = target.querySelector(".inline-status");
+      if (!status) {
+        status = document.createElement("div");
+        host.insertBefore(status, host.firstChild);
+      }
+      status.className = `inline-status ${state === "ok" ? "ok" : state === "error" ? "error" : ""}`;
+      status.textContent = message;
+    }
+
     function renderSourceCards(data) {
       const sources = Array.isArray(data?.sources) ? data.sources : [];
       if (!sources.length) {
@@ -1351,8 +1434,9 @@
       `;
     }
 
-    async function api(action, payload = {}, renderTarget = action) {
+    async function api(action, payload = {}, renderTarget = action, options = {}) {
       setBusy(true);
+      if (options.renderPending !== false) renderPendingAction(renderTarget, action);
       try {
         const response = await fetch("/api/action", {
           method: "POST",
@@ -1401,12 +1485,40 @@
     function openResultPath(index) {
       const item = lastResultPaths[index];
       if (!item) return null;
-      return api("open-path", {path: item.path}, lastAction);
+      return openPathWithoutReplacingResult(item.path, item.label || "产物");
     }
 
     function openSpecificPath(path) {
       if (!path) return null;
-      return api("open-path", {path}, lastAction);
+      return openPathWithoutReplacingResult(path, "来源");
+    }
+
+    async function openPathWithoutReplacingResult(path, label = "来源") {
+      const targetKey = lastAction || "review";
+      showInlineStatus(targetKey, `打开来源中：${path}`);
+      setBusy(true);
+      try {
+        const response = await fetch("/api/action", {
+          method: "POST",
+          headers: {"content-type": "application/json"},
+          body: JSON.stringify({action: "open-path", payload: {path}})
+        });
+        const data = await response.json();
+        renderOutput(data, {show: false});
+        if (data?.ok) {
+          showInlineStatus(targetKey, `${label}已发送打开请求；原搜索结果保留在下方。`, "ok");
+        } else {
+          showInlineStatus(targetKey, `无法打开${label}：${compact(data?.summary || data?.error || path, 160)}`, "error");
+        }
+        return data;
+      } catch (error) {
+        const data = {ok: false, action: "open-path", error: String(error.stack || error)};
+        renderOutput(data, {show: false});
+        showInlineStatus(targetKey, `无法打开${label}：${data.error}`, "error");
+        return data;
+      } finally {
+        setBusy(false);
+      }
     }
 
     async function copyPromptFromLast() {
@@ -1426,8 +1538,37 @@
     function seedExtractFromSource(path) {
       const input = $("extractInput");
       if (input) input.value = input.value || inputForAction("review") || "基于已选来源生成 AI 上下文包";
-      lastExtractPreview = {sources: [{path}]};
+      lastExtractPreview = {sources: [{path, title: "手动加入的来源", why: "用户从搜索结果中加入上下文包候选。"}]};
+      renderSeededExtractSource(path);
       document.getElementById("extract")?.scrollIntoView({behavior: "smooth", block: "start"});
+    }
+
+    function renderSeededExtractSource(path) {
+      const target = $("extractResult");
+      if (!target) return;
+      target.classList.remove("waiting");
+      target.innerHTML = `
+        <article class="result-document result-sections">
+          <section class="result-summary-card">
+            <div class="result-eyebrow">结果 · 生成 AI 上下文包</div>
+            <h4>已加入上下文包候选</h4>
+            <p>这条来源已放入待生成列表。确认相关后，可以直接生成 AI 上下文包。</p>
+          </section>
+          <section class="result-wide">
+            <span class="result-label">候选来源</span>
+            <article class="source-card">
+              <div class="source-card-title">手动加入的来源</div>
+              <div class="source-card-body">来源来自搜索结果；确认生成时会按该路径读取证据。</div>
+              <code class="path-chip">${escapeHtml(path)}</code>
+            </article>
+          </section>
+          <section class="result-section">
+            <span class="result-label">下一步</span>
+            <div class="result-detail">点击确认生成上下文包，或修改任务关键词后重新预览候选来源。</div>
+          </section>
+          <div class="result-actions"><button class="result-button primary" onclick="generateExtractFromPreview()">确认生成上下文包</button></div>
+        </article>
+      `;
     }
 
     async function copyText(value) {

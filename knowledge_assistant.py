@@ -4,6 +4,7 @@ import argparse
 import datetime as dt
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,9 @@ SAFETY_TEXT = "安全边界：不删除源文件，只读取来源，只写新�
 CORE_ACTIONS = ["organize", "review", "extract"]
 DEPRECATED_ACTIONS = {"remind", "legacy-index"}
 MAX_REVIEW_ITEMS = 1200
+REVIEW_INDEX_CACHE_TTL_SECONDS = 60.0
+_REVIEW_INDEX_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_REVIEW_INDEX_CACHE_STATS = {"hits": 0, "misses": 0}
 AI_IDENTITY_FILENAMES = [
     "AI_IDENTITY.md",
     "AI_COLLABORATION_RULES.md",
@@ -675,6 +679,7 @@ def organize(config: dict[str, Any], payload: dict[str, Any] | None = None) -> d
         next_actions=next_actions,
         debug=debug,
     )
+    clear_review_index_cache()
     return result
 
 
@@ -714,13 +719,17 @@ def iter_watch_markdown_notes(config: dict[str, Any]) -> list[Path]:
             continue
         max_depth = int(root_config.get("max_depth") or 3)
         max_files = int(root_config.get("max_files") or 500)
-        count = 0
         base_depth = len(root.parts)
-        for path in sorted(root.rglob("*"), key=lambda item: item.stat().st_mtime if item.exists() else 0, reverse=True):
-            if count >= max_files:
-                break
-            if not path.is_file() or path.suffix.lower() not in {".md", ".txt"}:
-                continue
+        candidates: list[Path] = []
+        for pattern in ("*.md", "*.txt"):
+            for path in root.rglob(pattern):
+                if not path.is_file():
+                    continue
+                if len(path.parts) - base_depth > max_depth:
+                    continue
+                candidates.append(path)
+        count = 0
+        for path in sorted(candidates, key=lambda item: item.stat().st_mtime if item.exists() else 0, reverse=True):
             if len(path.parts) - base_depth > max_depth:
                 continue
             key = str(path.resolve())
@@ -729,10 +738,43 @@ def iter_watch_markdown_notes(config: dict[str, Any]) -> list[Path]:
             seen.add(key)
             notes.append(path)
             count += 1
+            if count >= max_files:
+                break
     return notes
 
 
-def build_review_index(config: dict[str, Any], limit: int = MAX_REVIEW_ITEMS) -> list[dict[str, Any]]:
+def clear_review_index_cache() -> None:
+    _REVIEW_INDEX_CACHE.clear()
+    _REVIEW_INDEX_CACHE_STATS["hits"] = 0
+    _REVIEW_INDEX_CACHE_STATS["misses"] = 0
+
+
+def review_index_cache_stats() -> dict[str, int]:
+    return dict(_REVIEW_INDEX_CACHE_STATS)
+
+
+def review_index_cache_key(config: dict[str, Any], limit: int) -> str:
+    watch_roots = []
+    for root in config.get("watch_roots", []):
+        watch_roots.append(
+            {
+                "path": str(root.get("path") or ""),
+                "max_depth": int(root.get("max_depth") or 3),
+                "max_files": int(root.get("max_files") or 500),
+            }
+        )
+    payload = {
+        "limit": limit,
+        "vault": str(vault_path(config)),
+        "knowledge_root": str(knowledge_root(config)),
+        "obsidian_run_dir": str(config.get("obsidian_run_dir") or ""),
+        "runtime_root": str(runtime_root(config)),
+        "watch_roots": watch_roots,
+    }
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def build_review_index_uncached(config: dict[str, Any], limit: int = MAX_REVIEW_ITEMS) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for path in [*iter_markdown_notes(config), *iter_watch_markdown_notes(config)]:
         if len(items) >= limit:
@@ -764,6 +806,19 @@ def build_review_index(config: dict[str, Any], limit: int = MAX_REVIEW_ITEMS) ->
             }
         )
     return items
+
+
+def build_review_index(config: dict[str, Any], limit: int = MAX_REVIEW_ITEMS) -> list[dict[str, Any]]:
+    key = review_index_cache_key(config, limit)
+    now = time.monotonic()
+    cached = _REVIEW_INDEX_CACHE.get(key)
+    if cached and now - cached[0] <= REVIEW_INDEX_CACHE_TTL_SECONDS:
+        _REVIEW_INDEX_CACHE_STATS["hits"] += 1
+        return list(cached[1])
+    _REVIEW_INDEX_CACHE_STATS["misses"] += 1
+    items = build_review_index_uncached(config, limit)
+    _REVIEW_INDEX_CACHE[key] = (now, items)
+    return list(items)
 
 
 def query_tokens(query: str) -> list[str]:

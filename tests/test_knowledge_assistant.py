@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -345,6 +346,41 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertEqual("review", result["action"])
         self.assertEqual([], result["sources"])
         self.assertEqual([], result["artifacts"])
+
+    def test_watch_root_index_uses_extension_specific_globs(self) -> None:
+        config = knowledge_assistant.load_config(self.config_path)
+        calls: list[str] = []
+
+        def fake_rglob(path: Path, pattern: str):
+            calls.append(pattern)
+            return iter([])
+
+        with patch.object(Path, "rglob", fake_rglob):
+            notes = knowledge_assistant.iter_watch_markdown_notes(config)
+
+        self.assertEqual([], notes)
+        self.assertNotIn("*", calls)
+        self.assertEqual(["*.md", "*.txt"], calls)
+
+    def test_review_index_cache_reuses_index_and_organize_invalidates_it(self) -> None:
+        config = knowledge_assistant.load_config(self.config_path)
+        knowledge_assistant.clear_review_index_cache()
+        first = knowledge_assistant.build_review_index(config)
+        second = knowledge_assistant.build_review_index(config)
+
+        self.assertEqual(first, second)
+        self.assertEqual(1, knowledge_assistant.review_index_cache_stats()["misses"])
+        self.assertEqual(1, knowledge_assistant.review_index_cache_stats()["hits"])
+
+        knowledge_assistant.run_action(
+            "organize",
+            {"text": "CacheInvalidationEvidence-20260602", "source": "cache-test"},
+            self.config_path,
+        )
+        knowledge_assistant.build_review_index(config)
+
+        self.assertEqual(1, knowledge_assistant.review_index_cache_stats()["misses"])
+        self.assertEqual(0, knowledge_assistant.review_index_cache_stats()["hits"])
 
     def test_review_finds_codex_startup_github_note_despite_recent_noise(self) -> None:
         self.write_codex_output_index_note()
