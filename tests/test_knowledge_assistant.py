@@ -859,6 +859,27 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertTrue(any("文件索引" in item.get("path", "") for item in review["sources"]), review)
         self.assertTrue(any("Beta Notes" in item.get("title", "") for item in review["sources"]), review)
 
+    def test_organize_exposes_obsidian_findability_locations(self) -> None:
+        source_dir = self.fixture / "Obsidian找回资料"
+        source_dir.mkdir()
+        source_file = source_dir / "Findability Note.md"
+        source_file.write_text("FindabilityEvidence-20260602：入库后要能在 Obsidian 找回。", encoding="utf-8")
+
+        result = knowledge_assistant.run_action("organize", {"local_paths": str(source_dir)}, self.config_path)
+
+        self.assertUnifiedResult(result, "organize")
+        locations = result["debug"].get("obsidian_locations")
+        self.assertIsInstance(locations, dict, result)
+        for key in ["vault", "organize_note", "organize_dir", "file_index_dir", "search_hint"]:
+            self.assertIn(key, locations, locations)
+        self.assertTrue(Path(locations["organize_note"]).exists())
+        self.assertTrue(Path(locations["organize_dir"]).is_dir())
+        self.assertTrue(Path(locations["file_index_dir"]).is_dir())
+        self.assertIn("知识整理助手", locations["search_hint"])
+        artifact_types = {item["type"] for item in result["artifacts"]}
+        self.assertIn("obsidian-directory", artifact_types)
+        self.assertIn("file-index-directory", artifact_types)
+
     def test_organize_refuses_missing_local_path_without_text(self) -> None:
         missing = self.fixture / "missing-folder"
 

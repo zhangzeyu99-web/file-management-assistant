@@ -456,6 +456,24 @@ def write_file_index_notes(
     return created
 
 
+def build_obsidian_locations(
+    config: dict[str, Any],
+    organize_note: Path,
+    file_index_notes: list[Path] | None = None,
+) -> dict[str, str]:
+    organize_dir = section_dir(config, "整理")
+    file_index_dir = section_dir(config, "文件索引")
+    return {
+        "vault": str(vault_path(config)),
+        "knowledge_root": str(knowledge_root(config)),
+        "organize_note": str(organize_note),
+        "organize_dir": str(organize_dir),
+        "file_index_dir": str(file_index_dir),
+        "first_file_index_note": str(file_index_notes[0]) if file_index_notes else "",
+        "search_hint": "在 Obsidian 里打开知识整理助手，优先看“整理”和“文件索引”；搜索回顾可直接搜文件名、路径或摘录关键词。",
+    }
+
+
 def unified_result(
     action: str,
     summary: str,
@@ -653,7 +671,10 @@ def organize(config: dict[str, Any], payload: dict[str, Any] | None = None) -> d
                 },
             )
     summary = f"整理记录已写入 Obsidian：{title}；建议领域：{domain['name']}。"
-    artifacts = [artifact("obsidian-note", note_path, "打开整理记录")]
+    artifacts = [
+        artifact("obsidian-note", note_path, "打开整理记录"),
+        artifact("obsidian-directory", section_dir(config, "整理"), "打开整理目录"),
+    ]
     debug: dict[str, Any] = {"kind": kind, "domain": domain, "suggestion": suggestion}
     next_actions = ["回顾相关知识", "提取 AI 上下文包", "需要时在 Obsidian 中手动归位"]
     if scan:
@@ -671,6 +692,7 @@ def organize(config: dict[str, Any], payload: dict[str, Any] | None = None) -> d
         debug["file_index_count"] = len(file_index_notes)
         debug["file_index_notes"] = [str(path) for path in file_index_notes]
         next_actions = ["打开路径整理清单", "按建议归档到生活/学习/工作", "需要继续问 AI 时提取上下文包"]
+    debug["obsidian_locations"] = build_obsidian_locations(config, note_path, file_index_notes)
     result = unified_result(
         "organize",
         summary,

@@ -563,6 +563,19 @@ tags:
             self.assertIn(required, html)
         self.assertNotIn("openSpecificPath(path) {\n      if (!path) return null;\n      return api(\"open-path\"", html)
 
+    def test_html_explains_where_to_find_new_obsidian_notes(self) -> None:
+        html = gui_server.HTML
+
+        for required in [
+            "renderObsidianLocation",
+            "在 Obsidian 里怎么找",
+            "整理记录",
+            "文件索引目录",
+            "打开整理目录",
+            "搜索回顾可直接搜文件名、路径或摘录关键词",
+        ]:
+            self.assertIn(required, html)
+
     def test_advanced_page_is_degraded_to_static_notice(self) -> None:
         advanced = (gui_server.ROOT / "docs" / "assets" / "gui" / "advanced.html").read_text(encoding="utf-8-sig")
 

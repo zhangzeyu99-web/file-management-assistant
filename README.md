@@ -44,6 +44,16 @@ GUI 不是 Codex 本体，也不是文件清理器。它只负责三件可验证
 
 旧工具已降级为说明页；产品主线只保留三件事：添加资料必须真实入库，搜索回顾必须返回已沉淀证据，生成 AI 上下文包必须产出可复制 prompt。
 
+## 在 Obsidian 里怎么找
+
+默认写入位置在你的 `knowledge_root` 下。常见真实路径是：
+
+- `04 例行工作\知识整理助手\整理`：每次 `添加资料` 生成的整理记录。
+- `04 例行工作\知识整理助手\文件索引`：本地目录里每个可读文件的独立索引。
+- `04 例行工作\知识整理助手\AI 上下文包`：确认生成后的 Markdown 上下文包。
+
+GUI 的 `添加资料` 结果会单独显示“在 Obsidian 里怎么找”，包含整理记录、整理目录和文件索引目录；搜索回顾可直接搜文件名、来源路径或摘录关键词。
+
 ## 界面产品化原则
 
 首页按知识站点的信息架构收敛：首屏只讲清用途和安全边界；三个操作作为导航入口；结果卡固定展示“答案是什么 / 证据在哪 / 产物在哪 / 下一步”。详见 [Current Iteration Plan](docs/CURRENT_ITERATION_PLAN.md)、[Product UI Research](docs/PRODUCT_UI_RESEARCH.md)、[Portable AI System Iteration Plan](docs/PORTABLE_AI_SYSTEM_ITERATION_PLAN.md) 和 [Product Retrospective And Next Plan](docs/PRODUCT_RETROSPECTIVE_AND_NEXT_PLAN.md)。

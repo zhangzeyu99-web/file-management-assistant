@@ -32,6 +32,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\init-assistant.ps1
 - 如果路径下有可读文件，会为每个文件生成独立索引条目。
 - 源文件不会被删除、移动、重命名或重写。
 
+写入后在 Obsidian 里这样找：
+
+- `知识整理助手/整理`：查看本次整理记录。
+- `知识整理助手/文件索引`：查看每个可读文件的独立索引。
+- GUI 结果里的“在 Obsidian 里怎么找”会直接给出可复制路径和打开按钮。
+
 ## 3. 搜索回顾
 
 - 输入关键词或问题，例如 `运营sop`。

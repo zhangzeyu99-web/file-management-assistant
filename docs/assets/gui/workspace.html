@@ -1325,6 +1325,49 @@
       `;
     }
 
+    function renderObsidianLocation(data) {
+      if (data?.action !== "organize") return "";
+      const locations = data?.debug?.obsidian_locations || {};
+      const organizeNote = locations.organize_note || "";
+      const organizeDir = locations.organize_dir || "";
+      const fileIndexDir = locations.file_index_dir || "";
+      if (!organizeNote && !organizeDir && !fileIndexDir) return "";
+      return `
+        <section class="result-wide">
+          <span class="result-label">在 Obsidian 里怎么找</span>
+          <div class="source-card-grid">
+            ${organizeNote ? `
+              <article class="source-card">
+                <div class="source-card-meta">第一步</div>
+                <div class="source-card-title">整理记录</div>
+                <div class="source-card-body">先打开这条笔记，看本次整理背景、来源和归档建议。</div>
+                <code class="path-chip">${escapeHtml(organizeNote)}</code>
+                <div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(organizeNote)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(organizeNote)})'>打开整理记录</button></div>
+              </article>
+            ` : ""}
+            ${organizeDir ? `
+              <article class="source-card">
+                <div class="source-card-meta">目录入口</div>
+                <div class="source-card-title">整理目录</div>
+                <div class="source-card-body">以后想按时间回看入库记录，优先打开这个目录。</div>
+                <code class="path-chip">${escapeHtml(organizeDir)}</code>
+                <div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(organizeDir)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(organizeDir)})'>打开整理目录</button></div>
+              </article>
+            ` : ""}
+            ${fileIndexDir ? `
+              <article class="source-card">
+                <div class="source-card-meta">检索入口</div>
+                <div class="source-card-title">文件索引目录</div>
+                <div class="source-card-body">每个可读文件会生成独立索引；搜索回顾可直接搜文件名、路径或摘录关键词。</div>
+                <code class="path-chip">${escapeHtml(fileIndexDir)}</code>
+                <div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(fileIndexDir)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(fileIndexDir)})'>打开文件索引目录</button></div>
+              </article>
+            ` : ""}
+          </div>
+        </section>
+      `;
+    }
+
     function renderArtifactShelf(data) {
       const artifacts = Array.isArray(data?.artifacts) ? data.artifacts : [];
       if (!artifacts.length) {
@@ -1423,6 +1466,7 @@
             <div class="result-detail">${escapeHtml(data?.answer || didWhat)}</div>
           </section>
           ${renderSourceCards(data)}
+          ${renderObsidianLocation(data)}
           ${renderArtifactShelf(data)}
           ${renderPromptPreview()}
           <section class="result-section">
