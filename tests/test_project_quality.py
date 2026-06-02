@@ -210,6 +210,28 @@ class ProjectQualityTests(unittest.TestCase):
         self.assertNotIn("jumps to the knowledge feed", active_docs)
         self.assertNotIn("opens a knowledge card", active_docs)
 
+    def test_gui_server_does_not_keep_deprecated_knowledge_feed_backend(self) -> None:
+        gui_server = (self.repo / "gui_server.py").read_text(encoding="utf-8-sig")
+        gui_tests = (self.repo / "tests" / "test_gui_server.py").read_text(encoding="utf-8-sig")
+        human_usability = (self.repo / "scripts" / "gui-human-usability.js").read_text(encoding="utf-8-sig")
+
+        for phrase in [
+            "def build_knowledge_feed",
+            "def project_codex_feed_items",
+            "def structured_feed_summary",
+            "def attach_related_feed_items",
+            "TOPIC_RULES",
+        ]:
+            self.assertNotIn(phrase, gui_server)
+        self.assertNotIn("build_knowledge_feed", gui_tests)
+        for phrase in [
+            "knowledge feed",
+            "knowledge-feed",
+            'href="#knowledge"',
+            "[data-knowledge-card]",
+        ]:
+            self.assertNotIn(phrase, human_usability)
+
     def test_portable_ai_templates_are_versioned_and_documented(self) -> None:
         result = project_quality.run_checks(self.repo)
         portable_templates = next(item for item in result["checks"] if item["name"] == "portable_ai_templates")

@@ -168,16 +168,12 @@ async page => {
     if ((await page.locator(".feature-anchor").count()) !== 3) issue("wrong-feature-count", "home should expose exactly three main feature anchors");
     if (await visible("#out")) issue("json-visible-on-load", "advanced JSON is visible by default");
 
-    step("jump to knowledge feed");
-    await humanClick('a[href="#knowledge"]', "hero knowledge CTA");
-    const cardCount = await page.locator("[data-knowledge-card]").count();
-    if (cardCount < 1) {
-      issue("knowledge-feed-empty", "knowledge feed rendered no cards");
-    } else {
-      await humanClick("[data-knowledge-card]", "first knowledge card");
-      const detailText = await text("#knowledgeDetail", 2500);
-      if (!detailText || detailText.length < 80) issue("knowledge-detail-too-thin", "knowledge card detail is too thin");
-      if (!(await visible("#knowledgeDetail .result-button"))) issue("knowledge-detail-no-action", "knowledge detail has no obvious action button");
+    step("check three primary entries");
+    const entryLabels = await page.locator(".feature-anchor").evaluateAll(nodes => nodes.map(node => node.textContent || ""));
+    for (const expected of ["添加资料", "搜索回顾", "生成 AI 上下文包"]) {
+      if (!entryLabels.some(label => label.includes(expected))) {
+        issue("primary-entry-missing", `missing primary entry: ${expected}`);
+      }
     }
 
     step("organize section with local target");
