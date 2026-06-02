@@ -51,6 +51,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\init-assistant.ps1
 - 确认来源后生成 Markdown 和可复制 prompt。
 - 如果已安装 `AI 身份文件`，prompt 会附带身份偏好和上下文边界摘要。
 - 身份文件不替代证据；没有候选来源时仍不会生成上下文包。
+- 生成后在 Obsidian 的 `知识整理助手/提取` 里查看上下文包笔记；GUI 结果会给出上下文包目录、runtime Markdown 和可复制路径。
 
 ## 验收标准
 

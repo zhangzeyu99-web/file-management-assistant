@@ -474,6 +474,18 @@ def build_obsidian_locations(
     }
 
 
+def build_extract_locations(config: dict[str, Any], extract_note: Path, runtime_markdown: Path) -> dict[str, str]:
+    extract_dir = section_dir(config, "提取")
+    return {
+        "vault": str(vault_path(config)),
+        "knowledge_root": str(knowledge_root(config)),
+        "extract_note": str(extract_note),
+        "extract_dir": str(extract_dir),
+        "runtime_markdown": str(runtime_markdown),
+        "search_hint": "在 Obsidian 里打开知识整理助手，优先看“提取”；搜索回顾可搜 AI 上下文包标题、来源路径或 prompt 关键词。",
+    }
+
+
 def unified_result(
     action: str,
     summary: str,
@@ -1533,6 +1545,7 @@ AI 身份文件摘要：
     runtime_md = write_text(run_dir(config, "extract", generated_at) / filename, markdown)
     obsidian_md = write_text(section_dir(config, "提取") / filename, markdown)
     write_json(run_dir(config, "extract", generated_at) / "context-package.json", {"request": request, "sources": sources, "identity": identity, "prompt": prompt, "mode": "generate"})
+    extract_locations = build_extract_locations(config, obsidian_md, runtime_md)
     identity_note = f"已写入 AI 身份文件摘要 {identity['count']} 条。" if identity["count"] else "未发现 AI 身份文件摘要。"
     result = unified_result(
         "extract",
@@ -1550,6 +1563,7 @@ AI 身份文件摘要：
             "mode": "generate",
             "source_paths": source_paths,
             "identity": identity,
+            "extract_locations": extract_locations,
             "direct_answers": [item.get("direct_evidence") for item in sources if item.get("direct_evidence")],
         },
     )

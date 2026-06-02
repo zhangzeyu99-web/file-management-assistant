@@ -32,6 +32,11 @@ GUI 是本地知识整理助手的三操作入口，负责收集输入、展示�
 ## 生成 AI 上下文包
 
 先预览候选来源；确认后生成 Markdown 和 prompt。prompt 会引用来源路径和证据摘要，方便复制到新的 AI 对话。
+确认生成后，结果区会显示 `上下文包在 Obsidian 里怎么找`：
+
+- `上下文包笔记`：本次生成的 Obsidian Markdown，包含来源摘要、安全边界和 prompt。
+- `上下文包目录`：按任务回看或复用 prompt 的入口。
+- `runtime Markdown`：本次 GUI 运行证据，用来追踪生成过程。
 
 ## 文件与 Obsidian 关系
 

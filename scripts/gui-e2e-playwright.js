@@ -18,6 +18,7 @@ async page => {
       anchors_checked: 0,
       has_local_target_input: false,
       obsidian_findability: false,
+      extract_findability: false,
       preview_before_generate: false,
       seeded_context_from_review: false,
     },
@@ -376,6 +377,21 @@ async page => {
     const generated = report.actions.find(item => item.label === "确认生成预览上下文包");
     report.three_operations.preview_before_generate = Boolean(preview && generated);
     if (generated && generated.response_ok) {
+      const resultText = generated.result_text || "";
+      const locations = generated.response?.debug?.extract_locations || {};
+      const hasExtractLocationCopy = resultText.includes("上下文包在 Obsidian 里怎么找") && resultText.includes("上下文包目录");
+      const hasExtractLocationData = Boolean(locations.extract_note && locations.extract_dir && locations.runtime_markdown);
+      report.three_operations.extract_findability = hasExtractLocationCopy && hasExtractLocationData;
+      if (!hasExtractLocationCopy) {
+        addIssue("extract-missing-obsidian-findability", "generated context package does not tell the user where to find it in Obsidian", {
+          result_text: resultText,
+        });
+      }
+      if (!hasExtractLocationData) {
+        addIssue("extract-missing-location-data", "extract response is missing structured context package location data", {
+          extract_locations: locations,
+        });
+      }
       const joined = collectStrings(generated.response).join("\n");
       for (const phrase of ["AI 身份文件摘要", "本地知识整理助手产品负责人", "严格逐个功能 QA"]) {
         if (!joined.includes(phrase)) {

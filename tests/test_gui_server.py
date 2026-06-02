@@ -576,6 +576,19 @@ tags:
         ]:
             self.assertIn(required, html)
 
+    def test_html_explains_where_to_find_generated_context_packages(self) -> None:
+        html = gui_server.HTML
+
+        for required in [
+            "renderExtractLocation",
+            "上下文包在 Obsidian 里怎么找",
+            "上下文包笔记",
+            "上下文包目录",
+            "runtime Markdown",
+            "搜索回顾可搜上下文包标题、来源路径或 prompt 关键词",
+        ]:
+            self.assertIn(required, html)
+
     def test_advanced_page_is_degraded_to_static_notice(self) -> None:
         advanced = (gui_server.ROOT / "docs" / "assets" / "gui" / "advanced.html").read_text(encoding="utf-8-sig")
 

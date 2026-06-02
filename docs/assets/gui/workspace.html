@@ -1368,6 +1368,50 @@
       `;
     }
 
+    function renderExtractLocation(data) {
+      if (data?.action !== "extract" || data?.debug?.mode !== "generate") return "";
+      const locations = data?.debug?.extract_locations || {};
+      const extractNote = locations.extract_note || "";
+      const extractDir = locations.extract_dir || "";
+      const runtimeMarkdown = locations.runtime_markdown || "";
+      if (!extractNote && !extractDir && !runtimeMarkdown) return "";
+      return `
+        <section class="result-wide">
+          <span class="result-label">上下文包在 Obsidian 里怎么找</span>
+          <div class="source-card-grid">
+            ${extractNote ? `
+              <article class="source-card">
+                <div class="source-card-meta">第一步</div>
+                <div class="source-card-title">上下文包笔记</div>
+                <div class="source-card-body">先打开这条笔记，核对来源、摘要、安全边界和可复制 prompt。</div>
+                <code class="path-chip">${escapeHtml(extractNote)}</code>
+                <div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(extractNote)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(extractNote)})'>打开上下文包笔记</button></div>
+              </article>
+            ` : ""}
+            ${extractDir ? `
+              <article class="source-card">
+                <div class="source-card-meta">目录入口</div>
+                <div class="source-card-title">上下文包目录</div>
+                <div class="source-card-body">以后想按任务回看或复用 prompt，优先打开这个目录。</div>
+                <code class="path-chip">${escapeHtml(extractDir)}</code>
+                <div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(extractDir)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(extractDir)})'>打开上下文包目录</button></div>
+              </article>
+            ` : ""}
+            ${runtimeMarkdown ? `
+              <article class="source-card">
+                <div class="source-card-meta">运行证据</div>
+                <div class="source-card-title">runtime Markdown</div>
+                <div class="source-card-body">这是本次运行产物，用来追踪 GUI 操作和测试证据。</div>
+                <code class="path-chip">${escapeHtml(runtimeMarkdown)}</code>
+                <div class="result-actions"><button class="result-button" onclick='copyText(${inlineString(runtimeMarkdown)})'>复制路径</button><button class="result-button" onclick='openSpecificPath(${inlineString(runtimeMarkdown)})'>打开 runtime Markdown</button></div>
+              </article>
+            ` : ""}
+          </div>
+          <div class="result-detail">搜索回顾可搜上下文包标题、来源路径或 prompt 关键词。</div>
+        </section>
+      `;
+    }
+
     function renderArtifactShelf(data) {
       const artifacts = Array.isArray(data?.artifacts) ? data.artifacts : [];
       if (!artifacts.length) {
@@ -1467,6 +1511,7 @@
           </section>
           ${renderSourceCards(data)}
           ${renderObsidianLocation(data)}
+          ${renderExtractLocation(data)}
           ${renderArtifactShelf(data)}
           ${renderPromptPreview()}
           <section class="result-section">

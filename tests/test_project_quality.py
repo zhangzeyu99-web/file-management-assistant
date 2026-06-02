@@ -361,6 +361,9 @@ class ProjectQualityTests(unittest.TestCase):
             "seeded_context_from_review",
             "已加入上下文包候选",
             "确认生成已选上下文包",
+            "extract_findability",
+            "上下文包在 Obsidian 里怎么找",
+            "上下文包目录",
         ]:
             self.assertIn(phrase, script)
         self.assertIn("e2eLocalPath", runner)

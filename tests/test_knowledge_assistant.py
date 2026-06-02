@@ -704,6 +704,35 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertIn("AI_CONTEXT_BOUNDARY.md", markdown)
         self.assertEqual(2, result["debug"]["identity"]["count"])
 
+    def test_extract_generate_exposes_obsidian_context_package_locations(self) -> None:
+        source = self.vault / "02 项目" / "Codex" / "AI 上下文包找回规则.md"
+        source.write_text(
+            "# AI 上下文包找回规则\n\n关键结论：生成上下文包后，用户必须知道 Obsidian 笔记和上下文包目录在哪里。\n",
+            encoding="utf-8",
+        )
+
+        result = knowledge_assistant.run_action(
+            "extract",
+            {
+                "query": "AI 上下文包找回规则",
+                "request": "继续优化上下文包找回体验",
+                "mode": "generate",
+                "source_paths": [str(source)],
+            },
+            self.config_path,
+        )
+
+        self.assertTrue(result["ok"], result)
+        locations = result["debug"].get("extract_locations")
+        self.assertIsInstance(locations, dict, result)
+        for key in ["vault", "knowledge_root", "extract_note", "extract_dir", "runtime_markdown", "search_hint"]:
+            self.assertIn(key, locations, locations)
+            self.assertTrue(locations[key], locations)
+        self.assertTrue(Path(locations["extract_note"]).exists(), locations)
+        self.assertTrue(Path(locations["extract_dir"]).exists(), locations)
+        self.assertTrue(Path(locations["runtime_markdown"]).exists(), locations)
+        self.assertIn("AI 上下文包", locations["search_hint"])
+
     def test_extract_context_package_does_not_mix_unrelated_project_repo_evidence(self) -> None:
         self.write_codex_output_index_note()
         file_assistant_note = self.vault / "02 项目" / "Codex" / "09 文件管理助手流程归档.md"
