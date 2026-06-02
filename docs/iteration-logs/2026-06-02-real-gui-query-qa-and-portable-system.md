@@ -93,3 +93,41 @@
 
 - PowerShell `Get-Content` 在当前终端会把 UTF-8 中文显示成乱码，但 Python UTF-8 读回、`rg` 搜索和文件内容本身正常。
 - 当前沙箱不适合跑使用默认 `%TEMP%` 的完整 `unittest discover`，需要在授权环境中验证完整套件。
+
+## 本轮追加：搜索结果生成上下文包 GUI 闭环
+
+前一轮留下的核心缺口是：GUI 已能把真实搜索结果带入 `extract preview`，但没有验证用户点击“加入上下文包”之后，再点击“确认生成上下文包”是否真的写出 Markdown 和 Obsidian 笔记。
+
+本轮补齐内容：
+
+- 新增 `scripts/gui-context-package-qa.js`：模拟真人从 `搜索回顾` 输入中文查询，点击来源卡的 `加入上下文包`，再确认生成。
+- 新增 `scripts/run-context-package-gui-qa.ps1`：创建临时 demo vault 和 demo runtime，只在测试目录写入，不污染真实 Obsidian vault。
+- 更新 `scripts/verify-harness.ps1`：新增 `context_package_gui_qa` 检查项，让完整 harness 覆盖这个闭环。
+- 更新 `tests/test_project_quality.py`：要求 GUI QA、runner、harness 都具备“搜索结果 -> 上下文包候选 -> 生成 prompt/Markdown/Obsidian 笔记”的证据。
+
+验收结果：
+
+- 静态 QA：`test_context_package_gui_qa_generates_prompt_from_seeded_review_source` 通过。
+- 真实 GUI QA：`powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-context-package-gui-qa.ps1 -StrictUx` 通过，`ux_issues=0`，`mechanics_failures=0`，`console=0`。
+- 完整单元测试：`python -X utf8 -m unittest discover -s tests -v` 通过，114 项。
+- 项目质量检查：`python -X utf8 project_quality.py` 通过。
+- 完整 harness：`powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1 -AllowDirty -SkipRemoteSync` 通过。
+
+本轮真实产物：
+
+- GUI QA summary：`D:\codex\file-management-assistant\output\context-package-gui-qa\20260602-173829-260-c05abfe0\gui-context-package-qa-summary.md`
+- GUI QA screenshot：`D:\codex\file-management-assistant\output\context-package-gui-qa\20260602-173829-260-c05abfe0\final-page.png`
+- 生成的 demo runtime Markdown：`D:\codex\file-management-assistant\output\context-package-gui-qa\20260602-173829-260-c05abfe0\demo-runtime\knowledge-assistant\2026-06-02\173840\extract\20260602-173840 Obsidian 教程闭环证据.md`
+- 生成的 demo Obsidian 笔记：`D:\codex\file-management-assistant\output\context-package-gui-qa\20260602-173829-260-c05abfe0\demo-vault\04 例行工作\知识整理助手\提取\20260602-173840 Obsidian 教程闭环证据.md`
+
+本轮自查：
+
+- 视觉清晰阅读友好：本轮重点是补交互真实闭环，未改视觉，但确认生成后不展示 JSON，结果卡显示 prompt 和产物路径。
+- 总结归纳到位：上下文包不再停留在候选预览，已验证可从证据生成可复制 prompt。
+- 发给别人能看懂：summary 记录 query、首条来源、产物路径和 prompt 预览。
+- 传到 Codex 指引性：harness 已加入该链路，后续 Codex 不应再只测 preview。
+- GUI 双向交互：已从搜索结果卡片完成到生成文件的真实点击链路。
+- 信息内容编辑：生成 Markdown 和 demo Obsidian note 均可直接打开编辑。
+- 展示方式方便：仍有下一轮空间，重点是把 prompt 和来源路径做成更像文档卡片的阅读结构。
+- 信息集关联：生成只使用搜索命中的已确认来源。
+- 发散性思考：当前侧重可靠闭环，后续再优化相近关键词和推荐补充资料。

@@ -113,6 +113,19 @@ try {
         return $parsed
     }
 
+    Invoke-Checked "context_package_gui_qa" {
+        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-context-package-gui-qa.ps1 -StrictUx 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
+        $parsed = $output -join "`n" | ConvertFrom-Json
+        if (-not $parsed.ok -or -not $parsed.strict_ok) { throw "context package GUI QA returned failing result" }
+        if (-not (Test-Path -LiteralPath $parsed.json)) { throw "missing context package GUI QA json: $($parsed.json)" }
+        if (-not (Test-Path -LiteralPath $parsed.markdown)) { throw "missing context package GUI QA markdown: $($parsed.markdown)" }
+        if (-not (Test-Path -LiteralPath $parsed.screenshot)) { throw "missing context package GUI QA screenshot: $($parsed.screenshot)" }
+        if (-not (Test-Path -LiteralPath $parsed.generated_markdown)) { throw "missing generated runtime markdown: $($parsed.generated_markdown)" }
+        if (-not (Test-Path -LiteralPath $parsed.generated_obsidian_note)) { throw "missing generated Obsidian note: $($parsed.generated_obsidian_note)" }
+        return $parsed
+    }
+
     Invoke-Checked "core_loop_real" {
         if ($SkipDryRun) { return "skipped" }
         $python = @'

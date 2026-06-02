@@ -526,6 +526,43 @@ class ProjectQualityTests(unittest.TestCase):
             self.assertIn(phrase, runner)
         self.assertIn("real_query_gui_qa", harness)
 
+    def test_context_package_gui_qa_generates_prompt_from_seeded_review_source(self) -> None:
+        script_path = self.repo / "scripts" / "gui-context-package-qa.js"
+        runner_path = self.repo / "scripts" / "run-context-package-gui-qa.ps1"
+        harness_path = self.repo / "scripts" / "verify-harness.ps1"
+
+        self.assertTrue(script_path.exists(), script_path)
+        self.assertTrue(runner_path.exists(), runner_path)
+        script = script_path.read_text(encoding="utf-8-sig")
+        runner = runner_path.read_text(encoding="utf-8-sig")
+        harness = harness_path.read_text(encoding="utf-8-sig")
+
+        for phrase in [
+            "Obsidian 教程闭环证据",
+            "#reviewInput",
+            "加入上下文包",
+            "已加入上下文包候选",
+            "确认生成上下文包",
+            "debug?.mode === \"generate\"",
+            "prompt",
+            "obsidian-note",
+            "gui-context-package-qa-result.json",
+            "gui-context-package-qa-summary.md",
+        ]:
+            self.assertIn(phrase, script)
+        for phrase in [
+            "demo-vault",
+            "demo-runtime",
+            "Obsidian 教程闭环证据",
+            "run-context-package-gui-qa.ps1",
+            "context-package-gui-qa",
+            "generated_prompt",
+            "generated_markdown",
+            "generated_obsidian_note",
+        ]:
+            self.assertIn(phrase, runner)
+        self.assertIn("context_package_gui_qa", harness)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
