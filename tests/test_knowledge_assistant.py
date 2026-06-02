@@ -565,6 +565,31 @@ class KnowledgeAssistantTests(unittest.TestCase):
         self.assertIn("matched_terms", result["sources"][0])
         self.assertNotIn("简历 SOP", json.dumps(result["sources"], ensure_ascii=False))
 
+    def test_extract_preview_reports_available_ai_identity_files(self) -> None:
+        identity_root = self.vault / "04 例行工作" / "知识整理助手" / "AI 身份文件"
+        identity_root.mkdir(parents=True)
+        (identity_root / "AI_IDENTITY.md").write_text(
+            "# AI 身份文件\n\n来源：unit-test\n\n## 使用者画像\n\n- 常见任务：产品化知识管理库。\n\n## 下一步\n\n- 生成上下文包时引用本偏好。\n",
+            encoding="utf-8",
+        )
+        source = self.vault / "02 项目" / "Codex" / "AI 上下文包规则.md"
+        source.write_text(
+            "# AI 上下文包规则\n\n关键结论：上下文包必须先引用来源路径，再给结论。\n",
+            encoding="utf-8",
+        )
+
+        result = knowledge_assistant.run_action(
+            "extract",
+            {"query": "AI 上下文包规则", "request": "继续优化上下文包", "mode": "preview"},
+            self.config_path,
+        )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("candidate_only", result["status"])
+        self.assertEqual(1, result["debug"]["identity"]["count"])
+        self.assertIn("AI_IDENTITY.md", result["debug"]["identity"]["files"][0]["path"])
+        self.assertIn("AI 身份文件已可用", result["summary"])
+
     def test_extract_generate_keeps_direct_evidence_for_confirmed_sources(self) -> None:
         project_note = self.vault / "02 项目" / "Codex" / "09 文件管理助手流程归档.md"
         project_note.write_text(
@@ -596,6 +621,52 @@ class KnowledgeAssistantTests(unittest.TestCase):
         markdown = markdown_path.read_text(encoding="utf-8")
         self.assertIn("github.com/zhangzeyu99-web/file-management-assistant", prompt)
         self.assertIn("github.com/zhangzeyu99-web/file-management-assistant", markdown)
+
+    def test_extract_generate_includes_ai_identity_summary_in_prompt_and_markdown(self) -> None:
+        identity_root = self.vault / "04 例行工作" / "知识整理助手" / "AI 身份文件"
+        identity_root.mkdir(parents=True)
+        (identity_root / "AI_IDENTITY.md").write_text(
+            "# AI 身份文件\n\n"
+            "来源：unit-test\n\n"
+            "## 使用者画像\n\n"
+            "- 角色：本地知识整理助手产品负责人。\n"
+            "- 常见任务：严格逐个功能 QA。\n"
+            "## 下一步\n\n"
+            "- 上下文包要保留用户偏好。\n",
+            encoding="utf-8",
+        )
+        (identity_root / "AI_CONTEXT_BOUNDARY.md").write_text(
+            "# AI 上下文边界\n\n"
+            "来源：unit-test\n\n"
+            "## 默认不提供给 AI\n\n"
+            "- 私有 token、账号、邮箱密码。\n"
+            "## 下一步\n\n"
+            "- 生成前确认来源。\n",
+            encoding="utf-8",
+        )
+        source = self.vault / "02 项目" / "Codex" / "AI 上下文包规则.md"
+        source.write_text(
+            "# AI 上下文包规则\n\n关键结论：上下文包必须先引用来源路径，再给结论。\n",
+            encoding="utf-8",
+        )
+
+        result = knowledge_assistant.run_action(
+            "extract",
+            {"query": "AI 上下文包规则", "request": "继续优化上下文包", "mode": "generate", "source_paths": [str(source)]},
+            self.config_path,
+        )
+
+        self.assertTrue(result["ok"], result)
+        prompt = next(item["content"] for item in result["artifacts"] if item.get("type") == "prompt")
+        markdown_path = next(Path(item["path"]) for item in result["artifacts"] if item.get("type") == "markdown")
+        markdown = markdown_path.read_text(encoding="utf-8")
+        self.assertIn("AI 身份文件摘要", prompt)
+        self.assertIn("本地知识整理助手产品负责人", prompt)
+        self.assertIn("严格逐个功能 QA", prompt)
+        self.assertIn("私有 token", prompt)
+        self.assertIn("## AI 身份文件摘要", markdown)
+        self.assertIn("AI_CONTEXT_BOUNDARY.md", markdown)
+        self.assertEqual(2, result["debug"]["identity"]["count"])
 
     def test_extract_context_package_does_not_mix_unrelated_project_repo_evidence(self) -> None:
         self.write_codex_output_index_note()

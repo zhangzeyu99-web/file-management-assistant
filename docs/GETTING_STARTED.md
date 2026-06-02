@@ -4,11 +4,25 @@
 
 ## 1. 启动
 
+第一次使用可以先跑 demo 初始化：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\init-assistant.ps1 -Demo
+```
+
+这会创建 demo vault，并写入 `AI_IDENTITY.md`、`AI_COLLABORATION_RULES.md`、`AI_CONTEXT_BOUNDARY.md` 和 `Skills-SOP` 三主操作模板。
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
 ```
 
 打开 `http://127.0.0.1:8765/`。
+
+如果你已经把 `config.local.json` 改成真实 Obsidian 路径，可以安装可迁移 AI 身份文件和 SOP：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\init-assistant.ps1 -InstallPortableTemplates
+```
 
 ## 2. 添加资料
 
@@ -29,6 +43,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
 - 输入当前任务。
 - 先预览候选来源。
 - 确认来源后生成 Markdown 和可复制 prompt。
+- 如果已安装 `AI 身份文件`，prompt 会附带身份偏好和上下文边界摘要。
+- 身份文件不替代证据；没有候选来源时仍不会生成上下文包。
 
 ## 验收标准
 

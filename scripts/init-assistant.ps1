@@ -1,16 +1,55 @@
 param(
     [switch]$Force,
-    [switch]$Demo
+    [switch]$Demo,
+    [switch]$InstallPortableTemplates
 )
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$PortableTemplateActions = @()
 
 function ConvertTo-PrettyJson {
     param([object]$Value)
     $Value | ConvertTo-Json -Depth 10
+}
+
+function Expand-ConfigPath {
+    param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return "" }
+    return [Environment]::ExpandEnvironmentVariables($Value)
+}
+
+function Install-PortableTemplates {
+    param(
+        [string]$KnowledgeRoot,
+        [switch]$ForceTemplates
+    )
+    $actions = @()
+    if ([string]::IsNullOrWhiteSpace($KnowledgeRoot)) {
+        return @("skipped portable AI templates because knowledge_root is empty")
+    }
+
+    $templateRoot = Join-Path $RepoRoot "templates\portable-ai-system"
+    if (-not (Test-Path -LiteralPath $templateRoot)) {
+        return @("skipped portable AI templates because templates\portable-ai-system is missing")
+    }
+
+    New-Item -ItemType Directory -Force -Path $KnowledgeRoot | Out-Null
+    foreach ($template in Get-ChildItem -LiteralPath $templateRoot -Recurse -File) {
+        $relative = $template.FullName.Substring($templateRoot.Length).TrimStart("\", "/")
+        $target = Join-Path $KnowledgeRoot $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+        if ((Test-Path -LiteralPath $target) -and -not $ForceTemplates) {
+            $actions += "kept portable template $relative"
+        }
+        else {
+            Copy-Item -LiteralPath $template.FullName -Destination $target -Force:$ForceTemplates
+            $actions += "installed portable template $relative"
+        }
+    }
+    return $actions
 }
 
 function New-DemoConfig {
@@ -41,6 +80,7 @@ function New-DemoConfig {
         "",
         "This file demonstrates that legacy AI chat notes can be indexed without moving or overwriting them."
     )
+    $script:PortableTemplateActions = Install-PortableTemplates -KnowledgeRoot $knowledgeRoot -ForceTemplates:$Force
 
     return [ordered]@{
         runtime_root = $runtime
@@ -100,6 +140,7 @@ try {
         }
         ConvertTo-PrettyJson $config | Set-Content -LiteralPath $demoConfigTarget -Encoding UTF8
         $result.demo_config = (Resolve-Path -LiteralPath $demoConfigTarget).Path
+        $result.actions += $PortableTemplateActions
     }
     elseif (-not (Test-Path -LiteralPath ".\config.local.json")) {
         Copy-Item -LiteralPath ".\config.example.json" -Destination ".\config.local.json"
@@ -111,6 +152,18 @@ try {
     }
     else {
         $result.actions += "kept existing config.local.json"
+    }
+
+    if ($InstallPortableTemplates -and -not $Demo) {
+        $configObject = Get-Content -LiteralPath ".\config.local.json" -Encoding UTF8 | ConvertFrom-Json
+        $knowledgeRoot = Expand-ConfigPath ($configObject.knowledge_root)
+        if ([string]::IsNullOrWhiteSpace($knowledgeRoot)) {
+            $knowledgeRoot = Expand-ConfigPath ($configObject.obsidian_run_dir)
+        }
+        if ([string]::IsNullOrWhiteSpace($knowledgeRoot)) {
+            $knowledgeRoot = Expand-ConfigPath ($configObject.obsidian_vault)
+        }
+        $result.actions += Install-PortableTemplates -KnowledgeRoot $knowledgeRoot -ForceTemplates:$Force
     }
 
     $result.actions += "core loop only: initialize config and demo assets; do not run deprecated reminder or legacy index actions"

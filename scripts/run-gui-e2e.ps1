@@ -15,6 +15,7 @@ $Stamp = "$(Get-Date -Format "yyyyMMdd-HHmmss-fff")-$([guid]::NewGuid().ToString
 $RunDir = Join-Path $Repo "output\gui-e2e\$Stamp"
 $ConfigPath = Join-Path $RunDir "config.gui-e2e.json"
 $ServerProcess = $null
+$StartedServer = $false
 $Session = "gui-e2e-$Stamp"
 $LocalPathForE2E = ""
 
@@ -52,6 +53,33 @@ function New-FixtureConfig {
     Set-Content -Path (Join-Path $fixture "work-project-review.csv") -Value "task,status`nGUI E2E,done" -Encoding UTF8
     Set-Content -Path (Join-Path $vault "projects\knowledge-organizer\Card\gui-result-card.md") -Value "# GUI result card`n`nType: Card`nSource: E2E fixture`n`n## Key conclusion`n`nThe result area should show human-readable cards instead of default JSON." -Encoding UTF8
     Set-Content -Path (Join-Path $obsidianRun "obsidian-ai-context.md") -Value "# Obsidian tutorial and AI context pack`n`nType: Card`nSource: E2E fixture`n`n## Key conclusion`n`nObsidian tutorial material and AI context packs must be searchable through review before extraction." -Encoding UTF8
+    $identityScript = @'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1]) / "\u0041\u0049 \u8eab\u4efd\u6587\u4ef6"
+root.mkdir(parents=True, exist_ok=True)
+(root / "AI_IDENTITY.md").write_text(
+    "# AI \u8eab\u4efd\u6587\u4ef6\n\n"
+    "\u6765\u6e90\uff1aGUI E2E fixture\n\n"
+    "## \u4f7f\u7528\u8005\u753b\u50cf\n\n"
+    "- \u89d2\u8272\uff1a\u672c\u5730\u77e5\u8bc6\u6574\u7406\u52a9\u624b\u4ea7\u54c1\u8d1f\u8d23\u4eba\u3002\n"
+    "- \u5e38\u89c1\u4efb\u52a1\uff1a\u4e25\u683c\u9010\u4e2a\u529f\u80fd QA\u3002\n\n"
+    "## \u4e0b\u4e00\u6b65\n\n"
+    "- \u751f\u6210\u4e0a\u4e0b\u6587\u5305\u65f6\u5f15\u7528\u672c\u504f\u597d\u3002\n",
+    encoding="utf-8",
+)
+(root / "AI_CONTEXT_BOUNDARY.md").write_text(
+    "# AI \u4e0a\u4e0b\u6587\u8fb9\u754c\n\n"
+    "\u6765\u6e90\uff1aGUI E2E fixture\n\n"
+    "## \u9ed8\u8ba4\u4e0d\u63d0\u4f9b\u7ed9 AI\n\n"
+    "- \u79c1\u6709 token\u3001\u8d26\u53f7\u3001\u90ae\u7bb1\u5bc6\u7801\u3002\n\n"
+    "## \u4e0b\u4e00\u6b65\n\n"
+    "- \u751f\u6210\u524d\u786e\u8ba4\u6765\u6e90\u3002\n",
+    encoding="utf-8",
+)
+'@
+    $identityScript | python - $obsidianRun
 
     $oldFile = Join-Path $fixture "old-installer.exe"
     Set-Content -Path $oldFile -Value "fake installer" -Encoding ASCII
@@ -107,6 +135,16 @@ function Stop-PortServer {
     }
 }
 
+function Stop-GuiServer {
+    if ($script:StartedServer) {
+        if ($script:ServerProcess) {
+            Stop-Process -Id $script:ServerProcess.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 300
+        }
+        Stop-PortServer -TargetPort $Port
+    }
+}
+
 function Wait-HttpOk {
     param([string]$Url)
     $deadline = (Get-Date).AddSeconds(20)
@@ -125,12 +163,64 @@ function Invoke-PlaywrightClose {
     param([string]$SessionName)
     if (-not (Get-Command npx.cmd -ErrorAction SilentlyContinue)) { return }
     $closeArgs = @("--package", "@playwright/cli", "playwright-cli", "-s=$SessionName", "close")
-    $process = Start-Process -FilePath "npx.cmd" -ArgumentList $closeArgs -WorkingDirectory $Repo -WindowStyle Hidden -PassThru
-    try {
-        Wait-Process -Timeout 15 -Id $process.Id -ErrorAction Stop
-    } catch {
+    Start-Process -FilePath "npx.cmd" -ArgumentList $closeArgs -WorkingDirectory $Repo -WindowStyle Hidden | Out-Null
+}
+
+function Stop-PlaywrightSessionProcesses {
+    param([string]$SessionName)
+    if ([string]::IsNullOrWhiteSpace($SessionName)) { return }
+    $escaped = [regex]::Escape($SessionName)
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match $escaped } |
+        ForEach-Object {
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+}
+
+function Invoke-PlaywrightRunCode {
+    param(
+        [string]$SessionName,
+        [string]$ScriptPath,
+        [string]$OutputPath,
+        [string]$ErrorPath,
+        [int]$TimeoutSec = 300
+    )
+    $runArgs = @("--package", "@playwright/cli", "playwright-cli", "-s=$SessionName", "--raw", "run-code", "--filename", $ScriptPath)
+    $process = Start-Process -FilePath "npx.cmd" `
+        -ArgumentList $runArgs `
+        -WorkingDirectory $Repo `
+        -RedirectStandardOutput $OutputPath `
+        -RedirectStandardError $ErrorPath `
+        -WindowStyle Hidden `
+        -PassThru
+    if (-not $process.WaitForExit($TimeoutSec * 1000)) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        Invoke-PlaywrightClose -SessionName $SessionName
+        Stop-PlaywrightSessionProcesses -SessionName $SessionName
+        throw "run-code timed out after $TimeoutSec seconds. Stdout: $OutputPath Stderr: $ErrorPath"
     }
+    $process.Refresh()
+    $stdoutContent = ""
+    if (Test-Path -LiteralPath $OutputPath) {
+        $rawStdout = Get-Content -LiteralPath $OutputPath -Raw -Encoding UTF8
+        if ($null -ne $rawStdout) {
+            $stdoutContent = $rawStdout.Trim()
+        }
+    }
+    if ($null -ne $process.ExitCode -and $process.ExitCode -ne 0 -and [string]::IsNullOrWhiteSpace($stdoutContent)) {
+        $stderr = ""
+        if (Test-Path -LiteralPath $ErrorPath) {
+            $stderrContent = Get-Content -LiteralPath $ErrorPath -Raw -Encoding UTF8
+            if ($null -ne $stderrContent) {
+                $stderr = $stderrContent.Trim()
+            }
+        }
+        throw "run-code failed with exit code $($process.ExitCode). $stderr"
+    }
+    if ([string]::IsNullOrWhiteSpace($stdoutContent)) {
+        throw "run-code did not write stdout: $OutputPath"
+    }
+    return $stdoutContent
 }
 
 function Get-ResultPaths {
@@ -176,6 +266,7 @@ try {
             "--no-browser"
         )
         $ServerProcess = Start-Process -FilePath python -ArgumentList $args -WorkingDirectory $Repo -WindowStyle Hidden -PassThru
+        $script:StartedServer = $true
         Wait-HttpOk -Url $BaseUrl
     } else {
         New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
@@ -202,10 +293,14 @@ try {
     & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" resize 1680 950 | Out-Null
     $heroScreenshot = Join-Path $RunDir "hero-page.png"
     & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" screenshot --filename $heroScreenshot | Out-Null
-    $raw = & npx.cmd --package "@playwright/cli" playwright-cli "-s=$Session" --raw run-code --filename (Join-Path $Repo "scripts\gui-e2e-playwright.js")
-    $rawText = ($raw -join "`n").Trim()
     $rawPath = Join-Path $RunDir "playwright-raw.txt"
-    $rawText | Set-Content -Path $rawPath -Encoding UTF8
+    $stderrPath = Join-Path $RunDir "playwright-stderr.txt"
+    $rawText = Invoke-PlaywrightRunCode `
+        -SessionName $Session `
+        -ScriptPath (Join-Path $Repo "scripts\gui-e2e-playwright.js") `
+        -OutputPath $rawPath `
+        -ErrorPath $stderrPath `
+        -TimeoutSec 300
     $jsonStart = $rawText.IndexOf("{")
     $jsonEnd = $rawText.LastIndexOf("}")
     if ($jsonStart -lt 0 -or $jsonEnd -le $jsonStart) {
@@ -314,10 +409,9 @@ try {
     if (-not $result.ok) { exit 1 }
     if ($StrictUx -and $result.ux_issues.Count -gt 0) { exit 2 }
 } finally {
+    Stop-GuiServer
     try {
         Invoke-PlaywrightClose -SessionName $Session
+        Stop-PlaywrightSessionProcesses -SessionName $Session
     } catch {}
-    if ($ServerProcess) {
-        Stop-Process -Id $ServerProcess.Id -Force -ErrorAction SilentlyContinue
-    }
 }

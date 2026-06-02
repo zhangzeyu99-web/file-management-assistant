@@ -24,6 +24,11 @@ SAFETY_TEXT = "安全边界：不删除源文件，只读取来源，只写新�
 CORE_ACTIONS = ["organize", "review", "extract"]
 DEPRECATED_ACTIONS = {"remind", "legacy-index"}
 MAX_REVIEW_ITEMS = 1200
+AI_IDENTITY_FILENAMES = [
+    "AI_IDENTITY.md",
+    "AI_COLLABORATION_RULES.md",
+    "AI_CONTEXT_BOUNDARY.md",
+]
 READABLE_FILE_EXTENSIONS = {
     ".bat",
     ".cmd",
@@ -118,6 +123,37 @@ def compact_text(text: str, limit: int = 180) -> str:
     if len(cleaned) <= limit:
         return cleaned
     return cleaned[: limit - 1] + "…"
+
+
+def strip_markdown_noise(text: str) -> str:
+    cleaned_lines: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            line = line.lstrip("#").strip()
+        cleaned_lines.append(line)
+    return " ".join(cleaned_lines)
+
+
+def ai_identity_context(config: dict[str, Any]) -> dict[str, Any]:
+    root = knowledge_root(config) / "AI 身份文件"
+    files: list[dict[str, str]] = []
+    for filename in AI_IDENTITY_FILENAMES:
+        path = root / filename
+        if not path.exists() or path.suffix.lower() != ".md":
+            continue
+        try:
+            text = path.read_text(encoding="utf-8-sig", errors="ignore")
+        except OSError:
+            continue
+        summary = compact_text(strip_markdown_noise(text), 260)
+        if not summary:
+            continue
+        files.append({"title": path.stem, "path": str(path), "summary": summary})
+    combined = "\n".join(f"- {item['title']}：{item['summary']}（来源：{item['path']}）" for item in files)
+    return {"count": len(files), "files": files, "summary": combined}
 
 
 def write_text(path: Path, contents: str) -> Path:
@@ -1281,7 +1317,13 @@ def review(config: dict[str, Any], payload: dict[str, Any] | None = None) -> dic
     return result
 
 
-def render_context_markdown(request: str, sources: list[dict[str, Any]], prompt: str, generated_at: dt.datetime) -> str:
+def render_context_markdown(
+    request: str,
+    sources: list[dict[str, Any]],
+    prompt: str,
+    generated_at: dt.datetime,
+    identity: dict[str, Any] | None = None,
+) -> str:
     source_lines = "\n".join(
         f"- [{item.get('type', 'note')}] {item.get('title', '')}\n"
         f"  直接线索：{item.get('direct_evidence') or item.get('summary', '')}\n"
@@ -1289,6 +1331,9 @@ def render_context_markdown(request: str, sources: list[dict[str, Any]], prompt:
         f"  来源：{item.get('path', '')}"
         for item in sources
     )
+    identity = identity or {"count": 0, "summary": ""}
+    identity_summary = str(identity.get("summary") or "").strip()
+    identity_section = identity_summary or "- 未发现 AI 身份文件；仅使用本次确认来源。"
     return f"""# AI 上下文包
 
 生成时间：{generated_at.strftime("%Y-%m-%d %H:%M:%S %z")}
@@ -1297,6 +1342,10 @@ def render_context_markdown(request: str, sources: list[dict[str, Any]], prompt:
 ## 来源摘要
 
 {source_lines or "- 暂无匹配来源。"}
+
+## AI 身份文件摘要
+
+{identity_section}
 
 ## 可复制 Prompt
 
@@ -1313,6 +1362,7 @@ def render_context_markdown(request: str, sources: list[dict[str, Any]], prompt:
 def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     generated_at = now_local()
+    identity = ai_identity_context(config)
     mode = str(payload.get("mode") or "generate").strip().lower()
     if mode not in {"preview", "generate"}:
         mode = "generate"
@@ -1355,9 +1405,10 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
         return result
     if mode == "preview":
         first = sources[0]
+        identity_hint = "AI 身份文件已可用，将在确认生成时作为偏好和边界摘要写入上下文包。" if identity["count"] else "未发现 AI 身份文件；确认生成时只使用证据来源。"
         result = unified_result(
             "extract",
-            f"找到 {len(sources)} 条候选来源。首选来源：{first.get('title', '未命名来源')}。请先检查来源是否相关，再确认生成 AI 上下文包。",
+            f"找到 {len(sources)} 条候选来源。首选来源：{first.get('title', '未命名来源')}。{identity_hint} 请先检查来源是否相关，再确认生成 AI 上下文包。",
             sources=sources,
             artifacts=[],
             next_actions=["确认生成上下文包", "调整关键词重新预览", "先打开来源核对内容"],
@@ -1366,6 +1417,7 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
                 "request": request,
                 "mode": "preview",
                 "candidate_count": len(sources),
+                "identity": identity,
                 "direct_answers": [item.get("direct_evidence") for item in sources if item.get("direct_evidence")],
             },
         )
@@ -1378,6 +1430,7 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
         f"{item['summary']}（来源：{item['path']}）"
         for item in sources
     ) or "- 暂无匹配来源。"
+    identity_summary = str(identity.get("summary") or "").strip() or "- 未发现 AI 身份文件；仅使用本次确认来源。"
     prompt = f"""AI 上下文包
 
 当前需求：
@@ -1386,22 +1439,27 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
 已整理上下文：
 {compressed}
 
+AI 身份文件摘要：
+{identity_summary}
+
 使用要求：
 - 先引用来源路径，再给结论。
 - 如果上下文不足，明确指出缺口，不要编造。
+- 遵守 AI 身份文件中的协作偏好和上下文边界；如果身份文件缺失，明确说明只依据本次来源。
 - 输出下一步行动，并说明是否需要继续添加资料、搜索回顾或生成新的上下文包。
 
 安全边界：
 {SAFETY_TEXT}
 """
     filename = f"{generated_at.strftime('%Y%m%d-%H%M%S')} {safe_filename(query, 'AI 上下文包')}.md"
-    markdown = render_context_markdown(request, sources, prompt, generated_at)
+    markdown = render_context_markdown(request, sources, prompt, generated_at, identity)
     runtime_md = write_text(run_dir(config, "extract", generated_at) / filename, markdown)
     obsidian_md = write_text(section_dir(config, "提取") / filename, markdown)
-    write_json(run_dir(config, "extract", generated_at) / "context-package.json", {"request": request, "sources": sources, "prompt": prompt, "mode": "generate"})
+    write_json(run_dir(config, "extract", generated_at) / "context-package.json", {"request": request, "sources": sources, "identity": identity, "prompt": prompt, "mode": "generate"})
+    identity_note = f"已写入 AI 身份文件摘要 {identity['count']} 条。" if identity["count"] else "未发现 AI 身份文件摘要。"
     result = unified_result(
         "extract",
-        f"AI 上下文包已生成：{safe_filename(query, '当前任务')}。",
+        f"AI 上下文包已生成：{safe_filename(query, '当前任务')}。{identity_note}",
         sources=sources,
         artifacts=[
             artifact("prompt", None, "复制 AI 上下文包 prompt", prompt),
@@ -1414,11 +1472,12 @@ def extract(config: dict[str, Any], payload: dict[str, Any] | None = None) -> di
             "request": request,
             "mode": "generate",
             "source_paths": source_paths,
+            "identity": identity,
             "direct_answers": [item.get("direct_evidence") for item in sources if item.get("direct_evidence")],
         },
     )
     result["status"] = "generated"
-    result["answer"] = f"AI 上下文包已生成，已引用 {len(sources)} 条证据来源。"
+    result["answer"] = f"AI 上下文包已生成，已引用 {len(sources)} 条证据来源；{identity_note}"
     return result
 
 

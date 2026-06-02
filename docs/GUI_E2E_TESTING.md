@@ -9,7 +9,7 @@ The default mode is isolated and safe:
 - starts a temporary GUI server on port `8767`
 - clicks real GUI buttons through Playwright
 - verifies `/api/action` requests and responses
-- verifies site-style anchors and knowledge-card details
+- verifies the three public operation anchors: 添加资料、搜索回顾、生成 AI 上下文包
 - checks returned local paths exist
 - writes a JSON report, Markdown summary, hero screenshot, and final-state screenshot
 
@@ -70,14 +70,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -B
 The E2E audit now verifies these product-level behaviors:
 
 - action results do not default to a black JSON/code box
-- the first screen is a site-style knowledge base with three anchor cards
+- the first screen exposes only the three public operation cards
 - feature cards jump to `#organize`, `#review`, and `#extract`
-- the knowledge feed renders `[data-knowledge-card]`, and clicking a card opens `#knowledgeDetail`
+- the public status API does not expose the deprecated `knowledge_feed`
 - the organize section exposes `#localPaths`, file picker, folder picker, and drag/drop zone
 - the harness fills `e2eLocalPath`, clicks `检查本地目标`, and verifies `inspect-local-targets`
 - extract flow clicks `预览候选来源` first, then clicks `确认生成上下文包`
-- in full isolated mode, file radar must use `custom-local-paths` when a local path is provided
-- file radar results expose visible next-action buttons in the readable result card
+- in full isolated mode, local target inspection must use `custom-local-paths` when a local path is provided
+- result cards expose readable answers, evidence, artifacts, and next-action buttons without default JSON
 
 These are product UX failures, not backend mechanics failures. The script separates them so we can prove real operations work while still tracking what must be fixed before the GUI feels usable.
 
@@ -86,7 +86,7 @@ These are product UX failures, not backend mechanics failures. The script separa
 - `scripts/run-gui-e2e.ps1` creates an isolated fixture folder and passes it to the browser as `e2eLocalPath`.
 - `scripts/gui-e2e-playwright.js` writes that path into the local target input before clicking buttons.
 - Read-only live smoke tests still click `检查本地目标`, but skip write-producing actions.
-- Strict mode fails on missing feature anchors, `missing-knowledge-feed`, `knowledge-card-detail-missing`, `missing-file-target-section`, `local-target-not-recognized`, raw JSON default output, or missing next-action buttons.
+- Strict mode fails on missing feature anchors, missing local target inputs, `local-target-not-recognized`, raw JSON default output, missing preview-before-generate flow, or missing next-action buttons.
 
 ## Human Usability Recording
 
@@ -96,7 +96,7 @@ For a more realistic user flow, run the video harness:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-human-usability.ps1 -Headed -StrictUx
 ```
 
-This mode uses a temporary fixture vault and records the interaction to `output/human-usability/<run>/human-usability.webm`. It simulates a desktop user who reads the hero, jumps to the knowledge feed, opens a knowledge card, pastes a local path, runs organize/review/extract, copies the context prompt, and verifies that non-core diagnostics are no longer part of the main workflow.
+This mode uses a temporary fixture vault and records the interaction to `output/human-usability/<run>/human-usability.webm`. It simulates a desktop user who reads the hero, pastes a local path, runs organize/review/extract, copies the context prompt, and verifies that non-core diagnostics are no longer part of the main workflow.
 
 For the live local GUI without writing test notes into the real vault:
 

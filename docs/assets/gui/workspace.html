@@ -927,8 +927,8 @@
           <a class="hero-button" href="#review">搜索回顾</a>
         </div>
         <div class="hero-metrics" aria-label="当前状态">
-          <div class="hero-metric"><span class="metric-value" id="statFeed">-</span><span class="metric-label">已整理来源</span></div>
-          <div class="hero-metric"><span class="metric-value" id="statFiles">-</span><span class="metric-label">扫描文件</span></div>
+          <div class="hero-metric"><span class="metric-value" id="statCore">3</span><span class="metric-label">核心操作</span></div>
+          <div class="hero-metric"><span class="metric-value" id="statSafety">0</span><span class="metric-label">源文件改动</span></div>
           <div class="hero-metric"><span class="metric-value" id="statNotes">-</span><span class="metric-label">Obsidian 笔记</span></div>
           <div class="hero-metric"><span class="metric-value" id="statRefresh">--:--</span><span class="metric-label">最近刷新</span></div>
         </div>
@@ -1439,11 +1439,9 @@
     async function refreshStatus() {
       const response = await fetch("/api/status");
       const status = await response.json();
-      const fileSummary = status.file_report?.summary || {};
       const metrics = status.metrics || {};
-      const feed = status.knowledge_feed || [];
-      $("statFeed").textContent = formatNumber(feed.length);
-      $("statFiles").textContent = formatNumber(fileSummary.total_files);
+      $("statCore").textContent = formatNumber(metrics?.core_operations);
+      $("statSafety").textContent = formatNumber(metrics?.source_file_mutations);
       $("statNotes").textContent = formatNumber(metrics?.obsidian_notes);
       $("statRefresh").textContent = nowTime();
       return status;

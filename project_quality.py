@@ -28,6 +28,7 @@ REQUIRED_DOCS = [
     "docs/PRODUCT_RETROSPECTIVE_AND_NEXT_PLAN.md",
     "docs/ITERATION_REVIEW_PROTOCOL.md",
     "docs/MIGRATION_BACKUP.md",
+    "docs/PORTABLE_AI_SYSTEM_ITERATION_PLAN.md",
     "docs/guidebook/README.md",
     "DESIGN.md",
     "docs/design-references/vibeui-mintlify-DESIGN.md",
@@ -49,6 +50,7 @@ PRINCIPLES = {
     "thin gui": ["thin gui", "GUI 只负责展示和调用"],
     "validation harness": ["validation harness", "verify-harness"],
     "deprecated non-core tools": ["旧工具已降级", "deprecated non-core tools"],
+    "portable ai three layers": ["ACT 知识资产", "AI 身份文件", "Skills / SOP"],
 }
 
 FORBIDDEN_PUBLIC_PATHS = [
@@ -81,6 +83,14 @@ STALE_LEGACY_FILES = [
     "docs/assets/gui/hero-illustration.png",
     "send_report_to_feishu.js",
     "send_obsidian_report_to_feishu.js",
+]
+PORTABLE_AI_TEMPLATE_FILES = [
+    "templates/portable-ai-system/AI 身份文件/AI_IDENTITY.md",
+    "templates/portable-ai-system/AI 身份文件/AI_COLLABORATION_RULES.md",
+    "templates/portable-ai-system/AI 身份文件/AI_CONTEXT_BOUNDARY.md",
+    "templates/portable-ai-system/Skills-SOP/organize.md",
+    "templates/portable-ai-system/Skills-SOP/review.md",
+    "templates/portable-ai-system/Skills-SOP/extract.md",
 ]
 
 
@@ -311,7 +321,7 @@ def check_iteration_review_protocol(root: Path) -> dict[str, Any]:
     missing = [item for item in required if item not in text]
     if missing:
         return fail_check("iteration_review_protocol", {"missing": missing})
-    logs = sorted((root / "docs" / "iteration-logs").glob("*.md"))
+    logs = sorted((root / "docs" / "iteration-logs").glob("*.md"), key=lambda path: path.stat().st_mtime)
     if not logs:
         return fail_check("iteration_review_protocol", {"missing": ["docs/iteration-logs/*.md"]})
     return ok_check(
@@ -326,9 +336,9 @@ def check_design_system_reference(root: Path) -> dict[str, Any]:
     required = [
         "Mintlify",
         "documentation-as-product",
-        "知识详情",
-        "关联内容",
-        "可追问问题",
+        "结果详情",
+        "命中证据",
+        "生成产物",
         "默认不做后台管理系统",
     ]
     missing = [item for item in required if item not in project_design]
@@ -344,6 +354,23 @@ def check_design_system_reference(root: Path) -> dict[str, Any]:
         evidence["missing_reference_heading"] = "# Design System: Mintlify"
         return fail_check("design_system_reference", evidence)
     return ok_check("design_system_reference", evidence)
+
+
+def check_portable_ai_templates(root: Path) -> dict[str, Any]:
+    missing: list[str] = []
+    incomplete: list[str] = []
+    for relative in PORTABLE_AI_TEMPLATE_FILES:
+        path = root / relative
+        if not path.exists():
+            missing.append(relative)
+            continue
+        text = path.read_text(encoding="utf-8-sig")
+        for required in ["来源", "下一步"]:
+            if required not in text:
+                incomplete.append(f"{relative}: missing {required}")
+    if missing or incomplete:
+        return fail_check("portable_ai_templates", {"missing": missing, "incomplete": incomplete})
+    return ok_check("portable_ai_templates", PORTABLE_AI_TEMPLATE_FILES)
 
 
 def iter_public_text_files(root: Path) -> list[Path]:
@@ -388,6 +415,7 @@ def run_checks(root: Path) -> dict[str, Any]:
         check_backup_manifest(root),
         check_iteration_review_protocol(root),
         check_design_system_reference(root),
+        check_portable_ai_templates(root),
         check_guidebook_assets(root),
         check_no_stale_legacy_files(root),
         check_mojibake_scan(root),

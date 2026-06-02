@@ -3,13 +3,14 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import sys
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 
 ROOT = Path(__file__).resolve().parent
@@ -511,8 +512,9 @@ def build_status(config_path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
         "config": str(config_path),
         "vault": str(knowledge_assistant.vault_path(config)),
         "runtime_root": str(knowledge_assistant.runtime_root(config)),
-        "knowledge_feed": build_knowledge_feed(config),
         "metrics": {
+            "core_operations": 3,
+            "source_file_mutations": 0,
             "obsidian_notes": count_obsidian_notes(config),
         },
         "safety": knowledge_assistant.SAFETY_TEXT,
@@ -698,13 +700,51 @@ def run_gui_action(action: str, payload: dict[str, Any] | None = None, config_pa
         return inspect_local_targets(config, payload)
 
     if action == "open-path":
+        config = load_config(config_path)
         target = Path(str(payload.get("path") or ""))
         if not target.exists():
             return {"ok": False, "error": f"path not found: {target}"}
-        webbrowser.open(str(target))
-        return {"ok": True, "opened": str(target)}
+        allowed_roots = configured_open_roots(config)
+        if allowed_roots and not path_is_inside_any_root(target, allowed_roots):
+            return {"ok": False, "error": f"path not allowed: {target}"}
+        opened_as = "system"
+        vault = Path(str(config.get("obsidian_vault") or "")).expanduser()
+        if target.suffix.lower() == ".md" and vault.exists():
+            try:
+                relative = target.resolve().relative_to(vault.resolve()).as_posix()
+                uri = f"obsidian://open?vault={quote(vault.name)}&file={quote(relative)}"
+                webbrowser.open(uri)
+                opened_as = "obsidian"
+            except ValueError:
+                os.startfile(str(target))  # type: ignore[attr-defined]
+        else:
+            os.startfile(str(target))  # type: ignore[attr-defined]
+        return {"ok": True, "opened": str(target), "opened_as": opened_as}
 
     return {"ok": False, "error": f"unsupported action: {action}"}
+
+
+def configured_open_roots(config: dict[str, Any]) -> list[Path]:
+    roots = config.get("allowed_open_roots")
+    if not roots:
+        roots = [config.get("runtime_root"), config.get("obsidian_vault"), config.get("knowledge_root")]
+    return [Path(str(item)).expanduser() for item in roots if item]
+
+
+def path_is_inside_any_root(target: Path, roots: list[Path]) -> bool:
+    try:
+        resolved_target = target.resolve()
+    except OSError:
+        return False
+    for root in roots:
+        if not root.exists():
+            continue
+        try:
+            resolved_target.relative_to(root.resolve())
+            return True
+        except ValueError:
+            continue
+    return False
 
 
 HTML = (ROOT / "docs" / "assets" / "gui" / "workspace.html").read_text(encoding="utf-8")

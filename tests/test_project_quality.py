@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -74,6 +75,8 @@ class ProjectQualityTests(unittest.TestCase):
         protocol_text = (self.repo / "docs" / "ITERATION_REVIEW_PROTOCOL.md").read_text(encoding="utf-8-sig")
 
         self.assertTrue(protocol["ok"], protocol)
+        latest_by_mtime = max((self.repo / "docs" / "iteration-logs").glob("*.md"), key=lambda path: path.stat().st_mtime)
+        self.assertEqual(str(latest_by_mtime.relative_to(self.repo)), protocol["evidence"]["latest_log"])
         for question in [
             "做到了视觉清晰阅读友好了吗",
             "做到了总结归纳到位",
@@ -100,9 +103,9 @@ class ProjectQualityTests(unittest.TestCase):
         for phrase in [
             "Mintlify",
             "documentation-as-product",
-            "知识详情",
-            "关联内容",
-            "可追问问题",
+            "结果详情",
+            "命中证据",
+            "生成产物",
             "默认不做后台管理系统",
         ]:
             self.assertIn(phrase, project_design)
@@ -148,6 +151,110 @@ class ProjectQualityTests(unittest.TestCase):
         self.assertNotIn("生成 Codex 交接", public_text)
         self.assertNotIn("Codex 交接", public_text)
         self.assertNotIn("AI 交接", public_text)
+
+    def test_public_docs_explain_portable_three_layer_ai_system(self) -> None:
+        public_text = "\n".join(
+            (self.repo / path).read_text(encoding="utf-8-sig")
+            for path in [
+                "README.md",
+                "docs/PROJECT_PRINCIPLES.md",
+                "docs/PORTABLE_AI_SYSTEM_ITERATION_PLAN.md",
+            ]
+        )
+
+        for phrase in [
+            "ACT 知识资产",
+            "AI 身份文件",
+            "Skills / SOP",
+            "可迁移",
+            "可复用",
+            "随时切换 AI 工具",
+        ]:
+            self.assertIn(phrase, public_text)
+
+    def test_public_docs_do_not_promote_knowledge_feed_as_core_flow(self) -> None:
+        active_docs = "\n".join(
+            (self.repo / path).read_text(encoding="utf-8-sig")
+            for path in [
+                "README.md",
+                "DESIGN.md",
+                "docs/GUI_E2E_TESTING.md",
+                "docs/CLOSED_LOOP_USAGE.md",
+            ]
+        )
+
+        self.assertNotIn("持续更新的知识流", active_docs)
+        self.assertNotIn("下滑后可以浏览", active_docs)
+        self.assertNotIn("知识流不是文件列表", active_docs)
+        self.assertNotIn("knowledge-card details", active_docs)
+        self.assertNotIn("jumps to the knowledge feed", active_docs)
+        self.assertNotIn("opens a knowledge card", active_docs)
+
+    def test_portable_ai_templates_are_versioned_and_documented(self) -> None:
+        result = project_quality.run_checks(self.repo)
+        portable_templates = next(item for item in result["checks"] if item["name"] == "portable_ai_templates")
+        expected = [
+            "templates/portable-ai-system/AI 身份文件/AI_IDENTITY.md",
+            "templates/portable-ai-system/AI 身份文件/AI_COLLABORATION_RULES.md",
+            "templates/portable-ai-system/AI 身份文件/AI_CONTEXT_BOUNDARY.md",
+            "templates/portable-ai-system/Skills-SOP/organize.md",
+            "templates/portable-ai-system/Skills-SOP/review.md",
+            "templates/portable-ai-system/Skills-SOP/extract.md",
+        ]
+        combined = "\n".join(
+            (self.repo / path).read_text(encoding="utf-8-sig")
+            for path in [
+                "README.md",
+                "docs/GETTING_STARTED.md",
+                "docs/MIGRATION_BACKUP.md",
+                "docs/PORTABLE_AI_SYSTEM_ITERATION_PLAN.md",
+            ]
+        )
+
+        self.assertTrue(portable_templates["ok"], portable_templates)
+        self.assertEqual(expected, portable_templates["evidence"])
+        for relative in expected:
+            path = self.repo / relative
+            self.assertTrue(path.exists(), relative)
+            text = path.read_text(encoding="utf-8-sig")
+            self.assertIn("来源", text)
+            self.assertIn("下一步", text)
+        self.assertIn("-InstallPortableTemplates", combined)
+        self.assertIn("AI_IDENTITY.md", combined)
+        self.assertIn("Skills-SOP", combined)
+
+    def test_demo_initialization_installs_identity_files_and_sops(self) -> None:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(self.repo / "scripts" / "init-assistant.ps1"),
+                "-Demo",
+            ],
+            cwd=self.repo,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+
+        root = self.repo / "demo" / "vault" / "routine" / "knowledge-organizer"
+        for relative in [
+            "AI 身份文件/AI_IDENTITY.md",
+            "AI 身份文件/AI_COLLABORATION_RULES.md",
+            "AI 身份文件/AI_CONTEXT_BOUNDARY.md",
+            "Skills-SOP/organize.md",
+            "Skills-SOP/review.md",
+            "Skills-SOP/extract.md",
+        ]:
+            path = root / relative
+            self.assertTrue(path.exists(), relative)
+            text = path.read_text(encoding="utf-8-sig")
+            self.assertIn("本地知识整理助手", text)
+            self.assertIn("下一步", text)
 
     def test_cli_exposes_only_three_core_actions(self) -> None:
         runner = (self.repo / "run-knowledge-assistant.ps1").read_text(encoding="utf-8-sig")
@@ -227,11 +334,14 @@ class ProjectQualityTests(unittest.TestCase):
             "命中证据",
             "生成产物",
             "Obsidian 教程",
+            "AI 身份文件已可用",
+            "本地知识整理助手产品负责人",
             "#localPaths",
             "#fileDropZone",
             "inspect-local-targets",
             "custom-local-paths",
             "missing-file-target-section",
+            "if ((await output.count()) === 0) return false",
         ]:
             self.assertIn(phrase, script)
         self.assertIn("e2eLocalPath", runner)
@@ -240,7 +350,17 @@ class ProjectQualityTests(unittest.TestCase):
         self.assertIn("--browser", runner)
         self.assertIn("read-only flag did not reach browser", runner)
         self.assertIn("Invoke-PlaywrightClose", runner)
-        self.assertIn("Wait-Process -Timeout", runner)
+        self.assertIn("Start-Process -FilePath \"npx.cmd\"", runner)
+        self.assertIn("Stop-GuiServer", runner)
+        self.assertIn("Stop-PortServer -TargetPort $Port", runner)
+        self.assertIn("$StartedServer = $false", runner)
+        self.assertIn("$script:StartedServer = $true", runner)
+        self.assertIn("if ($script:StartedServer)", runner)
+        self.assertIn("Invoke-PlaywrightRunCode", runner)
+        self.assertIn("run-code timed out", runner)
+        self.assertIn("Stop-PlaywrightSessionProcesses", runner)
+        self.assertIn("AI_IDENTITY.md", runner)
+        self.assertIn("AI_CONTEXT_BOUNDARY.md", runner)
 
         for phrase in [
             "human-usability.webm",

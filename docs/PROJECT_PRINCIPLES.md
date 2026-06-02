@@ -19,6 +19,7 @@ This project is a local knowledge organizer for Obsidian and AI workflows. It is
 - thin gui：GUI 只负责展示和调用，业务分发下沉到 `knowledge_assistant.py`。
 - validation harness：`scripts/verify-harness.ps1` 是主验证入口。
 - deprecated non-core tools：旧工具已降级，不再出现在首页或默认命令行；需要恢复时必须先证明它能服务三主闭环。
+- portable ai three layers：结构参考 Obsidian + AI 的三层文件系统：`ACT 知识资产` 管资料与证据，`AI 身份文件` 管用户偏好与边界，`Skills / SOP` 管重复流程；目标是可迁移、可复用、随时切换 AI 工具。
 
 ## Non Goals
 

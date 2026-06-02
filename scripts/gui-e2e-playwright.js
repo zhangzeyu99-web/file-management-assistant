@@ -1,5 +1,7 @@
 async page => {
   const startedAt = new Date().toISOString();
+  const logStep = (step) => console.log(`[gui-e2e] ${step}`);
+  logStep("start");
   const report = {
     ok: true,
     started_at: startedAt,
@@ -12,13 +14,10 @@ async page => {
     ux_issues: [],
     skipped: [],
     actions: [],
-    knowledge_detail: {
-      card_count: 0,
-      detail_visible: false,
-      has_summary: false,
-      has_related: false,
-      has_prompts: false,
-      has_source: false,
+    three_operations: {
+      anchors_checked: 0,
+      has_local_target_input: false,
+      preview_before_generate: false,
     },
   };
 
@@ -56,7 +55,9 @@ async page => {
 
   async function isOutputVisible() {
     try {
-      return await page.locator("#out").evaluate(el => {
+      const output = page.locator("#out");
+      if ((await output.count()) === 0) return false;
+      return await output.evaluate(el => {
         const style = window.getComputedStyle(el);
         return style.display !== "none" && style.visibility !== "hidden";
       });
@@ -119,6 +120,7 @@ async page => {
       label,
       expected_action: expectedAction,
       input,
+      duration_ms: null,
       ok: false,
       request_action: null,
       http_status: null,
@@ -131,19 +133,22 @@ async page => {
       error: null,
     };
     report.actions.push(item);
+    const actionStartedAt = Date.now();
 
     try {
       const actionInput = page.locator(`${scope} textarea[data-action-input]`).first();
       if (fillInput && await actionInput.count()) {
         await actionInput.fill(input);
       }
+      const button = buttonLocator(label, scope);
+      if ((await button.count()) === 0) {
+        throw new Error(`button not found: ${label}`);
+      }
+      await button.scrollIntoViewIfNeeded({ timeout: 3000 });
       const responsePromise = page.waitForResponse(
         response => response.url().includes("/api/action") && response.request().method() === "POST",
-        { timeout: 25000 },
+        { timeout: 12000 },
       );
-
-      const button = buttonLocator(label, scope);
-      await button.scrollIntoViewIfNeeded();
       await button.evaluate(el => el.click());
 
       const response = await responsePromise;
@@ -193,13 +198,18 @@ async page => {
     } catch (error) {
       item.error = String(error && error.message ? error.message : error);
       addFailure("button click failed", { label, expected_action: expectedAction, error: item.error });
+    } finally {
+      item.duration_ms = Date.now() - actionStartedAt;
     }
   }
 
+  logStep("wait-domcontentloaded");
   await page.waitForLoadState("domcontentloaded");
   await page.waitForTimeout(800);
   report.title = await page.title();
+  logStep("page-ready");
 
+  logStep("body-copy-check");
   const bodyText = await page.locator("body").innerText();
   const mustHave = [
     "本地知识整理助手",
@@ -225,6 +235,7 @@ async page => {
     addIssue("json-visible-on-load", "advanced JSON is visible on page load");
   }
 
+  logStep("anchor-checks");
   for (const target of ["organize", "review", "extract"]) {
     const anchor = page.locator(`.feature-anchor[href="#${target}"]`).first();
     if ((await anchor.count()) === 0) {
@@ -239,11 +250,12 @@ async page => {
     }
   }
 
-  report.knowledge_detail.card_count = 0;
+  report.three_operations.anchors_checked = 3;
 
   const fileInputCount = await page.locator("input[type=file]").count();
   const localPathInputCount = await page.locator("#localPaths").count();
   const dropZoneCount = await page.locator("#fileDropZone").count();
+  report.three_operations.has_local_target_input = fileInputCount > 0 && localPathInputCount > 0 && dropZoneCount > 0;
   if (fileInputCount === 0 || localPathInputCount === 0 || dropZoneCount === 0) {
     addIssue("missing-file-target-section", "organize section has no complete local target input with path input, file picker, and drop zone");
   }
@@ -251,6 +263,7 @@ async page => {
     await page.locator("#localPaths").fill(e2eLocalPath);
   }
 
+  logStep("inspect-local-targets");
   await clickAndCapture({
     label: "检查本地目标",
     expectedAction: "inspect-local-targets",
@@ -260,6 +273,7 @@ async page => {
   });
 
   if (readOnly) {
+    logStep("review-readonly");
     await clickAndCapture({
       label: "搜索回顾",
       expectedAction: "review",
@@ -271,6 +285,7 @@ async page => {
     report.skipped.push({ label: "生成 AI 上下文包", action: "extract", reason: "read-only smoke mode" });
     report.skipped.push({ label: "工具页诊断动作", action: "diagnostics", reason: "read-only smoke mode" });
   } else {
+    logStep("organize");
     await clickAndCapture({
       label: "添加资料",
       expectedAction: "organize",
@@ -278,6 +293,7 @@ async page => {
       scope: "#organize",
       renderScope: "#organize",
     });
+    logStep("review");
     await clickAndCapture({
       label: "搜索回顾",
       expectedAction: "review",
@@ -285,6 +301,7 @@ async page => {
       scope: "#review",
       renderScope: "#review",
     });
+    logStep("extract-preview");
     await clickAndCapture({
       label: "预览候选来源",
       expectedAction: "extract",
@@ -292,6 +309,7 @@ async page => {
       scope: "#extract",
       renderScope: "#extract",
     });
+    logStep("extract-generate");
     await clickAndCapture({
       label: "确认生成上下文包",
       expectedAction: "extract",
@@ -299,8 +317,28 @@ async page => {
       renderScope: "#extract",
       fillInput: false,
     });
+    const preview = report.actions.find(item => item.label === "预览候选来源");
+    if (preview && preview.response_ok) {
+      const identity = preview.response?.debug?.identity || {};
+      if ((identity.count || 0) < 1 || !String(preview.response.summary || "").includes("AI 身份文件已可用")) {
+        addIssue("extract-preview-missing-identity", "extract preview did not surface the available AI identity files", {
+          identity_count: identity.count || 0,
+        });
+      }
+    }
+    const generated = report.actions.find(item => item.label === "确认生成上下文包");
+    report.three_operations.preview_before_generate = Boolean(preview && generated);
+    if (generated && generated.response_ok) {
+      const joined = collectStrings(generated.response).join("\n");
+      for (const phrase of ["AI 身份文件摘要", "本地知识整理助手产品负责人", "严格逐个功能 QA"]) {
+        if (!joined.includes(phrase)) {
+          addIssue("extract-generate-missing-identity", `generated context package is missing identity phrase: ${phrase}`);
+        }
+      }
+    }
   }
   report.skipped.push({ label: "openers", action: "openers", reason: "non-core openers are not part of GUI E2E" });
+  logStep("done");
 
   const localTargetInspect = report.actions.find(item => item.expected_action === "inspect-local-targets");
   if (e2eLocalPath && localTargetInspect && localTargetInspect.response_ok) {

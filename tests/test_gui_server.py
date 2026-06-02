@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "gui_server.py"
@@ -68,7 +69,7 @@ class GuiServerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def test_status_reports_core_knowledge_feed(self) -> None:
+    def test_status_reports_three_operation_product_status_without_public_feed(self) -> None:
         status = gui_server.build_status(self.config_path)
 
         self.assertTrue(status["ok"])
@@ -79,12 +80,9 @@ class GuiServerTests(unittest.TestCase):
         self.assertNotIn("obsidian_report", status)
         self.assertNotIn("scenarios", status)
         self.assertNotIn("guidebook", status)
-        self.assertIn("knowledge_feed", status)
-        self.assertGreaterEqual(len(status["knowledge_feed"]), 1)
-        first_card = status["knowledge_feed"][0]
-        for key in ["title", "description", "type", "source_path", "updated_at", "tags", "action_hint"]:
-            self.assertIn(key, first_card)
-        self.assertTrue(first_card["source_path"].endswith("AI 上下文取用.md"))
+        self.assertNotIn("knowledge_feed", status)
+        self.assertEqual(3, status["metrics"]["core_operations"])
+        self.assertEqual(0, status["metrics"]["source_file_mutations"])
 
     def test_status_counts_obsidian_markdown_notes_for_home_metric(self) -> None:
         (self.vault / "01 今日日志" / "2026-05-26.md").write_text("# 今日笔记", encoding="utf-8")
@@ -324,6 +322,36 @@ tags:
         self.assertEqual(1, organize["debug"]["scan"]["total_files"])
         self.assertTrue(any(item.get("type") == "markdown" and "整理清单" in item.get("label", "") for item in organize["artifacts"]))
 
+    def test_open_path_opens_vault_markdown_with_obsidian_uri(self) -> None:
+        note = self.vault / "02 项目" / "知识行动助手" / "Card" / "AI 上下文取用.md"
+
+        with patch.object(gui_server.webbrowser, "open") as open_mock, patch.object(gui_server.os, "startfile") as start_mock:
+            result = gui_server.run_gui_action("open-path", {"path": str(note)}, self.config_path)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("obsidian", result["opened_as"])
+        open_mock.assert_called_once()
+        opened_uri = open_mock.call_args.args[0]
+        self.assertTrue(opened_uri.startswith("obsidian://open?"), opened_uri)
+        self.assertIn("vault=vault", opened_uri)
+        self.assertIn("AI%20%E4%B8%8A%E4%B8%8B%E6%96%87%E5%8F%96%E7%94%A8.md", opened_uri)
+        start_mock.assert_not_called()
+
+    def test_open_path_rejects_files_outside_allowed_roots(self) -> None:
+        outside = self.root / "outside.md"
+        outside.write_text("# outside\n\n不应被 GUI 打开。", encoding="utf-8")
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        config["allowed_open_roots"] = [str(self.runtime), str(self.vault)]
+        self.config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+
+        with patch.object(gui_server.webbrowser, "open") as open_mock, patch.object(gui_server.os, "startfile") as start_mock:
+            result = gui_server.run_gui_action("open-path", {"path": str(outside)}, self.config_path)
+
+        self.assertFalse(result["ok"], result)
+        self.assertIn("not allowed", result["error"])
+        open_mock.assert_not_called()
+        start_mock.assert_not_called()
+
     def test_removed_act_shortcuts_do_not_write_to_vault(self) -> None:
         before = set(self.vault.rglob("*.md"))
 
@@ -416,8 +444,14 @@ tags:
             "证据摘录",
             "加入上下文包",
             "metrics?.obsidian_notes",
+            "metrics?.core_operations",
+            "metrics?.source_file_mutations",
         ]:
             self.assertIn(required, html)
+        self.assertNotIn("status.knowledge_feed", html)
+        self.assertNotIn("status.file_report", html)
+        self.assertNotIn("statFeed", html)
+        self.assertNotIn("statFiles", html)
         for productized in [
             "来源可追溯",
             "命中证据",

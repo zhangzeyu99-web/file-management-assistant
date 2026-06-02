@@ -19,6 +19,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
 
 打开 `http://127.0.0.1:8765/` 后，先用 demo mode 跑通添加资料、搜索回顾、生成 AI 上下文包，再把 `config.local.json` 改成真实路径。
 
+`-Demo` 会在 demo vault 的 `knowledge_root` 下安装可迁移模板：
+
+- `AI 身份文件/AI_IDENTITY.md`
+- `AI 身份文件/AI_COLLABORATION_RULES.md`
+- `AI 身份文件/AI_CONTEXT_BOUNDARY.md`
+- `Skills-SOP/organize.md`
+- `Skills-SOP/review.md`
+- `Skills-SOP/extract.md`
+
+真实 vault 配好后，可以手动安装同一套模板：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\init-assistant.ps1 -InstallPortableTemplates
+```
+
 ## 生成 Manifest
 
 ```powershell
