@@ -563,6 +563,44 @@ class ProjectQualityTests(unittest.TestCase):
             self.assertIn(phrase, runner)
         self.assertIn("context_package_gui_qa", harness)
 
+    def test_organize_ingest_gui_qa_scans_real_directory_and_reviews_evidence(self) -> None:
+        script_path = self.repo / "scripts" / "gui-organize-ingest-qa.js"
+        runner_path = self.repo / "scripts" / "run-organize-ingest-gui-qa.ps1"
+        harness_path = self.repo / "scripts" / "verify-harness.ps1"
+
+        self.assertTrue(script_path.exists(), script_path)
+        self.assertTrue(runner_path.exists(), runner_path)
+        script = script_path.read_text(encoding="utf-8-sig")
+        runner = runner_path.read_text(encoding="utf-8-sig")
+        harness = harness_path.read_text(encoding="utf-8-sig")
+
+        for phrase in [
+            "GuiOrganizeIngestEvidence-20260602",
+            "#localPaths",
+            "检查本地目标",
+            "添加资料",
+            "已扫描",
+            "file_index_count",
+            "file_index_notes",
+            "#reviewInput",
+            "搜索回顾",
+            "data-source-evidence-card",
+            "gui-organize-ingest-qa-result.json",
+            "gui-organize-ingest-qa-summary.md",
+        ]:
+            self.assertIn(phrase, script)
+        for phrase in [
+            "demo-source",
+            "demo-vault",
+            "demo-runtime",
+            "GuiOrganizeIngestEvidence-20260602",
+            "run-organize-ingest-gui-qa.ps1",
+            "generated_file_index_notes",
+            "review_top_source_path",
+        ]:
+            self.assertIn(phrase, runner)
+        self.assertIn("organize_ingest_gui_qa", harness)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

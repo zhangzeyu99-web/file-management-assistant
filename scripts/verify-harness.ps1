@@ -113,6 +113,23 @@ try {
         return $parsed
     }
 
+    Invoke-Checked "organize_ingest_gui_qa" {
+        $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-organize-ingest-gui-qa.ps1 -StrictUx 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }
+        $parsed = $output -join "`n" | ConvertFrom-Json
+        if (-not $parsed.ok -or -not $parsed.strict_ok) { throw "organize ingest GUI QA returned failing result" }
+        if (-not (Test-Path -LiteralPath $parsed.json)) { throw "missing organize ingest GUI QA json: $($parsed.json)" }
+        if (-not (Test-Path -LiteralPath $parsed.markdown)) { throw "missing organize ingest GUI QA markdown: $($parsed.markdown)" }
+        if (-not (Test-Path -LiteralPath $parsed.screenshot)) { throw "missing organize ingest GUI QA screenshot: $($parsed.screenshot)" }
+        if (($parsed.scanned_files -as [int]) -lt 2) { throw "organize ingest GUI QA scanned fewer than two files" }
+        if (-not $parsed.generated_file_index_notes -or $parsed.generated_file_index_notes.Count -lt 2) { throw "organize ingest GUI QA generated too few file index notes" }
+        foreach ($path in $parsed.generated_file_index_notes) {
+            if (-not (Test-Path -LiteralPath $path)) { throw "missing generated file index note: $path" }
+        }
+        if (-not (Test-Path -LiteralPath $parsed.review_top_source_path)) { throw "missing review top source path: $($parsed.review_top_source_path)" }
+        return $parsed
+    }
+
     Invoke-Checked "context_package_gui_qa" {
         $output = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-context-package-gui-qa.ps1 -StrictUx 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($output -join "`n") }

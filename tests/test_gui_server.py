@@ -472,6 +472,7 @@ class GuiServerTests(unittest.TestCase):
             self.assertIn(required, html)
         self.assertIn(".site-action-result", html)
         self.assertIn("grid-column: 1 / -1;", html)
+        self.assertIn("overflow-wrap: anywhere;", html)
         self.assertNotIn("grid-column: 2;\n      grid-row: 1 / span 5;", html)
 
     def test_advanced_page_is_degraded_to_static_notice(self) -> None:
