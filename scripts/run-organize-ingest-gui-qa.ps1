@@ -189,7 +189,9 @@ try {
     $rawPath = Join-Path $RunDir "playwright-raw.txt"
     $jsonPath = Join-Path $RunDir "gui-organize-ingest-qa-result.json"
     $summaryPath = Join-Path $RunDir "gui-organize-ingest-qa-summary.md"
+    $organizeScreenshotPath = Join-Path $RunDir "organize-completion.png"
     $screenshotPath = Join-Path $RunDir "final-page.png"
+    $TestUrl = Add-QueryParam -Url $TestUrl -Name "organizeScreenshotPath" -Value $organizeScreenshotPath
 
     $openArgs = @("--package", "@playwright/cli", "playwright-cli", "-s=$Session", "open", $TestUrl)
     if ($Browser -ne "chromium") { $openArgs += @("--browser", $Browser) }
@@ -217,6 +219,7 @@ try {
     $result | Add-Member -NotePropertyName "demo_runtime" -NotePropertyValue $Demo.demo_runtime -Force
     $result | Add-Member -NotePropertyName "json" -NotePropertyValue $jsonPath -Force
     $result | Add-Member -NotePropertyName "markdown" -NotePropertyValue $summaryPath -Force
+    $result | Add-Member -NotePropertyName "organize_screenshot" -NotePropertyValue $organizeScreenshotPath -Force
     $result | Add-Member -NotePropertyName "screenshot" -NotePropertyValue $screenshotPath -Force
 
     foreach ($requiredPath in $result.organize.generated_file_index_notes) {
@@ -241,6 +244,7 @@ try {
         run_dir = $RunDir
         json = $jsonPath
         markdown = $summaryPath
+        organize_screenshot = $organizeScreenshotPath
         screenshot = $screenshotPath
         demo_source = $Demo.demo_source
         demo_vault = $Demo.demo_vault

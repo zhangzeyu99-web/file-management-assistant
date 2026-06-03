@@ -77,6 +77,7 @@ async page => {
 
   try {
     const sourcePath = queryParam("sourcePath");
+    const organizeScreenshotPath = queryParam("organizeScreenshotPath");
     report.source_path = sourcePath;
     if (!sourcePath) {
       fail("sourcePath query parameter is missing");
@@ -111,6 +112,7 @@ async page => {
       artifact_types: artifactTypes(organizeAction.data),
       obsidian_locations: organizeAction.data?.debug?.obsidian_locations || {},
       ui_text: organizeAction.text.slice(0, 1600),
+      screenshot: organizeScreenshotPath || "",
     };
     if (!organizeAction.data?.ok) {
       fail("添加资料 did not return ok", report.organize);
@@ -126,10 +128,14 @@ async page => {
         fail("添加资料 missing required artifact type", {requiredType, artifact_types: report.organize.artifact_types});
       }
     }
-    for (const requiredText of ["已扫描", "在 Obsidian 里怎么找", "文件索引目录", "推荐搜索词"]) {
+    for (const requiredText of ["已扫描", "本次入库结果", "独立文件索引", "源文件改动", "在 Obsidian 里怎么找", "文件索引目录", "推荐搜索词", "入库来源", "入库产物"]) {
       if (!organizeAction.text.includes(requiredText)) {
         fail("添加资料 result missing readable UI text", {requiredText});
       }
+    }
+    if (organizeScreenshotPath) {
+      await page.locator("#organizeResult").scrollIntoViewIfNeeded({timeout: 10000});
+      await page.screenshot({path: organizeScreenshotPath, fullPage: false});
     }
 
     await page.locator("#reviewInput").fill(QUERY);

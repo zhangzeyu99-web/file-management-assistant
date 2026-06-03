@@ -441,6 +441,29 @@ class GuiServerTests(unittest.TestCase):
         ]:
             self.assertIn(required, html)
 
+    def test_organize_completion_uses_ingest_reading_structure(self) -> None:
+        html = gui_server.HTML
+
+        for required in [
+            "renderOrganizeCompletion",
+            "data-organize-completion",
+            "本次入库结果",
+            "扫描文件",
+            "独立文件索引",
+            "源文件改动",
+            "建议阅读顺序",
+            "本次结果",
+            "入库来源",
+            "为什么入库",
+            "来源摘录",
+            "入库产物",
+            "产物路径",
+            "默认只展示最常用路径",
+            "先打开“整理记录”",
+            "最后用“推荐搜索词”测试能否找回",
+        ]:
+            self.assertIn(required, html)
+
     def test_html_explains_where_to_find_generated_context_packages(self) -> None:
         html = gui_server.HTML
 
