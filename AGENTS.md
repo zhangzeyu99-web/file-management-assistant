@@ -1,6 +1,6 @@
 # 个人知识工作台协作入口
 
-本仓库 main 为独立重构的 v0.2 新版，唯一开发入口。先读 README.md、PROJECT.md 和受影响模块。旧版由 legacy-v0.1-before-workspace 标签保留，不恢复旧代码覆盖新版。
+本仓库 main 为独立重构的 v0.3 新版，唯一开发入口。先读 README.md、PROJECT.md 和受影响模块。旧版由 legacy-v0.1-before-workspace 标签保留，不恢复旧代码覆盖新版。
 
 - 使用真实模型与官方原生 Codex 来源接口；不扫描原始会话 JSONL/SQLite。
 - 接续已有 version 1 检查点，禁止自动初始化空状态、全量重总结或覆盖人工笔记。写入读回成功后再登记。

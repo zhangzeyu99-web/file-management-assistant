@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { searchSnapshot } from "../../../../lib/search";
+import { migrationCloudRoute, MIGRATION_CLOUD_LIMIT } from "../../../../lib/migration-cloud";
 
 export const dynamic = "force-dynamic";
 type Job = Record<string, any>;
@@ -21,8 +22,14 @@ async function state(key: string) {
 async function setState(key: string,value: unknown) {
   await bindings().DB.prepare("INSERT INTO workspace_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(key,JSON.stringify(value)).run();
 }
+async function publishMigration(key: string,value: unknown,expected: unknown,jobId: string,owner: string) {
+  const changed=await bindings().DB.prepare(
+    "INSERT INTO workspace_state(key,value) SELECT ?,? WHERE EXISTS(SELECT 1 FROM jobs WHERE id=? AND kind='migration_export' AND owner=? AND status='running' AND lease_until>=?) AND (SELECT value FROM workspace_state WHERE key=?) IS ? ON CONFLICT(key) DO UPDATE SET value=excluded.value RETURNING key"
+  ).bind(key,JSON.stringify(value),jobId,owner,Date.now(),key,expected===null?null:JSON.stringify(expected)).first();
+  return !!changed;
+}
 async function createJob(kind: string,input: any,id?: string) {
-  const db=bindings().DB, now=Date.now(), activeKey=kind==="update" ? "update" : null;
+  const db=bindings().DB, now=Date.now(), activeKey=["update","migration_export"].includes(kind) ? kind : null;
   if(activeKey) {
     const active = await db.prepare("SELECT * FROM jobs WHERE active_key=?").bind(activeKey).first<Job>();
     if(active) return unpack(active);
@@ -48,13 +55,17 @@ async function handler(req:Request) {
   try {
     const url=new URL(req.url), path=url.pathname.split("/api/workspace/")[1]||"";
     const b=bindings();
+    if(req.method!=="GET") {
+      const origin=req.headers.get("origin");
+      if(origin && origin!==url.origin)return json({error:"请求来源不匹配"},403);
+    }
     // Only the ignored local development binding activates the local endpoint.
     if(b.OW_LOCAL_API) {
       const local=new URL(b.OW_LOCAL_API);
       if(!["127.0.0.1","localhost"].includes(local.hostname))return json({error:"本机接口配置无效"},500);
       const headers=new Headers({"Content-Type":req.headers.get("content-type")||"application/json"});
       const result=await fetch(`${local.origin}/api/workspace/${path}${url.search}`,{method:req.method,headers,body:req.method==="GET"?undefined:await req.arrayBuffer()});
-      return new Response(result.body,{status:result.status,headers:{"Content-Type":result.headers.get("content-type")||"application/json","Cache-Control":"no-store"}});
+      return new Response(result.body,{status:result.status,headers:Object.fromEntries([...["content-type","content-length","content-disposition","x-content-type-options"].flatMap(key=>result.headers.has(key)?[[key,result.headers.get(key)!]]:[]),["Cache-Control","no-store"]])});
     }
     // The Site remains owner-private. Sites authenticates browser and service requests
     // before dispatch; browser identity and service identity intentionally differ.
@@ -62,6 +73,16 @@ async function handler(req:Request) {
       const origin=req.headers.get("origin");
       if(origin && origin!==url.origin)return json({error:"请求来源不匹配"},403);
     }
+    if(path==="migration/status" && req.method==="GET") {
+      const heartbeat=await state("heartbeat");
+      const online=!!heartbeat && Date.now()-heartbeat.at<90000;
+      return json({mode:"cloud",configured:true,online,can_export:true,device:heartbeat?.device||"本机",export_limit_bytes:MIGRATION_CLOUD_LIMIT});
+    }
+    const migrationResponse=await migrationCloudRoute(req,path,{
+      bucket:b.BUCKET,getState:state,publishState:publishMigration,
+      getJob:async id=>b.DB.prepare("SELECT * FROM jobs WHERE id=?").bind(id).first<Job>(),
+    });
+    if(migrationResponse)return migrationResponse;
     if(path==="health") {
       const heartbeat=await state("heartbeat");
       return json({mode:"cloud",online:!!heartbeat && Date.now()-heartbeat.at<90000,heartbeat,synced_at:(await state("snapshot"))?.at||null});
@@ -96,7 +117,8 @@ async function handler(req:Request) {
     }
     if(path==="jobs"&&req.method==="POST") {
       const data=await req.json() as any;
-      if(!["update","answer","context","ingest"].includes(data.kind))return json({error:"不支持的操作"},400);
+      if(!["update","answer","context","ingest","migration_export"].includes(data.kind))return json({error:"不支持的操作"},400);
+      if(data.kind==="migration_export" && data.request_id && !/^[a-zA-Z0-9-]{10,80}$/.test(data.request_id))return json({error:"请求标识无效"},400);
       if(JSON.stringify(data).length>180000)return json({error:"文字过长，请通过文件上传"},413);
       return json(await createJob(data.kind,data.input||{},data.request_id),202);
     }

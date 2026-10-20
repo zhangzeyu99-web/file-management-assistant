@@ -1,4 +1,4 @@
-"""Persistent jobs with a single active update and expiring ownership."""
+"""Persistent jobs with deduplicated update/export tasks and expiring ownership."""
 import json
 import sqlite3
 import time
@@ -43,10 +43,10 @@ class JobStore:
         return item
 
     def create(self, kind, payload, request_id=None):
-        if kind not in {"update", "answer", "context", "ingest"}:
+        if kind not in {"update", "answer", "context", "ingest", "migration_export"}:
             raise ValueError("不支持的任务类型")
         now = int(time.time() * 1000)
-        key = "update" if kind == "update" else None
+        key = kind if kind in {"update", "migration_export"} else None
         job_id = request_id or str(uuid.uuid4())
         with self.connection() as conn:
             conn.execute("BEGIN IMMEDIATE")

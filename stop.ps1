@@ -114,7 +114,9 @@ if ($listener) {
     }
     if ($settings.config_path) {
         $configPattern = '(?:^|\s)--config(?:\s+|=)' + (Argument-Pattern $settings.config_path)
-        if ($process.CommandLine -notmatch $configPattern) {
+        $selectedRuntime = $apiHealth.config_path -eq $settings.config_path -and
+            $apiHealth.project_root -eq $projectRoot
+        if ($process.CommandLine -notmatch $configPattern -and -not $selectedRuntime) {
             throw "运行进程使用其他配置；未停止进程。请传入启动时使用的 -Config。"
         }
     } elseif ($process.CommandLine -match '(?:^|\s)--config(?:\s|=)') {

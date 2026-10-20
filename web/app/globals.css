@@ -254,6 +254,58 @@ summary { cursor:pointer; }
 .upload-hint { margin-top:10px; font-size:11px; }
 .modal-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-top:24px; padding-top:18px; border-top:1px solid var(--line); }
 .toast { position:fixed; bottom:26px; left:calc(50% + 80px); transform:translateX(-50%); z-index:150; background:#2d4a36; color:white; padding:11px 20px; border-radius:7px; box-shadow:0 5px 30px #253b2726; max-width:min(520px,calc(100% - 32px)); font-size:14px; }
+.migration-page { max-width:970px; }
+.migration-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:32px; align-items:start; }
+.migration-section { min-width:0; border-top:1px solid var(--line); padding-top:24px; }
+.migration-section-title { display:flex; align-items:center; gap:10px; color:var(--green); }
+.migration-section-title h2 { font-size:21px; }
+.migration-description { margin:13px 0 21px; color:var(--muted); font-size:14px; line-height:1.85; }
+.migration-footnote { color:var(--muted); font-size:13px; margin-top:20px; line-height:1.8; }
+.migration-hint { color:var(--muted); font-size:13px; line-height:1.8; margin:12px 0; }
+.migration-waiting { display:flex; align-items:flex-start; gap:8px; margin:0 0 18px; color:#7a6541; font-size:14px; }
+.migration-waiting svg { margin-top:3px; }
+.migration-progress { margin-top:20px; padding:17px 18px; background:#edf1e7; border-radius:7px; }
+.migration-progress>div,.migration-success>div { display:flex; align-items:center; gap:9px; font-size:14px; }
+.migration-progress strong,.migration-success strong { font-weight:550; overflow-wrap:anywhere; }
+.migration-progress .icon-button { margin-left:auto; }
+.migration-progress p { color:var(--muted); font-size:13px; margin-top:8px; }
+.migration-progress .text-button { margin-top:12px; }
+.migration-progress progress { display:block; width:100%; height:7px; margin-top:15px; border:0; border-radius:5px; overflow:hidden; accent-color:var(--green); background:#dce5d4; }
+.migration-progress progress::-webkit-progress-bar { background:#dce5d4; border-radius:5px; }
+.migration-progress progress::-webkit-progress-value { background:var(--green); border-radius:5px; }
+.migration-progress progress::-moz-progress-bar { background:var(--green); border-radius:5px; }
+.migration-success { margin-top:20px; color:var(--green); }
+.migration-success .primary-button,.migration-success .secondary-button { margin-top:15px; }
+.migration-install { margin-top:30px; padding-top:23px; border-top:1px solid var(--line); }
+.migration-install h3 { font-size:16px; font-weight:550; margin-bottom:13px; }
+.migration-install p { margin-top:13px; font-size:13px; line-height:1.8; color:var(--muted); }
+.migration-file { display:flex; position:relative; gap:13px; align-items:center; padding:21px 17px; border:1px dashed #adbf9f; background:#f0f3e8; border-radius:7px; cursor:pointer; min-width:0; color:var(--green); }
+.migration-file>span { min-width:0; }
+.migration-file strong { display:block; font-size:15px; overflow-wrap:anywhere; }
+.migration-file small { display:block; font-size:13px; color:var(--muted); margin-top:4px; }
+.migration-file input { position:absolute; opacity:0; inset:0; width:100%; height:100%; cursor:pointer; }
+.migration-file:focus-within { outline:2px solid #6a8a65; outline-offset:3px; }
+.migration-file.disabled { opacity:.65; cursor:wait; }
+.migration-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; margin:24px 0 0; padding-top:18px; border-top:1px solid var(--line); }
+.migration-summary dt { font-size:13px; color:var(--muted); }
+.migration-summary dd { margin:4px 0 0; font-size:28px; font-weight:550; color:var(--green); }
+.migration-summary dd span { margin-left:7px; font-size:13px; font-weight:400; }
+.migration-section input:not([type=file]) { font-size:14px; }
+.migration-warnings { padding-left:18px; color:#7b6541; font-size:13px; line-height:1.8; margin:16px 0; list-style:disc; }
+.migration-warnings li+li { margin-top:6px; }
+.migration-commit { margin-top:21px; }
+.migration-commit p { margin-top:10px; color:var(--muted); font-size:13px; }
+.migration-section .inline-error { font-size:14px; }
+.migration-section .inline-error .text-button { display:flex; margin:8px 0 0; }
+.migration-setup .migration-section:last-child { order:-1; }
+@media (max-width:760px) {
+  .migration-columns { grid-template-columns:minmax(0,1fr); gap:32px; }
+  .migration-section { padding-top:21px; }
+  .migration-section-title h2 { font-size:20px; }
+  .migration-description { margin:10px 0 18px; }
+  .migration-install { margin-top:23px; padding-top:20px; }
+  .migration-page .primary-button,.migration-page .secondary-button { white-space:normal; min-height:43px; }
+}
 .spin { animation:spin 1s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .spin { animation-duration:3s; } }

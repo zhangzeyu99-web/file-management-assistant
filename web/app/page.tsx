@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
-import { ArrowDownToLine, ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Clock3, Copy, FilePlus2, FileText, FolderOpen, History, Home, Layers3, Loader2, Menu, Plus, RefreshCw, Search, Upload, X } from "lucide-react";
+import { Archive, ArrowDownToLine, ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Clock3, Copy, FilePlus2, FileText, FolderOpen, History, Home, Layers3, Loader2, Menu, Plus, RefreshCw, Search, Upload, X } from "lucide-react";
 import Markdown, { safeLink } from "@/components/Markdown";
+import MigrationPanel from "@/components/MigrationPanel";
 
 type ThreadLink = { url: string; label: string; thread_id?: string };
 type Source = {
@@ -17,7 +18,7 @@ type Note = Source & { markdown: string; path?: string; focus?: Source };
 type JobResult = { markdown?: string; answer?: string; text?: string; notes?: (Source | string)[]; message?: string; [key: string]: unknown };
 type Job = { id: string; kind: string; status: string; stage: string; created_at?: number | string; updated_at?: number | string; error?: string; input?: { query?: string; title?: string; request?: string; filename?: string }; result?: JobResult | null };
 type JobsCache = { configured?: boolean; stale?: boolean; error?: string | null; refreshed_at?: string | number | null };
-type Health = { mode?: string; online?: boolean; synced_at?: string | number; index_version?: string; jobs_cache?: JobsCache; heartbeat?: { at?: number; device?: string } };
+type Health = { mode?: string; online?: boolean; setup_required?: boolean; synced_at?: string | number; index_version?: string; jobs_cache?: JobsCache; heartbeat?: { at?: number; device?: string } };
 type SearchResult = { query: string; items: Source[]; total: number; has_more?: boolean };
 type Route = { kind: string; id?: string; query?: string };
 type AnswerReference = { id: string; version: string };
@@ -25,7 +26,7 @@ type AnswerReference = { id: string; version: string };
 const API = "/api/workspace";
 const STORAGE = "obsidian-workspace-session-v1";
 const TERMINAL = new Set(["completed", "partial", "failed", "cancelled"]);
-const KINDS: Record<string, string> = { update: "更新知识库", answer: "回答问题", context: "准备接续内容", ingest: "收录资料" };
+const KINDS: Record<string, string> = { update: "更新知识库", answer: "回答问题", context: "准备接续内容", ingest: "收录资料", migration_export: "导出迁移包" };
 const STATUS: Record<string, string> = { queued: "等待执行", running: "处理中", completed: "已完成", partial: "部分完成", failed: "未完成", cancelled: "已取消" };
 const emptyOverview: Overview = { projects: [], recent: [], note_count: 0 };
 
@@ -142,10 +143,16 @@ export default function Workspace() {
     setProjects(Array.isArray(nextProjects) ? nextProjects : nextProjects.items || []);
   }, []);
   const refreshJobs = useCallback(async () => {
-    const [nextJobs, nextHealth] = await Promise.all([api<{ items: Job[]; cloud_cache?: JobsCache }>("jobs"), api<Health>("health")]);
+    const nextHealth = await api<Health>("health");
+    setHealth(nextHealth);
+    if (nextHealth.setup_required) {
+      setJobs([]); setJobsCache(null); setOverview(emptyOverview); setProjects([]);
+      if (window.location.hash !== "#migration") go("migration");
+      return nextHealth;
+    }
+    const nextJobs = await api<{ items: Job[]; cloud_cache?: JobsCache }>("jobs");
     setJobs(previous => [...(nextJobs.items || []), ...previous.filter(old => !(nextJobs.items || []).some(item => item.id === old.id))].slice(0, 120));
     setJobsCache(nextJobs.cloud_cache || nextHealth.jobs_cache || null);
-    setHealth(nextHealth);
     let changed = lastSyncedAt.current !== undefined && nextHealth.synced_at != null && nextHealth.synced_at !== lastSyncedAt.current;
     if (lastIndexVersion.current !== undefined && nextHealth.index_version != null && nextHealth.index_version !== lastIndexVersion.current) changed = true;
     lastSyncedAt.current = nextHealth.synced_at;
@@ -158,6 +165,7 @@ export default function Workspace() {
       }
     }
     if (changed) await refreshLibrary();
+    return nextHealth;
   }, [refreshLibrary]);
 
   useEffect(() => {
@@ -180,7 +188,7 @@ export default function Workspace() {
     setRoute(readRoute()); setReady(true);
     const onHash = () => { setRoute(readRoute()); setMenuOpen(false); setDetailError(""); window.scrollTo({ top: 0 }); };
     window.addEventListener("hashchange", onHash);
-    Promise.all([refreshLibrary(), refreshJobs()]).catch(cause => setError(cause.message || "知识库连接失败。")).finally(() => setLoading(false));
+    refreshJobs().then(nextHealth => nextHealth.setup_required ? undefined : refreshLibrary()).catch(cause => setError(cause.message || "知识库连接失败。")).finally(() => setLoading(false));
     const interval = setInterval(() => {
       if (!document.hidden) refreshJobs().catch(cause => {
         setHealth(previous => previous ? { ...previous, online: false } : null);
@@ -189,6 +197,9 @@ export default function Workspace() {
     }, 4000);
     return () => { window.removeEventListener("hashchange", onHash); clearInterval(interval); };
   }, [refreshLibrary, refreshJobs]);
+  useEffect(() => {
+    if (health?.setup_required && route.kind !== "migration") go("migration");
+  }, [health?.setup_required, route.kind]);
   useEffect(() => {
     if (!ready) return;
     try {
@@ -360,12 +371,23 @@ export default function Workspace() {
     try { const next = await api<Job>(`jobs/${encodeURIComponent(job.id)}/${action}`, {}); await refreshJobs(); if (next.id) { if (next.kind) putJob(next); go("job", next.id); } }
     catch (cause) { setError(cause instanceof Error ? cause.message : "操作未完成。"); }
   }
+  async function migrationActivated(noteCount?: number) {
+    searchSequence.current++;
+    setSelected([]); setQuery(""); setRequest(""); setContextId(""); setAnswerId(""); setProjectAnswerId("");
+    setSearch(null); setNote(null); setProject(null); setJobs([]); setError("");
+    answers.current = {}; answerRequests.current = {}; handledJobs.current.clear();
+    try { localStorage.removeItem(STORAGE); } catch { /* Backend activation is already saved. */ }
+    await refreshJobs();
+    await refreshLibrary();
+    setToast(`已导入${typeof noteCount === "number" ? ` ${noteCount} 篇笔记，` : "资料，"}原有知识库已保留。`);
+    go("home");
+  }
 
   const answerJob = jobs.find(job => job.id === answerId), contextJob = jobs.find(job => job.id === contextId), currentJob = jobs.find(job => job.id === route.id);
   const projectAnswerJob = jobs.find(job => job.id === projectAnswerId);
   const latestUpdate = jobs.find(job => job.kind === "update"), runningUpdate = jobs.find(job => job.kind === "update" && !TERMINAL.has(job.status));
   const online = health?.online === true;
-  const viewTitle = ({ home: "工作首页", projects: "项目", project: project?.title || "项目", updates: "更新记录", job: KINDS[currentJob?.kind || ""] || "任务记录", search: "找回资料", note: "阅读资料", context: "准备接续" } as Record<string, string>)[route.kind] || "工作首页";
+  const viewTitle = ({ home: "工作首页", projects: "项目", project: project?.title || "项目", updates: "更新记录", job: KINDS[currentJob?.kind || ""] || "任务记录", search: "找回资料", note: "阅读资料", context: "准备接续", migration: "备份与迁移" } as Record<string, string>)[route.kind] || "工作首页";
   const searchBox = <SearchBox query={query} setQuery={setQuery} searching={searching} inputRef={inputRef} onSubmit={submitSearch} />;
 
   function threadLinks(links: ThreadLink[] = []) {
@@ -429,6 +451,7 @@ export default function Workspace() {
       {text && job.kind !== "update" && <><div className="result-actions"><button className="primary-button" onClick={() => void copy(text)}><Copy size={16} />复制内容</button><button className="secondary-button" onClick={() => download(text)}><ArrowDownToLine size={16} />下载 Markdown</button></div><Markdown text={text} onCopy={copy} onWikiLink={name => go("search", name)} /></>}
       {!text && active && <p className="muted">结果会在这里出现，可以先阅读来源。</p>}
       {job.result?.message && !text && <p>{String(job.result.message)}</p>}
+      {job.kind === "migration_export" && <button className="primary-button" onClick={() => go("migration", job.id)}><Archive size={16} />{job.status === "completed" ? "下载迁移包" : "查看导出进度"}</button>}
       {countSummary && <p className="scope-counts">{countSummary}</p>}
       {job.kind === "update" && resultDetails(job)}
       {notes.length > 0 && <div className="written-notes"><h3>本次收录</h3><div id={`job-notes-${job.id}`}>{(notesExpanded ? notes : notes.slice(0, 8)).map((item, index) => typeof item === "string" ? <p key={index}>{item}</p> : <button className="note-link" key={item.id || index} onClick={() => item.id ? go("note", item.id) : go("search", item.title)}><FileText size={17} />{item.title || "查看新笔记"}<ArrowRight size={16} /></button>)}</div>{notes.length > 8 && <button className="show-more" aria-expanded={notesExpanded} aria-controls={`job-notes-${job.id}`} onClick={() => setExpandedJobNotes(previous => ({ ...previous, [job.id]: !previous[job.id] }))}>{notesExpanded ? "收起" : `查看全部 ${notes.length} 篇`}<ChevronRight size={15} /></button>}</div>}
@@ -443,16 +466,17 @@ export default function Workspace() {
   return <div className="workspace-shell">
     <aside className={`sidebar ${menuOpen ? "open" : ""}`} aria-label="主导航">
       <a className="brand" href="#home"><span className="brand-mark"><BookOpen size={22} strokeWidth={1.6} /></span><span><strong>个人知识工作台</strong><small>Obsidian · 自己的积累</small></span></a>
-      <nav>{([{ kind: "home", label: "工作首页", Icon: Home }, { kind: "projects", label: "项目与资料", Icon: FolderOpen }, { kind: "updates", label: "更新记录", Icon: History }]).map(({ kind, label, Icon }) => <a key={kind} href={`#${kind}`} className={(route.kind === kind || (kind === "projects" && route.kind === "project") || (kind === "updates" && route.kind === "job")) ? "active" : ""}><Icon size={19} /><span>{label}</span>{kind === "updates" && jobs.some(job => !TERMINAL.has(job.status)) && <span className="nav-count">{jobs.filter(job => !TERMINAL.has(job.status)).length}</span>}</a>)}</nav>
+      <nav>{([{ kind: "home", label: "工作首页", Icon: Home }, { kind: "projects", label: "项目与资料", Icon: FolderOpen }, { kind: "updates", label: "更新记录", Icon: History }, { kind: "migration", label: "备份与迁移", Icon: Archive }]).filter(item => !health?.setup_required || item.kind === "migration").map(({ kind, label, Icon }) => <a key={kind} href={`#${kind}`} className={(route.kind === kind || (kind === "projects" && route.kind === "project") || (kind === "updates" && route.kind === "job")) ? "active" : ""}><Icon size={19} /><span>{label}</span>{kind === "updates" && jobs.some(job => !TERMINAL.has(job.status)) && <span className="nav-count">{jobs.filter(job => !TERMINAL.has(job.status)).length}</span>}</a>)}</nav>
       <div className="sidebar-note"><span className="eyebrow">从这里继续</span><p>找回做法。<br />带上资料，接着做。</p></div>
-      <div className="sidebar-bottom"><div className={`connection ${online ? "online" : ""}`}><span />{health ? (online ? "本机已连接" : "本机暂未连接") : "正在连接"}</div><p>{overview.note_count} 篇知识笔记</p><a href="https://evenstar-learning-library.zhangzeyu99.chatgpt.site/" target="_blank" rel="noopener noreferrer">视频总结知识库 <ArrowRight size={13} /></a></div>
+      <div className="sidebar-bottom"><div className={`connection ${online ? "online" : ""}`}><span />{health?.setup_required ? "等待导入资料" : health ? (online ? "本机已连接" : "本机暂未连接") : "正在连接"}</div><p>{overview.note_count} 篇知识笔记</p><a href="https://evenstar-learning-library.zhangzeyu99.chatgpt.site/" target="_blank" rel="noopener noreferrer">视频总结知识库 <ArrowRight size={13} /></a></div>
     </aside>
     {menuOpen && <button className="sidebar-scrim" aria-label="关闭导航" onClick={() => setMenuOpen(false)} />}
-    <div className="main-shell"><header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="展开导航" aria-expanded={menuOpen} onClick={() => setMenuOpen(value => !value)}><Menu size={22} /></button><a href="#home">知识工作台</a><span>/</span><span>{viewTitle}</span></div><div className="topbar-actions"><button className={`basket-toggle ${selected.length ? "has-items" : ""}`} aria-label={`已选资料 ${selected.length}`} onClick={() => setBasketOpen(true)}><Layers3 size={18} /><span>已选资料</span><b>{selected.length}</b></button><button className="top-add" onClick={() => setUploadOpen(true)}><Plus size={17} /><span>添加资料</span></button></div></header>
+    <div className="main-shell"><header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="展开导航" aria-expanded={menuOpen} onClick={() => setMenuOpen(value => !value)}><Menu size={22} /></button><a href="#home">知识工作台</a><span>/</span><span>{viewTitle}</span></div>{!health?.setup_required && <div className="topbar-actions"><button className={`basket-toggle ${selected.length ? "has-items" : ""}`} aria-label={`已选资料 ${selected.length}`} onClick={() => setBasketOpen(true)}><Layers3 size={18} /><span>已选资料</span><b>{selected.length}</b></button><button className="top-add" onClick={() => setUploadOpen(true)}><Plus size={17} /><span>添加资料</span></button></div>}</header>
       <main className="main-content" id="main">
         {error && <div className="global-error" role="alert"><span>{error}</span><button onClick={() => { setError(""); void refreshLibrary().catch(cause => setError(cause.message)); }}>重试</button></div>}
         {jobsCache?.stale && <div className="cache-notice" role="status"><Clock3 size={17} /><span>当前为上次任务记录，云端连接恢复后刷新。</span></div>}
-        {loading ? <div className="page-loading"><Loader2 className="spin" size={25} /><p>正在读取你的知识库…</p></div> : <>
+        {loading && route.kind !== "migration" ? <div className="page-loading"><Loader2 className="spin" size={25} /><p>正在读取你的知识库…</p></div> : <>
+          {route.kind === "migration" && <MigrationPanel mode={health?.mode} online={health?.online} setupRequired={health?.setup_required} exportJobId={route.id} onActivated={migrationActivated} onJobsChanged={refreshJobs} />}
           {route.kind === "home" && <>
             <section className="home-intro"><span className="eyebrow">自己的经验，随时找得回来</span><h1>从已有的积累，继续。</h1>{searchBox}<div className="search-hints"><span>试着问</span>{["热血合服", "本地化", "Obsidian"].map(value => <button key={value} onClick={() => go("search", value)}>{value}<ArrowRight size={12} /></button>)}<kbd>Ctrl K</kbd></div></section>
             <section className="update-strip"><div><span className="update-label"><span className={`status-dot ${online ? "online" : ""}`} />{runningUpdate ? runningUpdate.stage : online ? "本机已连接 · 可以更新" : "本机未连接 · 任务将等待"}</span><p>{latestUpdate ? `${STATUS[latestUpdate.status] || latestUpdate.stage} · ${when(latestUpdate.updated_at)}` : "只处理新增资料和线程续聊"}</p></div><button className="primary-button" disabled={submitting} onClick={() => runningUpdate ? go("job", runningUpdate.id) : void update()}>{runningUpdate ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}{runningUpdate ? "查看进度" : "检查并更新"}</button></section>

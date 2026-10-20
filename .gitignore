@@ -19,3 +19,5 @@ web/.dev.vars*
 web/.openai/hosting.local.json
 web/.agents/
 web/.codex/
+.workspace-active.json
+.migration-staging/

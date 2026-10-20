@@ -3,9 +3,14 @@ import base64
 import ctypes
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlencode
+
+MIGRATION_CHUNK_BYTES = 4 * 1024 * 1024
+MIGRATION_CLOUD_LIMIT = 128 * 1024 * 1024
 
 
 class Blob(ctypes.Structure):
@@ -43,13 +48,14 @@ class Cloud:
     def available(self):
         return bool(self.url) and self.token_path.exists()
 
-    def request(self, path, data=None, *, raw=False):
+    def request(self, path, data=None, *, raw=False, binary=False):
         if not self.available:
             raise RuntimeError("线上连接尚未配置")
         token = protect(self.token_path.read_bytes(), decrypt=True).decode("utf-8")
         req = urllib.request.Request(self.url + "/api/workspace/" + path,
-            data=json.dumps(data, ensure_ascii=False).encode("utf-8") if data is not None else None,
-            headers={"OAI-Sites-Authorization": "Bearer " + token, "Content-Type": "application/json"})
+            data=data if binary else json.dumps(data, ensure_ascii=False).encode("utf-8") if data is not None else None,
+            headers={"OAI-Sites-Authorization": "Bearer " + token,
+                     "Content-Type": "application/octet-stream" if binary else "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=45) as response:
                 payload = response.read()
@@ -63,3 +69,36 @@ class Cloud:
             except Exception:
                 pass
             raise RuntimeError(message) from None
+
+    def upload_migration(self, bundle, job_id, owner, *, progress=None):
+        """Upload bounded chunks with the same private service authentication."""
+        bundle = Path(bundle)
+        size = bundle.stat().st_size
+        if size > MIGRATION_CLOUD_LIMIT:
+            raise ValueError("迁移包超过线上128 MB上限，请在本机页面导出")
+        if size <= 0:
+            raise ValueError("迁移包为空，未上传")
+        parts = (size + MIGRATION_CHUNK_BYTES - 1) // MIGRATION_CHUNK_BYTES
+        if progress:
+            progress("迁移包已生成，正在准备私有下载")
+        self.request("agent/migration/start",
+                     {"job_id": job_id, "owner": owner, "filename": bundle.name, "size": size, "parts": parts})
+        with bundle.open("rb") as source:
+            for part in range(parts):
+                if progress:
+                    progress(f"正在上传迁移包片段 {part + 1}/{parts}")
+                content = source.read(MIGRATION_CHUNK_BYTES)
+                if len(content) != min(MIGRATION_CHUNK_BYTES, size - part * MIGRATION_CHUNK_BYTES):
+                    raise RuntimeError("迁移包在上传期间变化，请重试")
+                self.request("agent/migration/chunk?" + urlencode(
+                    {"job_id": job_id, "part": part, "owner": owner}), content, binary=True)
+            if source.read(1) or bundle.stat().st_size != size:
+                raise RuntimeError("迁移包在上传期间变化，请重试")
+        if progress:
+            progress("正在确认私有迁移包下载")
+        result = self.request("agent/migration/complete", {"job_id": job_id, "owner": owner})
+        if (not isinstance(result, dict) or not isinstance(result.get("filename"), str) or
+                not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.zip", result["filename"]) or
+                result.get("size") != size or not result.get("download_url")):
+            raise RuntimeError("线上未确认完整迁移包，请重试")
+        return {key: result[key] for key in ("filename", "size", "download_url")}

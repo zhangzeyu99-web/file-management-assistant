@@ -1,20 +1,28 @@
-param(
+﻿param(
     [string]$Config = "",
     [int]$ApiPort,
     [int]$WebPort,
-    [switch]$Check
+    [switch]$Check,
+    [switch]$Bootstrap
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = $PSScriptRoot
 $webRoot = Join-Path $projectRoot "web"
 $pythonCommand = (Get-Command py -ErrorAction Stop).Source
+$pythonPrefix = @("-3")
+$environmentPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
+if (Test-Path -LiteralPath $environmentPython) {
+    $pythonCommand = $environmentPython
+    $pythonPrefix = @()
+}
 # Resolve configuration once through Python, preserving the caller's working
 # directory for explicit/OW_CONFIG paths. Only a non-secret startup summary is returned.
-$settingsArguments = @("-3", "-X", "utf8", "-c",
+$settingsArguments = $pythonPrefix + @("-X", "utf8", "-c",
     "import sys; sys.path.insert(0, sys.argv.pop(1)); from engine.settings import main; raise SystemExit(main())",
     $projectRoot, "--check-startup")
 if ($Config) { $settingsArguments += @("--config", $Config) }
+if ($Bootstrap) { $settingsArguments += "--allow-setup" }
 if ($PSBoundParameters.ContainsKey("ApiPort")) { $settingsArguments += @("--api-port", "$ApiPort") }
 if ($PSBoundParameters.ContainsKey("WebPort")) { $settingsArguments += @("--web-port", "$WebPort") }
 $settingsJson = & $pythonCommand @settingsArguments
@@ -38,7 +46,7 @@ New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 function Get-WorkspaceHealth([string]$Uri) {
     try {
         $health = Invoke-RestMethod -Uri $Uri -TimeoutSec 2
-        if ($health.mode -eq "local" -and $health.worker_running -eq $true) {
+        if ($health.mode -eq "local" -and ($health.worker_running -eq $true -or $health.setup_required -eq $true)) {
             return $health
         }
     } catch {}
@@ -82,7 +90,9 @@ $apiHealth = Get-WorkspaceHealth $apiUri
 $webHealth = Get-WorkspaceHealth $webUri
 $apiProcess = $null
 $webProcess = $null
-if ($apiHealth -and $Config) {
+$verifiedSameConfig = $apiHealth -and $Config -and $apiHealth.config_path -eq $Config -and
+    $apiHealth.project_root -eq $projectRoot
+if ($apiHealth -and $Config -and -not $verifiedSameConfig) {
     throw "端口 $ApiPort 已有工作台运行，配置不能热切换。请正常停止后使用此配置重启；并发使用其他配置须使用独立源码副本。未停止现有服务。"
 }
 if ($apiHealth) {
@@ -91,7 +101,8 @@ if ($apiHealth) {
     $process = if ($owners.Count -eq 1) { Get-CimInstance Win32_Process -Filter "ProcessId=$($owners[0])" } else { $null }
     $serverPattern = '(?:^|\s)"?' + [regex]::Escape((Join-Path $projectRoot "server.py")) + '"?(?=\s|$)'
     if (-not $process -or $process.Name -notmatch '^python(?:\d+(?:\.\d+)?)?w?\.exe$' -or
-        $process.CommandLine -notmatch $serverPattern -or $process.CommandLine -match '(?:^|\s)--config(?:\s|=)') {
+        $process.CommandLine -notmatch $serverPattern -or
+        (-not $verifiedSameConfig -and $process.CommandLine -match '(?:^|\s)--config(?:\s|=)')) {
         throw "API 端口对应其他项目或配置，不能复用；未启动服务。"
     }
 } else {
@@ -126,8 +137,10 @@ if (-not $webHealth) {
 }
 
 if (-not $apiHealth) {
-    $arguments = @("-3", "-X", "utf8", ('"' + (Join-Path $projectRoot "server.py") + '"'), "--port", "$ApiPort")
+    $arguments = $pythonPrefix + @("-X", "utf8", ('"' + (Join-Path $projectRoot "server.py") + '"'),
+        "--port", "$ApiPort", "--web-port", "$WebPort")
     if ($Config) { $arguments += @("--config", ('"' + $Config + '"')) }
+    if ($Bootstrap) { $arguments += "--allow-setup" }
     # Preserve the official desktop bridge's current native tool context.
     $apiProcess = Start-Process -FilePath $pythonCommand -ArgumentList $arguments `
         -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru `

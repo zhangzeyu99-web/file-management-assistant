@@ -1,6 +1,6 @@
 # 个人知识工作台 · Obsidian
 
-从已整理的资料找回做法、核对来源、准备下一次工作，并只处理新增文件与对话续聊。此仓库的 `main` 现为 v0.2 新版；旧实现保存在 Git 历史与 `legacy-v0.1-before-workspace` 标签中。
+从已整理的资料找回做法、核对来源、准备下一次工作，并只处理新增文件与对话续聊。此仓库的 `main` 现为 v0.3 新版；旧实现保存在 Git 历史与 `legacy-v0.1-before-workspace` 标签中。
 
 ## 先做什么
 
@@ -8,6 +8,7 @@
 - **继续工作**：把相关资料加入已选集合，填写本次目标，生成并复制接续内容。
 - **收录资料**：上传实际文件或粘贴正文；成功落盘后可直接阅读和检索。
 - **检查并更新**：只处理新文件、新文档入口和线程新完成轮次。失败只重试未完成部分。
+- **备份与迁移**：在网页导出迁移包；新电脑双击启动工作台，在页面选择 ZIP 导入。
 
 [使用说明](USER_GUIDE.md) · [迁移到另一台电脑](docs/MIGRATION.md) · [项目状态与维护](PROJECT.md) · [版本记录](CHANGELOG.md)
 
@@ -19,24 +20,11 @@
 
 ## Windows 本机启动
 
-已验证环境为 Python 3.14、Node.js 22.22。需要 Git。AI 动作还需要已登录的 Codex CLI；Codex 对话来源需要从桌面应用的当前工具上下文启动执行器。
+下载 [Windows 启动包](https://github.com/zhangzeyu99-web/file-management-assistant/releases/download/v0.3.0/Obsidian-Workspace-Windows.zip)，解压后双击 **打开工作台.cmd**。需要已安装 Python 3.11+（含 Python Launcher）及 Node.js 22.13+；启动入口会准备项目依赖并打开网页，无须手动跑命令。首次准备依赖需要网络。
 
-```powershell
-git clone https://github.com/zhangzeyu99-web/file-management-assistant.git obsidian-workspace
-Set-Location obsidian-workspace
-py -3 -m pip install -r requirements.txt
-Set-Location web
-npm ci
-Set-Location ..
-```
+新电脑没有知识库时直接进入迁移页，选择旧电脑导出的 ZIP，检查目录后点“导入并使用”。路径自动映射，导入后直接可阅读和检索；不会重新总结历史资料。再次双击会打开上次导入的库。
 
-先按 [迁移说明](docs/MIGRATION.md) 导入自己的笔记与已有 v1 检查点，获得私有配置，然后启动：
-
-```powershell
-.\start.ps1 -Config "你的迁移目录\config.local.json"
-```
-
-默认网页为 `http://127.0.0.1:5174/`，API 为 `127.0.0.1:8767`。启动脚本后台运行服务，不自动发起整理。项目目录的 `config.local.json` 可作为默认配置；字段示例见 [config.example.json](config.example.json)。不会自动创建空检查点或重跑历史全量。
+默认网页为 `http://127.0.0.1:5174/`，API 为 `127.0.0.1:8767`。AI 动作仍需要自己的 Codex 登录；对话来源还需要从桌面应用的当前工具上下文启动执行器。启动不会自动发起整理。开发者可使用 `start.ps1 -Config` 指定私有配置，示例见 [config.example.json](config.example.json)。
 
 ## 检索与同步
 

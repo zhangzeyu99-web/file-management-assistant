@@ -30,7 +30,7 @@ class SettingsTest(unittest.TestCase):
         self.patches = [
             patch.object(settings, "ROOT", self.project),
             patch.object(settings, "LEGACY_ROOT", self.legacy),
-            patch.dict(os.environ, {"OW_CONFIG": ""}),
+            patch.dict(os.environ, {"OW_CONFIG": "", "OW_DISABLE_LEGACY_CONFIG": ""}),
         ]
         for item in self.patches:
             item.start()
@@ -91,6 +91,31 @@ class SettingsTest(unittest.TestCase):
         local.write_text("{", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "JSON 无效"):
             settings.load_settings()
+
+    def test_browser_selection_preserves_private_config_and_explicit_argument_wins(self):
+        original = self.write_config(self.project / "config.local.json", port=19001)
+        selected = self.write_config(self.root / "imported/workspace.json", port=19002)
+        before = original.read_bytes()
+        pointer = self.project / ".workspace-active.json"
+        pointer.write_text(json.dumps({"config": str(selected)}), encoding="utf-8")
+        self.assertEqual(19002, settings.load_settings()["port"])
+        self.assertEqual("selected", settings.load_settings()["_config_source"])
+        self.assertEqual(19001, settings.load_settings(original)["port"])
+        self.assertEqual(before, original.read_bytes())
+        selected.unlink()
+        with self.assertRaisesRegex(ValueError, "配置文件不存在"):
+            settings.load_settings()
+
+    def test_bootstrap_empty_machine_reports_setup_without_initializing_checkpoint(self):
+        with patch("sys.stdout", io.StringIO()) as output:
+            self.assertEqual(0, settings.main(["--allow-setup", "--check-startup", "--api-port", "18701"]))
+            result = json.loads(output.getvalue())
+        self.assertTrue(result["setup_required"])
+        self.assertEqual(18701, result["port"])
+        self.assertFalse(Path(result["data_root"]).exists())
+        self.assertFalse((self.project / "config.local.json").exists())
+        with patch("sys.stdout", io.StringIO()), patch("sys.stderr", io.StringIO()):
+            self.assertEqual(2, settings.main(["--allow-setup", "--api-port", "0"]))
 
     def test_environment_paths_ports_and_new_source_defaults(self):
         os.environ["WORKSPACE_TEST_LOCATION"] = str(self.root / "portable")
@@ -153,6 +178,24 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(2, len(result["memory_roots"]))
         self.assertEqual(["build"], result["exclude_dir_names"])
         self.assertEqual((8767, 5174), (result["port"], result["web_port"]))
+        with patch.dict(os.environ, {"OW_DISABLE_LEGACY_CONFIG": "1"}), self.assertRaisesRegex(ValueError, "未找到配置"):
+            settings.load_settings()
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL and shutil.which("py"), "Windows launcher")
+    def test_isolated_bootstrap_launcher_opens_setup_without_a_config_or_checkpoint(self):
+        (self.project / "engine").mkdir()
+        for name in ("settings.py", "incremental.py"):
+            shutil.copy2(PROJECT / "engine" / name, self.project / "engine" / name)
+        shutil.copy2(PROJECT / "start.ps1", self.project / "start.ps1")
+        with patch.dict(os.environ, {"OW_DISABLE_LEGACY_CONFIG": "1"}):
+            checked = subprocess.run([POWERSHELL, "-NoProfile", "-File", str(self.project / "start.ps1"),
+                                      "-Bootstrap", "-Check", "-ApiPort", "18703", "-WebPort", "18704"],
+                                     cwd=self.root, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        self.assertEqual(0, checked.returncode, checked.stderr)
+        result = json.loads(checked.stdout)
+        self.assertTrue(result["setup_required"])
+        self.assertEqual((18703, 18704), (result["port"], result["web_port"]))
+        self.assertFalse((self.project / ".migration-staging").exists())
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL and shutil.which("py"), "Windows launcher")
     def test_launcher_check_reads_relative_config_and_explicit_port_overrides_without_starting(self):
@@ -194,7 +237,7 @@ class SettingsTest(unittest.TestCase):
         (self.project / "server.py").write_text('''import argparse,json,os
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler,HTTPServer
-p=argparse.ArgumentParser();p.add_argument("--port",type=int);p.add_argument("--config");a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument("--port",type=int);p.add_argument("--config");p.add_argument("--web-port",type=int);p.add_argument("--allow-setup",action="store_true");a=p.parse_args()
 Path("api.pid").write_text(str(os.getpid()))
 class Handler(BaseHTTPRequestHandler):
  def do_GET(self):

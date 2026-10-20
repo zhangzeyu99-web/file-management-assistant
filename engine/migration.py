@@ -10,8 +10,10 @@ import re
 import stat
 import sys
 import tempfile
+import threading
 import uuid
 import zipfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -109,6 +111,50 @@ def _inactive(data_root, state_path):
             raise MigrationError("请先停止本机执行器并确认写入已结束；发现运行锁：" + str(lock))
 
 
+class _ExecutorSession:
+    """Proof scoped to the thread currently holding the executor's OS lock."""
+
+    def __init__(self, data_root):
+        self.data_root = Path(data_root).resolve()
+        self.thread = threading.get_ident()
+        self.marker = json.loads((self.data_root / "executor.lock").read_text(encoding="utf-8"))
+        self.active = True
+
+    def validate(self):
+        marker = json.loads((self.data_root / "executor.lock").read_text(encoding="utf-8"))
+        if (not self.active or self.thread != threading.get_ident() or
+                marker != self.marker or marker.get("pid") != os.getpid() or not marker.get("owner")):
+            raise MigrationError("当前执行器不再持有导出所需的独占锁。")
+
+
+@contextmanager
+def executor_session(data_root):
+    """Hold the real writer lock; callers cannot opt out of its ownership checks."""
+    with writer_lock(Path(data_root) / "executor.lock"):
+        session = _ExecutorSession(data_root)
+        try:
+            yield session
+        finally:
+            session.active = False
+
+
+def export_active_bundle(config, destination, session, *, progress=None):
+    """Export from the serial worker, while owning both executor and state locks."""
+    if not isinstance(session, _ExecutorSession) or session.data_root != Path(config["data_root"]).resolve():
+        raise MigrationError("导出必须由当前知识库的独占执行器执行。")
+    session.validate()
+    state_lock = Path(config["state_path"]).with_suffix(".lock")
+    with writer_lock(state_lock):
+        state_owner = state_lock.read_bytes()
+
+        def validate():
+            session.validate()
+            if state_lock.read_bytes() != state_owner:
+                raise MigrationError("检查点写入锁已失效，迁移包未发布。")
+
+        return _export_bundle(config, destination, validate=validate, progress=progress)
+
+
 def _safe_file(path):
     if path.is_symlink() or bool(getattr(path.lstat(), "st_file_attributes", 0) & 0x400):
         raise MigrationError("迁移不跟随符号链接或重解析点：" + str(path))
@@ -176,8 +222,14 @@ def _references(value, field):
 def export_bundle(config, destination):
     """Read source state/vault only. A stopped executor is required."""
     cfg = load_settings(config)
+    _inactive(cfg["data_root"], cfg["state_path"])
+    with executor_session(cfg["data_root"]) as session:
+        return export_active_bundle(cfg, destination, session)
+
+
+def _export_bundle(cfg, destination, *, validate, progress=None):
     data_root, state_path, vault = (Path(cfg[key]).resolve() for key in ("data_root", "state_path", "obsidian_vault"))
-    _inactive(data_root, state_path)
+    validate()
     destination = Path(destination).resolve()
     if destination.exists():
         raise MigrationError("迁移包已存在，未覆盖：" + str(destination))
@@ -235,9 +287,15 @@ def export_bundle(config, destination):
         with zipfile.ZipFile(temporary, "x", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("manifest.json", _json(manifest))
             archive.writestr("checkpoint.json", _json(state))
-            for name, path in sorted(files.items()):
-                content = _read_stable(path)
+            for index, (name, path) in enumerate(sorted(files.items()), 1):
+                validate()
+                if progress:
+                    progress(index, len(files))
                 current = path.stat()
+                content = _read_stable(path)
+                after = path.stat()
+                if (current.st_size, current.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+                    raise MigrationError("文件在导出期间变化，请停止写入后重试：" + str(path))
                 info = zipfile.ZipInfo.from_file(path, name, strict_timestamps=False)
                 info.compress_type = zipfile.ZIP_DEFLATED
                 # Standard DOS time is only accurate to two seconds. Keep its
@@ -246,7 +304,7 @@ def export_bundle(config, destination):
                 info.comment = _json({"mtime_ns": current.st_mtime_ns})
                 archive.writestr(info, content)
                 snapshots[path] = (current.st_size, current.st_mtime_ns)
-        _inactive(data_root, state_path)
+        validate()
         if state_path.read_bytes() != state_before:
             raise MigrationError("检查点在导出期间变化，请停止写入后重试。")
         if any((path.stat().st_size, path.stat().st_mtime_ns) != version for path, version in snapshots.items()):

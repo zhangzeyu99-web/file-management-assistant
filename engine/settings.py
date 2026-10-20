@@ -65,15 +65,18 @@ def _legacy_settings():
 
 
 def load_settings(path=None, *, api_port=None, web_port=None):
-    """Explicit path, project local config, OW_CONFIG, then old-PC compatibility."""
+    """Explicit path, browser-selected workspace, local config, environment, legacy."""
     local = ROOT / "config.local.json"
+    active = ROOT / ".workspace-active.json"
     if path:
         selected, source = Path(_path(str(path), Path.cwd(), "Config")), "explicit"
+    elif active.is_file():
+        selected, source = Path(_path(_read_config(active).get("config"), ROOT, "active.config")), "selected"
     elif local.is_file():
         selected, source = local.resolve(), "project"
     elif os.environ.get("OW_CONFIG"):
         selected, source = Path(_path(os.environ["OW_CONFIG"], Path.cwd(), "OW_CONFIG")), "environment"
-    elif (LEGACY_ROOT / "config.json").is_file() and (LEGACY_ROOT / "config.local.json").is_file():
+    elif os.environ.get("OW_DISABLE_LEGACY_CONFIG") != "1" and (LEGACY_ROOT / "config.json").is_file() and (LEGACY_ROOT / "config.local.json").is_file():
         selected, source = None, "legacy"
     else:
         raise ValueError("未找到配置。请复制 config.example.json 为 config.local.json 并填写迁移路径，"
@@ -130,6 +133,7 @@ def main(argv=None):
     parser.add_argument("--api-port", type=int)
     parser.add_argument("--web-port", type=int)
     parser.add_argument("--check-startup", action="store_true")
+    parser.add_argument("--allow-setup", action="store_true")
     args = parser.parse_args(argv)
     try:
         config = load_settings(args.config, api_port=args.api_port, web_port=args.web_port)
@@ -139,6 +143,16 @@ def main(argv=None):
         summary.update(config_path=config["_config_path"], config_source=config["_config_source"])
         print(json.dumps(summary))
     except (ValueError, OSError) as error:
+        if args.allow_setup and not args.config and str(error).startswith("未找到配置"):
+            api_port = args.api_port if args.api_port is not None else 8767
+            web_port = args.web_port if args.web_port is not None else 5174
+            if not 1 <= api_port <= 65535 or not 1 <= web_port <= 65535 or api_port == web_port:
+                print("启动配置错误：API 与 Web 必须使用不同的有效端口。", file=sys.stderr)
+                return 2
+            print(json.dumps({"data_root": str(ROOT / ".migration-staging"), "port": api_port,
+                              "web_port": web_port, "config_path": "", "config_source": "setup",
+                              "setup_required": True}))
+            return 0
         print(f"启动配置错误：{error}", file=sys.stderr)
         return 2
     return 0

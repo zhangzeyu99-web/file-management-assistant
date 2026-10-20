@@ -13,12 +13,16 @@ class JobTests(unittest.TestCase):
         self.store = JobStore(Path(self.temp.name) / "jobs.sqlite")
 
     def test_double_update_clicks_share_one_job_and_finish_releases_slot(self):
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            jobs = list(pool.map(lambda _: self.store.create("update", {}), range(4)))
-        self.assertEqual(len({j["id"] for j in jobs}), 1)
-        current = self.store.claim("owner")
-        self.store.update(current["id"], "owner", status="completed", result={"notes": []})
-        self.assertNotEqual(self.store.create("update", {})["id"], current["id"])
+        for kind in ("update", "migration_export"):
+            with self.subTest(kind=kind):
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    jobs = list(pool.map(lambda _: self.store.create(kind, {}), range(4)))
+                self.assertEqual(len({j["id"] for j in jobs}), 1)
+                current = self.store.claim("owner")
+                self.store.update(current["id"], "owner", status="completed", result={"notes": []})
+                following = self.store.create(kind, {})
+                self.assertNotEqual(following["id"], current["id"])
+                self.store.cancel(following["id"])
 
     def test_cancel_or_lost_lease_cannot_overwrite_result(self):
         job = self.store.create("context", {"ids": ["a", "b"]})

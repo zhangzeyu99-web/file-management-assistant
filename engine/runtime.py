@@ -5,6 +5,7 @@ import base64
 import copy
 import json
 import os
+import re
 import socket
 import threading
 import time
@@ -21,6 +22,7 @@ from .incremental import (CheckpointStore, atomic_json, load_state, normalize_tu
 from .ingest import extract_path, extract_text, extract_upload, write_note, SUPPORTED
 from .jobs import JobStore
 from .library import Library
+from .migration import executor_session, export_active_bundle, MigrationError, _safe_file
 from .privacy import redact_text, redact_tree, sensitive_path
 
 
@@ -69,6 +71,10 @@ class Runtime:
         self.worker = None
         self.current = None
         self.active = threading.RLock()
+        self._execution_lock = threading.Lock()
+        self._claim_lock = threading.Lock()
+        self._claiming = False
+        self._executor_session = None
         self.connection = {"mode": "local", "online": True, "cloud_connected": False,
                            "native_context": bool(os.environ.get("CODEX_APP_TOOLS_PIPE_PATH")),
                            "synced_at": None, "error": None}
@@ -94,6 +100,20 @@ class Runtime:
         self.worker = threading.Thread(target=self._loop, daemon=True, name="knowledge-worker")
         self.worker.start()
 
+    def handoff_for_migration(self):
+        """Stop an idle worker without racing a local or remote claim."""
+        with self._claim_lock:
+            if self._claiming or self.current or not self._execution_lock.acquire(blocking=False):
+                raise ValueError("当前任务仍在执行或领取中，请完成后再切换知识库。")
+            try:
+                self.stop.set()
+            finally:
+                self._execution_lock.release()
+        if self.worker and self.worker.is_alive():
+            self.worker.join(timeout=10)
+            if self.worker.is_alive():
+                raise RuntimeError("执行器尚未停止，未切换知识库。")
+
     def health(self):
         running = bool(self.worker and self.worker.is_alive())
         return {**self.connection, "online": running, "worker_running": running,
@@ -103,12 +123,12 @@ class Runtime:
                 "jobs_cache": self._cloud_cache_status()}
 
     def create(self, kind, payload, request_id=None):
-        if kind not in {"update", "answer", "context", "ingest"}:
+        if kind not in {"update", "answer", "context", "ingest", "migration_export"}:
             raise ValueError("不支持的任务类型")
         existing = self.jobs.get(request_id) if request_id else None
         if existing:
             return {**existing, "origin": "local"}
-        if self.cloud.available:
+        if self.cloud.available and kind != "migration_export":
             job_id = request_id or str(uuid.uuid4())
             return self._cloud_job_request("jobs",
                 {"kind": kind, "input": payload, "request_id": job_id}, request_id=job_id)
@@ -291,7 +311,12 @@ class Runtime:
 
     def _loop(self):
         try:
-            with writer_lock(self.data / "executor.lock"):
+            with executor_session(self.data) as session:
+                self._executor_session = session
+                with self._claim_lock:
+                    if self.stop.is_set():
+                        return
+                    self._claiming = True
                 threading.Thread(target=self._heartbeat, daemon=True).start()
                 if self.cloud.available:
                     try:
@@ -300,19 +325,22 @@ class Runtime:
                         self.connection["error"] = str(e)
                 last_refresh = time.monotonic()
                 while not self.stop.is_set():
-                    job, remote = self.jobs.claim(self.owner), False
-                    if not job and self.cloud.available:
-                        try:
-                            job = self.cloud.request("agent/claim", {"owner": self.owner}).get("job")
-                            remote = bool(job)
-                            self.connection.update(cloud_connected=True, error=None)
-                        except Exception as e:
-                            self.connection.update(cloud_connected=False, error=str(e))
-                    if job:
-                        self.execute(job, remote)
-                    else:
-                        if time.monotonic() - last_refresh > 45:
-                            # Library refresh reads only changed knowledge notes, not old upstream sources.
+                    with self._claim_lock:
+                        if self.stop.is_set():
+                            break
+                        self._claiming = True
+                    try:
+                        job, remote = self.jobs.claim(self.owner), False
+                        if not job and self.cloud.available:
+                            try:
+                                job = self.cloud.request("agent/claim", {"owner": self.owner}).get("job")
+                                remote = bool(job)
+                                self.connection.update(cloud_connected=True, error=None)
+                            except Exception as e:
+                                self.connection.update(cloud_connected=False, error=str(e))
+                        if job:
+                            self.execute(job, remote)
+                        elif time.monotonic() - last_refresh > 45:
                             refreshed = self.library.refresh()
                             if self.cloud.available and (refreshed.get("changed") or self.connection.get("sync_pending")):
                                 try:
@@ -320,11 +348,23 @@ class Runtime:
                                 except Exception as e:
                                     self.connection["error"] = str(e)
                             last_refresh = time.monotonic()
+                    finally:
+                        with self._claim_lock:
+                            self._claiming = False
+                    if not job:
                         self.stop.wait(3)
         except Exception as e:
             self.connection["error"] = str(e)
+        finally:
+            self._executor_session = None
+            with self._claim_lock:
+                self._claiming = False
 
     def execute(self, job, remote=False):
+        with self._execution_lock:
+            self._execute(job, remote)
+
+    def _execute(self, job, remote=False):
         with self.active:
             self.current = {"job": job, "remote": remote, "stage": "准备资料", "lost": False}
         try:
@@ -335,6 +375,8 @@ class Runtime:
                 result = self.run_ingest(job, remote)
             elif job["kind"] in {"answer", "context"}:
                 result = self.run_generation(job)
+            elif job["kind"] == "migration_export":
+                result = self.run_migration_export(job, remote)
             else:
                 raise ValueError("不支持的任务")
             self.library.refresh()
@@ -349,7 +391,7 @@ class Runtime:
                     result["sync_pending"] = True
                     result.setdefault("errors", []).append({"source": "线上同步", "error": str(e)})
                     status = "partial"
-            self.progress("整理结果已保存", result)
+            self.progress("迁移包已准备好" if job["kind"] == "migration_export" else "整理结果已保存", result)
             with self.active:
                 self._remote_update(self.current, status=status,
                     stage="已完成" if status == "completed" else "部分完成，请查看结果",
@@ -365,6 +407,75 @@ class Runtime:
         finally:
             with self.active:
                 self.current = None
+
+    @property
+    def migration_exports(self):
+        data = self.data.resolve()
+        folder = data.with_name(data.name + "-migration-exports")
+        vault = Path(self.cfg["obsidian_vault"]).resolve()
+        if folder.is_relative_to(data) or folder.resolve().is_relative_to(vault):
+            raise MigrationError("迁移包目录必须位于运行数据和笔记库之外。")
+        if folder.exists():
+            _safe_file(folder)
+        return folder
+
+    def _migration_path(self, filename, lineage):
+        if (not isinstance(lineage, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", lineage) or
+                not isinstance(filename, str) or
+                not re.fullmatch(r"workspace-migration-" + re.escape(lineage) + r"-[a-f0-9]{32}\.zip", filename)):
+            raise ValueError("迁移包下载标识无效")
+        path = self.migration_exports / filename
+        if path.exists():
+            _safe_file(path)
+        return path
+
+    def migration_download(self, job_id):
+        """Resolve only a completed, locally owned export; never accept a path."""
+        job = self.jobs.get(job_id)
+        if not job or job["kind"] != "migration_export" or job["status"] != "completed":
+            raise ValueError("迁移包尚未准备好或任务不存在")
+        result = job.get("result") or {}
+        lineage = job["input"].get("retry_of") or job["id"]
+        path = self._migration_path(result.get("filename"), lineage)
+        if not path.is_file() or path.stat().st_size != result.get("size"):
+            raise ValueError("迁移包已不存在或发生变化，请重新导出")
+        return path, path.name
+
+    def run_migration_export(self, job, remote=False):
+        session = self._executor_session
+        if session is None:
+            raise MigrationError("导出必须在持有独占锁的本机执行器中运行。")
+        session.validate()
+        journal_path, journal = self._journal(job)
+        saved = journal.get("migration_export")
+        if saved:
+            bundle = self._migration_path(saved["filename"], journal["id"])
+            if (not bundle.is_file() or (bundle.stat().st_size, bundle.stat().st_mtime_ns) !=
+                    (saved["size"], saved["mtime_ns"])):
+                raise MigrationError("已生成迁移包缺失或变化，请新建导出任务。")
+        else:
+            filename = f"workspace-migration-{journal['id']}-{uuid.uuid4().hex}.zip"
+            bundle = self._migration_path(filename, journal["id"])
+            self.progress("正在打包笔记与增量记录")
+            last_progress = [time.monotonic()]
+
+            def report(index, total):
+                if time.monotonic() - last_progress[0] >= 5 or index == total:
+                    self.progress(f"正在打包笔记与增量记录 {index}/{total}")
+                    last_progress[0] = time.monotonic()
+
+            details = export_active_bundle(self.cfg, bundle, session, progress=report)
+            saved = {key: value for key, value in details.items() if key not in {"bundle", "ok"}}
+            saved.update(filename=filename, size=bundle.stat().st_size, mtime_ns=bundle.stat().st_mtime_ns)
+            journal["migration_export"] = saved
+            atomic_json(journal_path, journal)
+        session.validate()
+        result = {key: value for key, value in saved.items() if key != "mtime_ns"}
+        if remote:
+            result.update(self.cloud.upload_migration(bundle, job["id"], self.owner, progress=self.progress))
+        else:
+            result["download_url"] = "/api/workspace/migration/download/" + quote(job["id"], safe="")
+        return result
 
     def sync_snapshot(self):
         snapshot = redact_tree(self.library.export_snapshot())
@@ -630,7 +741,7 @@ class Runtime:
         self.progress("正在检查新增文件")
         local = plan_local(state, self.cfg,
             generated_roots=[self.cfg["output_root"], *self.cfg.get("old_output_roots", [])],
-            runtime_roots=[self.data, Path(__file__).resolve().parents[1]])
+            runtime_roots=[self.data, self.migration_exports, Path(__file__).resolve().parents[1]])
         scan_cursors = {}
         while local.get("resume_cursors"):
             self.progress("继续检查尚未覆盖的文件目录")
@@ -638,7 +749,7 @@ class Runtime:
             scan_cursors.update(cursors)
             page = plan_local(state, self.cfg,
                 generated_roots=[self.cfg["output_root"], *self.cfg.get("old_output_roots", [])],
-                runtime_roots=[self.data, Path(__file__).resolve().parents[1]], cursors=scan_cursors)
+                runtime_roots=[self.data, self.migration_exports, Path(__file__).resolve().parents[1]], cursors=scan_cursors)
             if page["resume_cursors"] == cursors:
                 local["warnings"].append("目录游标未推进，尚未覆盖的文件留待重试")
                 break
