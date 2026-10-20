@@ -1,12 +1,16 @@
 """Browser migration through real HTTP; all files and runtimes are isolated."""
+import io
 import json
+import os
 import threading
 import time
 import unittest
+import zipfile
 from types import SimpleNamespace
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import quote
 from unittest.mock import Mock, patch
 
 from engine.incremental import load_state, path_key
@@ -115,6 +119,74 @@ class BrowserMigrationTests(unittest.TestCase):
             self.assertEqual(str(config_path), settings.load_settings()["_config_path"])
         self.assertEqual("不可覆盖", (occupied / "人工.txt").read_text(encoding="utf-8"))
         self.assertFalse((self.project / "config.local.json").exists())
+
+    def test_without_codex_cli_import_read_search_and_export_work_but_ai_jobs_fail_clearly(self):
+        self.service.start_worker = True
+
+        def stop_runtime():
+            runtime = self.service.runtime
+            if runtime:
+                runtime.stop.set()
+                if runtime.worker:
+                    runtime.worker.join(timeout=8)
+                    self.assertFalse(runtime.worker.is_alive())
+        self.addCleanup(stop_runtime)
+
+        def finish_job(job_id):
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                status, job = self.request("jobs/" + job_id)
+                self.assertEqual(200, status, job)
+                if job["status"] in {"completed", "partial", "failed", "cancelled"}:
+                    return job
+                time.sleep(.02)
+            self.fail("Task did not reach a terminal state")
+
+        # Use the real model's executable discovery, never a fake model/runtime.
+        with patch.dict(os.environ, {"CODEX_CLI_PATH": ""}), patch(
+                "bridge.model.shutil.which", return_value=None) as discover:
+            upload_id = self.upload()
+            status, preview = self.request("migration/import/preview", {"upload_id": upload_id})
+            self.assertEqual(200, status, preview)
+            status, operation = self.request("migration/import/commit", {
+                "upload_id": upload_id, "destination": preview["destination"]})
+            self.assertEqual(202, status, operation)
+            imported = self.terminal(operation["operation_id"])
+            self.assertEqual("completed", imported["status"], imported)
+            self.assertTrue(imported["result"]["activated"])
+            self.assertFalse(self.request("health")[1]["setup_required"])
+            self.assertEqual(1, self.request("overview")[1]["note_count"])
+            status, found = self.request("search?q=" + quote("迁移验收术语"))
+            self.assertEqual(200, status, found)
+            self.assertTrue(found["items"])
+            source = found["items"][0]
+            note = self.request("notes/" + source["note_id"])[1]
+            self.assertIn("保留正文与人工增补", note["markdown"])
+            runtime = self.service.runtime
+            checkpoint = Path(runtime.cfg["state_path"])
+            before_state = checkpoint.read_bytes()
+            status, exported = self.request("jobs", {"kind": "migration_export", "input": {}})
+            self.assertEqual(202, status, exported)
+            exported = finish_job(exported["id"])
+            self.assertEqual("completed", exported["status"], exported)
+            status, package = self.request("migration/download/" + exported["id"])
+            self.assertEqual(200, status)
+            with zipfile.ZipFile(io.BytesIO(package)) as archive:
+                self.assertEqual(self.fixture.note_bytes, archive.read("vault/" + self.fixture.note.name))
+            discover.assert_not_called()
+            for kind in ("answer", "context"):
+                status, job = self.request("jobs", {"kind": kind, "input": {
+                    "query": "迁移验收术语是什么？", "ids": [source["id"]]}})
+                self.assertEqual(202, status, job)
+                failed = finish_job(job["id"])
+                self.assertEqual("failed", failed["status"], failed)
+                self.assertIn("安装 Codex CLI", failed["error"])
+                self.assertIn("登录", failed["error"])
+                self.assertFalse((failed.get("result") or {}).get("markdown"))
+            self.assertTrue(discover.called)
+            self.assertEqual(before_state, checkpoint.read_bytes())
+            self.assertEqual(1, self.request("overview")[1]["note_count"])
+            self.assertIsNone(runtime.model)
 
     def test_chunk_transport_rejects_csrf_wrong_offset_and_modified_retry(self):
         status, _ = self.request("migration/import/start", {"filename": "bundle.zip", "size": 10},
