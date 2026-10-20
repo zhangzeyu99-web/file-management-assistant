@@ -1,0 +1,57 @@
+{
+  "native": {
+    "list_ok": true,
+    "pinned_included": true,
+    "read_ok": true,
+    "read_pagination_ok": true,
+    "archive_pagination_ok": true,
+    "page_fields": [
+      "order",
+      "limit",
+      "nextCursor",
+      "hasMore"
+    ],
+    "turn_fields": [
+      "id",
+      "status",
+      "error",
+      "startedAt",
+      "completedAt",
+      "durationMs",
+      "items"
+    ]
+  },
+  "mutations": {
+    "persisted_threads_created": 0,
+    "thread_messages_sent": 0,
+    "knowledge_notes_written": 0,
+    "real_checkpoint_modified": false
+  },
+  "transport": "installed official codex-app-tools MCP over stdio; desktop pipe",
+  "raw_history_scanned": false,
+  "model": {
+    "ephemeral": true,
+    "real_generation_ok": true,
+    "structured_json_prompt_ok": true,
+    "tools_used": false,
+    "expected_title": "桥接验证",
+    "expected_next": "验证分页",
+    "desktop_context_removed": true
+  },
+  "truncation": {
+    "explicit_flags_detected": true,
+    "observed_locations": [
+      "turns[i].items[j].output.truncated",
+      "turns[i].items[j].changes[k].diff.truncated"
+    ],
+    "normal_pagination_not_marked_partial": true
+  },
+  "offline_contract_tests": "passed",
+  "runtime_requirements": [
+    "CODEX_APP_TOOLS_PIPE_PATH",
+    "CODEX_THREAD_ID",
+    "CODEX_CLI_PATH",
+    "installed official codex-app-tools MCP",
+    "Codex login"
+  ]
+}

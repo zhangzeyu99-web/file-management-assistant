@@ -1,88 +1,61 @@
-# 本地知识整理助手
+# 个人知识工作台 · Obsidian
 
-给 Obsidian 新手和 AI 工作流用户用的本地知识整理助手：把你放进来的本地文件、Obsidian 笔记和 AI 对话整理成可归档、可回顾、可提取给 AI 续用的个人知识系统。
+从已整理的资料找回做法、核对来源、准备下一次工作，并只处理新增文件与对话续聊。此仓库的 `main` 现为 v0.2 新版；旧实现保存在 Git 历史与 `legacy-v0.1-before-workspace` 标签中。
 
-项目按可迁移三层系统设计：`ACT 知识资产` 保存资料和证据，`AI 身份文件` 让不同 AI 工具理解你的偏好，`Skills / SOP` 固化反复执行的流程，目标是在本地保留上下文资产，随时切换 AI 工具也能继续使用。
+## 先做什么
 
-主界面只保留三个操作：
+- **找做法**：输入“项目名 + 具体问题”，先看回答，再点来源核对。
+- **继续工作**：把相关资料加入已选集合，填写本次目标，生成并复制接续内容。
+- **收录资料**：上传实际文件或粘贴正文；成功落盘后可直接阅读和检索。
+- **检查并更新**：只处理新文件、新文档入口和线程新完成轮次。失败只重试未完成部分。
 
-- **添加资料**：把文本、文件目录或 AI 对话写成新的 Obsidian 整理记录；粘贴真实路径时会生成索引清单和 manifest。
-- **搜索回顾**：按关键词或问题做证据检索，返回本地摘要、匹配来源、相关原因和可打开路径。
-- **生成 AI 上下文包**：先预览候选来源，确认后再生成可复制 prompt 和 Markdown；如果安装了 AI 身份文件，会附带偏好和边界摘要。
+[使用说明](USER_GUIDE.md) · [迁移到另一台电脑](docs/MIGRATION.md) · [项目状态与维护](PROJECT.md) · [版本记录](CHANGELOG.md)
 
-它可以帮你沉淀知识卡、任务记录和 AI 上下文包。默认安全边界：不会删除、不会移动、不会重命名、不会重写你的源文件；只写新的 Obsidian 笔记和本地运行证据。
+## 能迁走什么
 
-![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
-![PowerShell](https://img.shields.io/badge/PowerShell-5%2B-5391FE)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Safety](https://img.shields.io/badge/Safety-safe--by--default-orange)
+整理好的 Markdown 和附件可以原样复制，检索索引在新机重建，不需要重新调用模型总结。迁移工具同时带走增量检查点，映射新旧磁盘路径，防止旧文件因为换盘符被当成新增。
 
-## 5 分钟上手
+代码仓库不包含个人知识库、运行记录或凭据。仅克隆代码不会获得任何人的笔记。迁移包保存在自己的设备中，具体导出、导入与验收见迁移说明。
 
-```powershell
-git clone https://github.com/zhangzeyu99-web/file-management-assistant.git
-cd file-management-assistant
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\init-assistant.ps1 -Demo
-powershell -NoProfile -ExecutionPolicy Bypass -File .\start-assistant-gui.ps1
-```
+## Windows 本机启动
 
-`-Demo` 会创建 demo vault，并安装 `AI_IDENTITY.md`、`AI_COLLABORATION_RULES.md`、`AI_CONTEXT_BOUNDARY.md` 和 `Skills-SOP` 三主操作模板。打开 `http://127.0.0.1:8765/` 后，先用 demo vault 跑通三操作闭环，再把 `config.local.json` 改成你的真实 Obsidian 路径。
-
-如果已经配置真实 vault，可以把可迁移 AI 身份文件和 SOP 安装到 `knowledge_root`：
+已验证环境为 Python 3.14、Node.js 22.22。需要 Git。AI 动作还需要已登录的 Codex CLI；Codex 对话来源需要从桌面应用的当前工具上下文启动执行器。
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\init-assistant.ps1 -InstallPortableTemplates
+git clone https://github.com/zhangzeyu99-web/file-management-assistant.git obsidian-workspace
+Set-Location obsidian-workspace
+py -3 -m pip install -r requirements.txt
+Set-Location web
+npm ci
+Set-Location ..
 ```
 
-## GUI 主入口
-
-GUI 不是 Codex 本体，也不是文件清理器。它只负责三件可验证的事：
-
-- `添加资料`：在 `#organize` 区输入文本、AI 对话或完整本地路径；路径只做索引清单，不复制、不移动源文件。
-- `搜索回顾`：在 `#review` 区检索 Obsidian、助手报告、AI 归档和旧资料索引；无匹配时不编造答案。
-- `生成 AI 上下文包`：在 `#extract` 区先预览候选来源，再确认生成 AI 上下文包，包含来源路径、摘要、安全边界、AI 身份文件摘要和下一步请求。身份文件只补充偏好和边界，不能替代证据来源。
-
-旧工具已降级为说明页；产品主线只保留三件事：添加资料必须真实入库，搜索回顾必须返回已沉淀证据，生成 AI 上下文包必须产出可复制 prompt。
-
-## 在 Obsidian 里怎么找
-
-默认写入位置在你的 `knowledge_root` 下。常见真实路径是：
-
-- `04 例行工作\知识整理助手\整理`：每次 `添加资料` 生成的整理记录。
-- `04 例行工作\知识整理助手\文件索引`：本地目录里每个可读文件的独立索引。
-- `04 例行工作\知识整理助手\AI 上下文包`：确认生成后的 Markdown 上下文包。
-
-GUI 的 `添加资料` 结果会单独显示“在 Obsidian 里怎么找”，包含整理记录、整理目录和文件索引目录；搜索回顾可直接搜文件名、来源路径或摘录关键词。
-GUI 的 `添加资料` 结果还会显示“推荐搜索词”，这些词来自文件名、来源路径或可读文件摘录；点击任意推荐词会自动填入 `搜索回顾` 并执行，用来验证刚入库内容是否能被找回。
-GUI 的 `生成 AI 上下文包` 结果会单独显示“上下文包在 Obsidian 里怎么找”，包含上下文包笔记、上下文包目录和 runtime Markdown；搜索回顾可继续搜上下文包标题、来源路径或 prompt 关键词。
-
-## 界面产品化原则
-
-首页按知识站点的信息架构收敛：首屏只讲清用途和安全边界；三个操作作为导航入口；结果卡固定展示“答案是什么 / 证据在哪 / 产物在哪 / 下一步”。详见 [Current Iteration Plan](docs/CURRENT_ITERATION_PLAN.md)、[Product UI Research](docs/PRODUCT_UI_RESEARCH.md)、[Portable AI System Iteration Plan](docs/PORTABLE_AI_SYSTEM_ITERATION_PLAN.md) 和 [Product Retrospective And Next Plan](docs/PRODUCT_RETROSPECTIVE_AND_NEXT_PLAN.md)。
-
-## 命令行入口
+先按 [迁移说明](docs/MIGRATION.md) 导入自己的笔记与已有 v1 检查点，获得私有配置，然后启动：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action organize -Text "这段资料需要整理"
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action review -Query "Obsidian 教程"
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action extract -Request "继续优化知识库" -Mode preview
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-knowledge-assistant.ps1 -Action extract -Request "继续优化知识库" -Mode generate -SourcePath "C:\YourVault\path\source.md"
+.\start.ps1 -Config "你的迁移目录\config.local.json"
 ```
 
-命令行和 GUI 只推荐 `organize / review / extract`。旧提醒、文件雷达、知识库体检等入口不再作为产品闭环执行。
+默认网页为 `http://127.0.0.1:5174/`，API 为 `127.0.0.1:8767`。启动脚本后台运行服务，不自动发起整理。项目目录的 `config.local.json` 可作为默认配置；字段示例见 [config.example.json](config.example.json)。不会自动创建空检查点或重跑历史全量。
 
-## 迁移与备份
+## 检索与同步
 
-GitHub 只备份项目本体：代码、文档、模板、测试、配置样例和脚本。个人 Obsidian vault、`config.local.json`、运行报告和真实文件不进入公开仓库。详见 [Migration And Backup](docs/MIGRATION_BACKUP.md)。
+检索使用 Markdown 段落索引、项目别名、关键词和问题意图排序；默认使用前六条可见证据生成回答。有相关短笔记的结果表格被漏词时，以完整笔记补充证据。未加入向量搜索，也不自行联网补答案。未找到只说明现有笔记缺少依据，不代表事情没有做过。
 
-## 验证
+线上是经过登录保护的可读副本和持久任务队列，本机执行器主动领取任务。电脑离线时，线上可以阅读已同步资料，新任务等待本机恢复。启用线上需要自己的部署、服务授权和登录；仓库不会绑定到作者的私人站点。部署说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+
+正文提取支持文本、Markdown、DOCX 和有文字层的 PDF；飞书新增入口当前只登记元数据。图片、音视频和工作簿应先走对应专项处理流程，再收录文本结果。原生线程超限、读取不完整和运行中轮次均保留未完成状态。
+
+## 开发与验证
 
 ```powershell
-python -m unittest discover -s tests -v
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-gui-e2e.ps1 -StrictUx
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-harness.ps1 -AllowDirty -SkipRemoteSync
+py -3 -X utf8 -m unittest discover -s tests -q
+py -3 -X utf8 -m unittest discover -s bridge/tests -q
+Set-Location web
+npx tsc --noEmit
+npm run build
 ```
 
-## License
+`tests/ui_server.py` 提供隔离验收入口，不使用生产检查点。模型真实调用和个人资料验收另在私有环境执行，不能由无凭据 CI 代替。发布与回退规则见 [PROJECT.md](PROJECT.md)。
 
-MIT. See [LICENSE](LICENSE).
+许可证：[MIT](LICENSE)。

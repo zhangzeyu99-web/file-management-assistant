@@ -1,32 +1,12 @@
-# Changelog
+# 版本记录
 
-## 2026-05-06
+## v0.2.0 — 2026-10-20
 
-- Added `scenario_playbook.py` for scenario-first workflows: daily review, inbox triage, Obsidian health check, and AI context packaging.
-- Added scenario demo output that writes Markdown/JSON evidence under `runs` and copies the Markdown report into Obsidian.
-- Added GUI actions for viewing scenario cards and running the scenario demo.
-- Added `docs/USER_SCENARIOS.md` and `docs/CLOSED_LOOP_USAGE.md`.
-- Extended project quality gates and the release harness to verify scenario-based workflow and closed-loop behavior.
+- 独立重构为个人知识工作台：首页、检索、项目资料、阅读器、资料接续与更新记录。
+- 接入真实模型、文件内容上传、原生 Codex 来源和持久云任务，保存读回后推进检查点。
+- 默认仅新增文件、新飞书入口和已完成续聊，支持部分成功、取消和失败重试。
+- 修复项目误归属、复合问题漏掉结果表格、空查询，以及重试丢计数或漏补轮次。
+- 加入便携配置与知识库导出/导入，保留已整理正文、附件和增量边界，重新建立索引。
+- 整理 GitHub 主线、CI、文档、版本发布及回退入口；私人资料和凭据独立保存。
 
-## 2026-04-27
-
-- Prepared the project for open-source GitHub publication with SEO-focused README, documentation, security notes, contribution guide, and configurable local overrides.
-- Added project quality gates that verify the past product principles: local-first behavior, report-only safety, private config, Obsidian workflow, thin GUI, and validation harness.
-- Added `config_loader.py` and public/private configuration split with `config.local.json`.
-- Added a local GUI control panel at `http://127.0.0.1:8765/`.
-- Added safe GUI actions for file scanning, Obsidian auditing, capture, daily notes, ask, guide, opening reports, and AI context prompts.
-- Added GUI regression tests.
-
-## 2026-04-24
-
-- Initial standalone release.
-- Added bounded scanner and classifiers.
-- Added JSON, Markdown, and HTML report generation.
-- Added Obsidian run-note output.
-- Added Windows scheduled task installer.
-- Added unit tests and maintenance checklist.
-- Added release verification harness.
-- Added Obsidian beginner guide, inbox capture, daily-note, and Q&A helper.
-- Added Obsidian behavior-profile links and habit-aware Q&A routing.
-- Added read-only Obsidian internal management audit.
-- Integrated the Obsidian audit into the main scheduled assistant chain.
+旧实现及既往变更记录保留在 `legacy-v0.1-before-workspace` 标签与 Git 历史。
