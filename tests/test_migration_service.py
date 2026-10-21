@@ -188,6 +188,34 @@ class BrowserMigrationTests(unittest.TestCase):
             self.assertEqual(1, self.request("overview")[1]["note_count"])
             self.assertIsNone(runtime.model)
 
+    def test_early_post_rejections_deliver_json_when_body_follows_headers(self):
+        body = b'{"filename":"bundle.zip","size":10}'
+        cases = [
+            (403, "migration/import/start", body,
+             {"Content-Type": "application/json", "Origin": "https://foreign.invalid"}),
+            (415, "migration/import/start", body, {"Content-Type": "text/plain"}),
+            (413, "migration/import/chunk", b"x",
+             {"Content-Type": "application/octet-stream", "Content-Length": str(CHUNK_SIZE + 1)}),
+        ]
+        for expected, route, content, headers in cases:
+            with self.subTest(status=expected):
+                connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=1)
+                try:
+                    connection.putrequest("POST", "/api/workspace/" + route)
+                    for key, value in {"Content-Length": str(len(content)), **headers}.items():
+                        connection.putheader(key, value)
+                    connection.endheaders()
+                    # A browser can send its body after the server rejects its headers.
+                    # Closing before these bytes arrive used to abort response reads.
+                    time.sleep(.02)
+                    connection.send(content)
+                    response = connection.getresponse()
+                    self.assertEqual(expected, response.status)
+                    self.assertIsInstance(json.loads(response.read())["error"], str)
+                finally:
+                    connection.close()
+        self.assertFalse(self.service.uploads)
+
     def test_chunk_transport_rejects_csrf_wrong_offset_and_modified_retry(self):
         status, _ = self.request("migration/import/start", {"filename": "bundle.zip", "size": 10},
                                  headers={"Origin": "https://foreign.invalid"})

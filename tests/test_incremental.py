@@ -57,6 +57,8 @@ class IncrementalTests(unittest.TestCase):
         old, new = source / "old.md", source / "new.md"
         old.write_text("旧文件已修改，仍不能重读", encoding="utf-8")
         new.write_text("新资料", encoding="utf-8")
+        home = source / "home.md"
+        home.write_text("人工整理入口，不应再次总结", encoding="utf-8")
         (source / "tokens.txt").write_text("do not read credentials", encoding="utf-8")
         self.state["files"][flow.path_key(old)] = {"baseline": True}
         for folder in (source / "old-generated", source / "new-generated", source / "runtime", source / ".codex"):
@@ -66,7 +68,7 @@ class IncrementalTests(unittest.TestCase):
                   "knowledge_root": str(source / "old-generated"), "runtime_root": str(source / "runtime")}
         with patch.object(Path, "read_text", side_effect=AssertionError("body read during plan")), \
              patch.object(Path, "read_bytes", side_effect=AssertionError("body read during plan")):
-            plan = flow.plan_local(self.state, config, generated_roots=[source / "new-generated"], memory_roots=[])
+            plan = flow.plan_local(self.state, config, generated_roots=[source / "new-generated", home], memory_roots=[])
         self.assertEqual([row["path"] for row in plan["files"]], [str(new.resolve())])
         self.assertEqual(plan["skipped"], 1)
         self.assertEqual(plan["source_status"]["threads"], "not_checked")
@@ -155,6 +157,37 @@ class IncrementalTests(unittest.TestCase):
         self.assertEqual(self.state, original)
         self.assertNotIn("unregistered-old", self.state["threads"])
 
+    def test_file_source_only_check_records_private_receipt_without_a_summary_and_deduplicates(self):
+        sources = self.root / "sources"
+        sources.mkdir()
+        source = sources / "12345.png"
+        source.write_bytes(b"BODY_MUST_NOT_BE_READ")
+        private = self.root / "runtime" / "private-check.md"
+        private.parent.mkdir()
+        text = "# 文件来源检查\n\n仅记录来源，未读取或总结正文。\n"
+        private.write_text(text, encoding="utf-8")
+        store = flow.CheckpointStore(self.state_path, self.root / "receipts", [private.parent])
+        item = {"path": str(source), "check_only": True, "note": str(private), "expected_text": text}
+        before = self.state_path.read_bytes()
+        self.assertFalse(store.ack({"files": [item]})["ok"])
+        self.assertEqual(before, self.state_path.read_bytes())
+        item["content_status"] = "source_only"
+        result = store.ack({"files": [item]})
+        self.assertTrue(result["ok"], result)
+        saved = flow.load_state(self.state_path)
+        entry = saved["files"][flow.path_key(source)]
+        self.assertNotIn("note", entry)
+        self.assertEqual("source_only", entry["content_status"])
+        self.assertEqual(str(private.resolve()), entry["check_note"])
+        self.assertNotIn("note", result["committed"][0])
+        retry = store.ack({"files": [item]})
+        self.assertEqual(result["committed"][0]["id"], retry["committed"][0]["id"])
+        source.write_bytes(b"CHANGED_ALREADY_SEEN_BODY")
+        with patch.object(Path, "read_text", side_effect=AssertionError("known body read")), \
+             patch.object(Path, "read_bytes", side_effect=AssertionError("known body read")):
+            plan = flow.plan_local(saved, {"watch_roots": [{"path": str(sources)}]}, memory_roots=[])
+        self.assertEqual([], plan["files"])
+
     def test_unknown_thread_turns_use_supplied_baseline_but_keep_late_completion(self):
         turns = [{"id": "historical", "status": "completed", "startedAt": 50, "completedAt": 60},
                  {"id": "at-boundary", "status": "completed", "startedAt": 90, "completedAt": 100},
@@ -167,6 +200,48 @@ class IncrementalTests(unittest.TestCase):
         # A larger global boundary cannot erase a known thread's unfinished range.
         own = flow.select_turns(self.state, "old", [turns[1]], after=1000)
         self.assertEqual([turn["id"] for turn in own["turns"]], ["at-boundary"])
+
+    def test_window_plan_keeps_later_updated_threads_and_unregistered_old_files(self):
+        source = self.root / "sources"
+        source.mkdir()
+        copied = source / "copied-old.md"
+        copied.write_text("新发现的旧资料仍须补齐", encoding="utf-8")
+        os.utime(copied, (50, 50))
+        local = flow.plan_local(self.state, {"watch_roots": [{"path": str(source)}]}, memory_roots=[])
+        self.assertEqual(local["files"][0]["modified_at"], 50)
+        self.state["threads"]["old"].update(pending=True, coverage="partial_read")
+        plan = flow.select_plan(self.state, files=local["files"],
+            threads=[{"id": "old", "updatedAt": 100}, {"id": "newly-seen", "updatedAt": 300}],
+            boundary=100, until="1970-01-01T00:03:20+00:00")
+        self.assertEqual([row["path"] for row in plan["files"]], [str(copied.resolve())])
+        self.assertEqual([row["id"] for row in plan["threads"]], ["old", "newly-seen"])
+        self.assertEqual([row["until"] for row in plan["threads"]], [200, 200])
+        self.assertEqual([row["after"] for row in plan["threads"]], [90, 100])
+
+    def test_turn_window_keeps_inclusive_edge_and_retries_later_completion(self):
+        turns = [{"id": "historical", "status": "completed", "startedAt": 90, "completedAt": 100},
+                 {"id": "late", "status": "completed", "startedAt": 95, "completedAt": 105},
+                 {"id": "at-upper", "status": "completed", "startedAt": 150, "completedAt": 200},
+                 {"id": "completed-later", "status": "completed", "startedAt": 95, "completedAt": 201},
+                 {"id": "running-at-upper", "status": "inProgress", "startedAt": 200},
+                 {"id": "running-later", "status": "inProgress", "startedAt": 201}]
+        before = copy.deepcopy(turns)
+        chosen = flow.select_turns(self.state, "newly-seen", turns, after=100, until=200)
+        self.assertEqual([turn["id"] for turn in chosen["turns"]], ["late", "at-upper"])
+        self.assertEqual([turn["id"] for turn in chosen["pending"]], ["running-at-upper"])
+        receipt = {"id": "newly-seen", "updatedAt": 300, "after": 100,
+                   "coverage": "increment_only", "complete": False, "pending": True,
+                   "turns": chosen["turns"], **self.note("window")}
+        self.assertTrue(self.store.ack({"threads": [receipt]})["ok"])
+        saved = flow.load_state(self.state_path)
+        self.assertNotIn("completed-later", saved["threads"]["newly-seen"]["turns"])
+        resumed = flow.select_turns(saved, "newly-seen", turns, after=1000, until=210)
+        self.assertEqual([turn["id"] for turn in resumed["turns"]], ["completed-later"])
+        self.assertEqual(turns, before)
+        for select in (lambda: flow.select_plan(self.state, until=0),
+                       lambda: flow.select_turns(self.state, "newly-seen", turns, until=0)):
+            with self.assertRaises(flow.IncrementalError):
+                select()
 
     def test_increment_only_receipt_keeps_baseline_floor_after_late_completion(self):
         note = self.note()

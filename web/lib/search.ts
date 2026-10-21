@@ -37,8 +37,8 @@ const roundScore=(score:number)=>{
 };
 const filler=/我(?:们)?(?:上次|之前|以前|以前的|想|想要|需要)?|上次|之前|以前|请问|请|帮我|帮忙|找一下|找回|查一下|为什么|为何|怎么(?:做|处理|用|的)?|怎样|如何|什么|哪些|有没有|是否|做过|处理过|做了|做的|具体|曾经|当时|告诉我|现在|继续|总结一下|(?:做过|处理过|做了|做的|的吗|了吗|呢|吗|的)$/g;
 const joiner=/需要|避免|哪一天|哪个|区分|处理|怎么查|从|到|与|和|的|要|是|时|按/g;
-const soft=new Set(["步骤","发布","交付","文件","检查","更新","统计","项目","成果","记录","完成","操作","查询","codex","id","没有","日期","总结","知识","使用","分开","不能","直接","整理"]);
-const words=new Set([...soft,"合服","重名","安装包","windows","字幕","转写","飞书","归档","新增","重复","旧文件","旧线程","线程","自动任务","日报","登录用户数","用户数","登录","除以","统计口径","战力","付费","分组","规则","边界","名单","技能名","技能","术语","中文","数据","校验","权限","错误","失败","重试","取消","来源","同步","备份","回滚","报告","维护","测试","结果","版本"]);
+const soft=new Set(["步骤","发布","交付","文件","检查","更新","统计","项目","成果","记录","完成","操作","查询","codex","id","没有","日期","总结","知识","使用","采用","分开","不能","直接","整理"]);
+const words=new Set([...soft,"合服","重名","安装包","windows","字幕","转写","飞书","归档","新增","重复","旧文件","旧线程","线程","自动任务","日报","登录用户数","用户数","登录","活跃","除以","统计口径","战力","付费","分组","规则","边界","名单","技能名","技能","术语","中文","数据","校验","权限","错误","失败","重试","取消","来源","同步","备份","回滚","报告","维护","测试","结果","版本"]);
 const wordPattern=new RegExp([...words].sort((a,b)=>b.length-a.length||(a<b?-1:a>b?1:0)).join("|"),"g");
 const sourcePlaceholder=/仅收录来源|仅登记来源|仅收录元数据|未读取或总结正文|未读取正文/;
 const searchText=(value:string)=>{
@@ -56,7 +56,7 @@ function supplementResultTable(snapshot:any,items:any[],requested:string[]) {
     const seed=items[index];
     if(!/^(?:新增需求|需求|未完成|待处理|下一步)$/.test(seed.title))continue;
     const note=(snapshot.notes||[]).find((n:any)=>n.id===seed.note_id);
-    if(!note||note.maintenance||String(note.markdown).length>12000)continue;
+    if(!note||note.archived||note.searchable===false||note.maintenance||String(note.markdown).length>12000)continue;
     const title=normal(canonical(withoutComments(note.title)));
     const projects=Object.keys(aliases).filter(k=>aliases[k].some(parts=>parts.every(p=>title.includes(normal(p)))));
     if(projects.length!==1||!requested.includes(projects[0])||sourcePlaceholder.test(note.markdown))continue;
@@ -93,8 +93,9 @@ export function searchSnapshot(snapshot:any,query:string,limit=50) {
     t=normal(t);if(t.length<2)return[];
     return /^[\u3400-\u9fff]+$/.test(t)&&t.length>3&&!words.has(t)?Array.from({length:t.length-1},(_,i)=>t.slice(i,i+2)):[t];
   }))];
+  const sources=(snapshot.sources||[]).filter((p:any)=>!p.archived&&p.searchable!==false);
   let rows=rowCache.get(snapshot);
-  if(!rows){rows=new Map((snapshot.sources||[]).map((p:any)=>[p.id,[searchText(p.text),searchText(p.section)]]));rowCache.set(snapshot,rows);}
+  if(!rows){rows=new Map(sources.map((p:any)=>[p.id,[searchText(p.text),searchText(p.section)]]));rowCache.set(snapshot,rows);}
   const counts=new Map(terms.map(term=>[term,[...rows!.values()].reduce((n,[text,heading])=>n+Number((text+heading).includes(term)),0)]));
   if([...counts.values()].some(Boolean)) {
     const boundaryText=intent.replace(filler," ").replace(joiner," ");
@@ -113,12 +114,17 @@ export function searchSnapshot(snapshot:any,query:string,limit=50) {
   const anchors=strong.filter(term=>weights.get(term)!>=maximum*.85);
   const missingIds=terms.some(term=>!soft.has(term)&&/[a-z]/.test(term)&&!counts.get(term));
   const weight=[...weights.values()].reduce((a,b)=>a+b,0);
-  const ranked=(snapshot.sources||[]).map((p:any)=>{
+  const ranked=sources.map((p:any)=>{
     if(missingIds||!query||(!requested.length&&!terms.length))return null;
     const [text,heading]=rows!.get(p.id)!,combined=heading+text;
     if(requested.length) {
-      if((p.topic_names||[]).length>1&&!requested.some(k=>(p.heading_projects||[]).includes(k)))return null;
-      if(!requested.some(k=>aliases[k].some(parts=>parts.every(t=>combined.includes(normal(canonical(t)))))))return null;
+      const declared=p.scope_projects||[];
+      if(declared.length===1) {
+        if(!requested.some(k=>declared.includes(k)))return null;
+      } else {
+        if((p.topic_names||[]).length>1&&!requested.some(k=>(p.heading_projects||[]).includes(k)))return null;
+        if(!requested.some(k=>aliases[k].some(parts=>parts.every(t=>combined.includes(normal(canonical(t)))))))return null;
+      }
     }
     const matches=terms.filter(t=>combined.includes(t));
     if(anchors.length&&!anchors.some(term=>combined.includes(term)))return null;

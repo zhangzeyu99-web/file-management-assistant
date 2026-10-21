@@ -1,4 +1,5 @@
 """Cross-directory offline migration, using private temporary fixture data only."""
+import base64
 import copy
 import json
 import os
@@ -11,7 +12,10 @@ from unittest.mock import patch
 
 from engine.incremental import load_state, path_key, plan_local
 from engine.library import Library
+from engine.ingest import write_note
+from engine.navigation import sync_navigation
 from engine.migration import MigrationError, export_bundle, import_bundle, inspect_bundle
+from engine.weekly import advance_window, open_window
 
 
 class MigrationTests(unittest.TestCase):
@@ -71,7 +75,7 @@ class MigrationTests(unittest.TestCase):
                        "obsidian_vault": str(self.vault), "output_root": str(self.vault / "generated"),
                        "old_output_roots": [], "memory_roots": [],
                        "watch_roots": [{"name": "资料", "path": str(self.sources), "max_depth": 2, "max_files": 50}],
-                       "cloud_url": "https://fixture.invalid", "app_secret": "SECRET_MUST_NOT_EXPORT",
+                       "cloud_url": "https://fixture.invalid", "feishu_enabled": False, "app_secret": "SECRET_MUST_NOT_EXPORT",
                        "port": 8767, "web_port": 5199}
         self.config_path = self.old / "private.local.json"
         self.config_path.write_text(json.dumps(self.config, ensure_ascii=False), encoding="utf-8")
@@ -91,6 +95,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(self.state_path.read_bytes(), before)
         summary = inspect_bundle(self.bundle)
         self.assertEqual(summary["config"]["cloud_url"], "")
+        self.assertIs(summary["config"]["feishu_enabled"], False)
         self.assertNotIn("app_secret", summary["config"])
         self.assertEqual(summary["config"]["feishu_video_owner"], "ou_fixture_video")
         with zipfile.ZipFile(self.bundle) as archive:
@@ -105,6 +110,7 @@ class MigrationTests(unittest.TestCase):
         self.restore()
         config = json.loads(self.config_out.read_text(encoding="utf-8"))
         self.assertEqual(config["web_port"], 5199)
+        self.assertIs(config["feishu_enabled"], False)
         state = load_state(config["state_path"])
         self.assertEqual((self.new / "vault" / "人工笔记.md").read_bytes(), self.note_bytes)
         self.assertEqual((self.new / "vault" / "cover.png").read_bytes(), b"fixture-attachment")
@@ -136,6 +142,163 @@ class MigrationTests(unittest.TestCase):
         new_file.write_text("新材料", encoding="utf-8")
         planned = plan_local(state, config, generated_roots=[config["output_root"]], runtime_roots=[config["data_root"]])
         self.assertEqual([Path(row["path"]) for row in planned["files"]], [new_file])
+
+    def test_weekly_accepted_watermark_survives_migration_without_pending_weekly_job(self):
+        window = open_window(self.data, "2026-10-20T10:00:00+08:00", "2026-10-23T19:00:00+08:00")
+        receipt = {"job_status": "completed", "quality_checked": True,
+                   "local_readback": True, "online_synced": True}
+        accepted = advance_window(self.data, window, "weekly-fixture", verified=True,
+                                  receipt=receipt, accepted_at="2026-10-23T20:00:00+08:00")
+        (self.data / "weekly-active.json").write_text("PENDING_WEEKLY_QUEUE_MUST_NOT_EXPORT", encoding="utf-8")
+        self.export()
+        with zipfile.ZipFile(self.bundle) as archive:
+            self.assertIn("runtime/weekly-archive.json", archive.namelist())
+            self.assertNotIn("runtime/weekly-active.json", archive.namelist())
+        self.restore()
+        new_data = self.new / "data"
+        restored = json.loads((new_data / "weekly-archive.json").read_text(encoding="utf-8"))
+        self.assertEqual(accepted, restored)
+        self.assertFalse((new_data / "weekly-active.json").exists())
+        following = open_window(new_data, "2026-10-20T10:00:00+08:00", "2026-11-06T19:00:00+08:00")
+        self.assertEqual(following["since"], accepted["accepted_until"])
+        self.assertFalse(following["first_run"])
+        self.assertTrue(following["catch_up"])
+
+    def test_layout_aliases_navigation_and_task_identity_survive_migration_without_plugin_settings(self):
+        source_check = self.data / "runs" / "feishu-source" / "metadata-check.md"
+        source_check.parent.mkdir(parents=True)
+        source_check.write_text("# 飞书来源检查\n\n仅登记元数据，未读取或总结正文。\n", encoding="utf-8")
+        self.state["feishu"]["metadata-doc"] = {"updatedAt": 200, "content_status": "source_only", "check_note": str(source_check)}
+        self.state_path.write_text(json.dumps(self.state, ensure_ascii=False), encoding="utf-8")
+        title, body, task_id = "热血合服规则", "已确认按地区边界核对名单，下一步补充排除原因。", "fixture-note-task"
+        written = write_note(self.vault / "30 资料", title, body, task_id,
+                             folder="热血合服", identity_root=self.vault)
+        archived = self.vault / ".source-history" / "旧输出" / "热血合服规则.md"
+        archived.parent.mkdir(parents=True)
+        Path(written["note"]).rename(archived)
+        relative = archived.relative_to(self.vault).as_posix()
+        index = self.vault / "30 资料/.note-index.json"
+        identities = json.loads(index.read_text(encoding="utf-8"))
+        identities["tasks"][task_id]["path"] = relative
+        index.write_text(json.dumps(identities, ensure_ascii=False), encoding="utf-8")
+        self.state["threads"]["thread"]["note"] = str(archived)
+        self.state_path.write_text(json.dumps(self.state, ensure_ascii=False), encoding="utf-8")
+        topic = self.vault / "10 项目" / "热血合服" / "排单规则.md"
+        topic.parent.mkdir(parents=True)
+        topic.write_text("# 热血合服规则\n\n按地区边界核对名单，下一步补充排除原因。\n", encoding="utf-8")
+        old_relative = "旧输出/热血规则.md"
+        old_id = "n_" + base64.urlsafe_b64encode(old_relative.encode()).decode().rstrip("=")
+        metadata = self.vault / ".obsidian/knowledge-layout.json"
+        metadata.parent.mkdir()
+        layout = {"version": 1, "navigation": True, "path_aliases": {old_relative: relative}}
+        metadata.write_text(json.dumps(layout, ensure_ascii=False), encoding="utf-8")
+        graph = metadata.parent / "graph.json"
+        graph_settings = {
+            "search": '-path:"40 日常/模板"',
+            "colorGroups": [
+                {"query": 'path:"10 项目/热血合服"', "color": {"a": 1, "rgb": 14048348}},
+                {"query": 'path:"20 方法"', "color": {"a": 0.8, "rgb": 5025616}},
+            ],
+            "showTags": False, "showAttachments": False, "hideUnresolved": True, "showOrphans": True,
+            "collapse-filter": False, "collapse-color-groups": False, "collapse-display": True,
+            "showArrow": True, "textFadeMultiplier": 0.5, "nodeSizeMultiplier": 1.4,
+            "lineSizeMultiplier": 0.7, "collapse-forces": False, "centerStrength": 0.4,
+            "repelStrength": 12, "linkStrength": 0.5, "linkDistance": 180, "scale": 0.7, "close": False,
+        }
+        graph.write_text(json.dumps(graph_settings, ensure_ascii=False), encoding="utf-8")
+        for filename in ("app.json", "workspace.json", "plugins/example/data.json", "credentials.json"):
+            file = metadata.parent / filename
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text("PLUGIN_SETTINGS_MUST_NOT_EXPORT", encoding="utf-8")
+        before = {path.relative_to(self.vault).as_posix(): (path.read_bytes(), path.stat().st_mtime_ns)
+                  for path in (metadata, graph, index, archived)}
+        self.export()
+        with zipfile.ZipFile(self.bundle) as archive:
+            self.assertIn("vault/.obsidian/knowledge-layout.json", archive.namelist())
+            self.assertIn("vault/30 资料/.note-index.json", archive.namelist())
+            self.assertIn("vault/" + relative, archive.namelist())
+            self.assertEqual(["vault/.obsidian/graph.json", "vault/.obsidian/knowledge-layout.json"],
+                             [name for name in archive.namelist() if name.startswith("vault/.obsidian/")])
+            self.assertNotIn(b"PLUGIN_SETTINGS_MUST_NOT_EXPORT", b"".join(archive.read(n) for n in archive.namelist()))
+        self.restore()
+        new_vault = self.new / "vault"
+        for name, (content, mtime) in before.items():
+            self.assertEqual(content, (new_vault / name).read_bytes())
+            self.assertEqual(mtime, (new_vault / name).stat().st_mtime_ns)
+        self.assertEqual(graph_settings, json.loads((new_vault / ".obsidian/graph.json").read_text(encoding="utf-8")))
+        library = Library(new_vault)
+        library.refresh()
+        self.assertEqual(relative, library.get_note(old_id)["relative"])
+        self.assertTrue(library.get_note(old_id)["archived"])
+        restored_state = load_state(self.new / "data" / "state.json")
+        restored_source = restored_state["feishu"]["metadata-doc"]
+        self.assertEqual("source_only", restored_source["content_status"])
+        self.assertEqual(200, restored_source["updatedAt"])
+        self.assertNotIn("note", restored_source)
+        self.assertEqual(source_check.read_text(encoding="utf-8"), Path(restored_source["check_note"]).read_text(encoding="utf-8"))
+        self.assertTrue(Path(restored_source["check_note"]).is_relative_to(self.new / "data"))
+        self.assertEqual(str(new_vault / relative), restored_state["threads"]["thread"]["note"])
+        for field in ("turns", "coverage", "through"):
+            self.assertEqual(self.state["threads"]["thread"][field], restored_state["threads"]["thread"][field])
+        self.assertEqual(3, len(sync_navigation(library)))
+        self.assertIn(title, (new_vault / "00 入口/知识库主题目录.md").read_text(encoding="utf-8"))
+        with patch("engine.ingest._note_matches", side_effect=AssertionError("identity index should resolve the existing note")):
+            retried = write_note(new_vault / "30 资料", title, body, task_id,
+                                 folder="热血合服", identity_root=new_vault)
+        self.assertTrue(retried["reused"])
+        self.assertFalse(retried["created"])
+        self.assertEqual(new_vault / relative, Path(retried["note"]))
+        restored_index = json.loads((new_vault / "30 资料/.note-index.json").read_text(encoding="utf-8"))
+        self.assertEqual(relative, restored_index["tasks"][task_id]["path"])
+
+    def test_management_metadata_rejects_nonportable_paths_and_only_exact_whitelist_is_imported(self):
+        self.export()
+        cases = [
+            ("vault/.obsidian/knowledge-layout.json", {"version": 1, "path_aliases": {"旧.md": "../库外.md"}}),
+            ("vault/30 资料/.note-index.json", {"version": 1, "tasks": {
+                "fixture-task": {"path": str(self.note), "status": "written"}}}),
+            ("vault/30 资料/.note-index.json", {"version": 1, "tasks": {
+                "fixture-task": {"path": ".other/笔记.md", "status": "written"}}}),
+            ("vault/.obsidian/knowledge-layout.json", {"version": 1, "path_aliases": {
+                "旧.md": ".source-history/.private/笔记.md"}}),
+            ("vault/.obsidian/app.json", {}),
+            ("vault/.obsidian/plugins/example/knowledge-layout.json", {"version": 1}),
+            ("vault/.obsidian/plugins/example/graph.json", {"search": ""}),
+            ("vault/.obsidian/graph.json", {"app_secret": "SHOULD_NOT_EXPORT"}),
+            ("vault/.obsidian/graph.json", {"search": "app_secret=SHOULD_NOT_EXPORT"}),
+            ("vault/.obsidian/graph.json", '{"search":"app_secret=SHOULD_NOT_EXPORT","search":""}'),
+            ("vault/.obsidian/graph.json", {"search": 17}),
+            ("vault/.obsidian/graph.json", {"showOrphans": "true"}),
+            ("vault/.obsidian/graph.json", {"centerStrength": float("nan")}),
+            ("vault/.obsidian/graph.json", {"colorGroups": [{"query": "", "color": {"a": 1, "rgb": 0x1000000}}]}),
+            ("vault/.obsidian/graph.json", {"colorGroups": [{"query": "", "color": {"a": 1, "rgb": 0}, "credentials": "EXTRA"}]}),
+        ]
+        for number, (name, data) in enumerate(cases):
+            with self.subTest(name=name):
+                altered = self.root / f"invalid-metadata-{number}.zip"
+                with zipfile.ZipFile(self.bundle) as source, zipfile.ZipFile(altered, "w") as target:
+                    for info in source.infolist():
+                        target.writestr(info, source.read(info.filename))
+                    target.writestr(name, data if isinstance(data, str) else json.dumps(data, ensure_ascii=False))
+                with self.assertRaises(MigrationError):
+                    inspect_bundle(altered)
+                with self.assertRaises(MigrationError):
+                    import_bundle(altered, self.mappings, self.config_out)
+                self.assertFalse(self.new.exists())
+        invalid_index = self.vault / "30 资料/.note-index.json"
+        invalid_index.parent.mkdir()
+        invalid_index.write_text(json.dumps(cases[1][1]), encoding="utf-8")
+        refused = self.root / "refused-export.zip"
+        with self.assertRaisesRegex(MigrationError, "知识库相对笔记路径"):
+            export_bundle(self.config_path, refused)
+        self.assertFalse(refused.exists())
+        invalid_index.unlink()
+        invalid_graph = self.vault / ".obsidian/graph.json"
+        invalid_graph.parent.mkdir()
+        invalid_graph.write_text('{"search":"app_secret=SHOULD_NOT_EXPORT"}', encoding="utf-8")
+        with self.assertRaisesRegex(MigrationError, "不能包含显式凭据"):
+            export_bundle(self.config_path, refused)
+        self.assertFalse(refused.exists())
 
     def test_missing_mapping_and_existing_different_note_refuse_before_writes(self):
         self.export()

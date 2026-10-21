@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import math
 import ntpath
 import os
 import re
@@ -18,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from .incremental import load_state, path_key, stamp, writer_lock
-from .privacy import sensitive_path
+from .privacy import redact_text, sensitive_path
 from .settings import load_settings
 
 FORMAT = "obsidian-workspace-migration"
@@ -26,13 +27,15 @@ CONFIG_PATHS = ("data_root", "state_path", "obsidian_vault", "output_root",
                 "knowledge_root", "obsidian_run_dir", "runtime_root")
 CONFIG_LIST_PATHS = ("old_output_roots", "generated_roots", "runtime_roots")
 CONFIG_KEYS = {*CONFIG_PATHS, *CONFIG_LIST_PATHS, "watch_roots", "memory_roots",
-               "exclude_dir_names", "port", "web_port", "feishu_video_owner", "cloud_url"}
+               "exclude_dir_names", "port", "web_port", "feishu_enabled", "feishu_video_owner", "cloud_url"}
 EXCLUDED_DIRS = {".git", ".obsidian", ".codex", ".openclaw", ".lark-cli",
                  "node_modules", "__pycache__", ".venv"}
 SOFTWARE_INSTALLERS = {".apk", ".exe", ".msi", ".dmg", ".iso", ".appx", ".msix"}
 EXCLUDED_SUFFIXES = {".dpapi", ".lock", ".guard", ".sqlite", ".sqlite3", ".db", ".jsonl",
                      ".key", ".pem", ".p12", ".pfx", ".kdbx"} | SOFTWARE_INSTALLERS
 MAX_UNPACKED_BYTES = 8 * 1024**3
+VAULT_METADATA = frozenset({".obsidian/knowledge-layout.json", ".obsidian/graph.json",
+                            "30 资料/.note-index.json"})
 
 
 class MigrationError(ValueError):
@@ -167,6 +170,101 @@ def _excluded(path):
             any(part.casefold() in EXCLUDED_DIRS for part in path.parts))
 
 
+def _validate_graph_settings(data):
+    """Native graph preferences only; no plugin settings or arbitrary payloads."""
+    booleans = {"collapse-filter", "showTags", "showAttachments", "hideUnresolved", "showOrphans",
+                "collapse-color-groups", "collapse-display", "showArrow", "collapse-forces", "close"}
+    numbers = {"textFadeMultiplier", "nodeSizeMultiplier", "lineSizeMultiplier", "centerStrength",
+               "repelStrength", "linkStrength", "linkDistance", "scale"}
+    if not isinstance(data, dict) or set(data) - booleans - numbers - {"search", "colorGroups"}:
+        raise ValueError("图谱设置包含不支持的字段")
+
+    def number(value):
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return False
+        try:
+            return math.isfinite(value)
+        except OverflowError:
+            return False
+
+    def query(value):
+        if not isinstance(value, str) or redact_text(value) != value:
+            raise ValueError("图谱筛选必须是文字，且不能包含显式凭据")
+
+    for key in booleans & data.keys():
+        if not isinstance(data[key], bool):
+            raise ValueError("图谱显示开关必须是布尔值")
+    for key in numbers & data.keys():
+        if not number(data[key]) or data[key] < 0:
+            raise ValueError("图谱外观和力度必须是有限非负数字")
+    if "search" in data:
+        query(data["search"])
+    if "colorGroups" in data:
+        if not isinstance(data["colorGroups"], list):
+            raise ValueError("图谱颜色组必须是数组")
+        for group in data["colorGroups"]:
+            if not isinstance(group, dict) or set(group) != {"query", "color"}:
+                raise ValueError("图谱颜色组只允许筛选和颜色")
+            query(group["query"])
+            color = group["color"]
+            if (not isinstance(color, dict) or set(color) != {"a", "rgb"}
+                    or not number(color["a"]) or not 0 <= color["a"] <= 1
+                    or not isinstance(color["rgb"], int) or isinstance(color["rgb"], bool)
+                    or not 0 <= color["rgb"] <= 0xFFFFFF):
+                raise ValueError("图谱颜色必须是有效的透明度和 RGB 色值")
+
+
+def _validate_vault_metadata(relative, content):
+    """Only explicitly portable Obsidian metadata may bypass exclusions."""
+    if relative not in VAULT_METADATA:
+        return
+
+    def note_path(value):
+        if not isinstance(value, str):
+            raise ValueError("笔记路径必须是字符串")
+        path = PurePosixPath(value)
+        if (not value or path.is_absolute() or "\\" in value or ":" in value
+                or path.as_posix() != value or path.suffix.lower() != ".md"
+                or any(part.startswith(".") and not (index == 0 and part == ".source-history")
+                       for index, part in enumerate(path.parts))):
+            raise ValueError("必须使用知识库相对笔记路径，不能包含绝对路径或越界路径")
+
+    try:
+        if relative == ".obsidian/graph.json":
+            def unique_object(pairs):
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError("图谱设置不接受重复字段")
+                    result[key] = value
+                return result
+            data = json.loads(content.decode("utf-8-sig"), object_pairs_hook=unique_object)
+            _validate_graph_settings(data)
+            return
+        data = json.loads(content.decode("utf-8-sig"))
+        if not isinstance(data, dict) or data.get("version") != 1:
+            raise ValueError("不支持的管理元数据版本")
+        if relative == ".obsidian/knowledge-layout.json":
+            aliases = data.get("path_aliases", {})
+            if not isinstance(aliases, dict):
+                raise ValueError("旧路径映射必须是对象")
+            if "navigation" in data and not isinstance(data["navigation"], bool):
+                raise ValueError("导航开关必须是布尔值")
+            for old, new in aliases.items():
+                note_path(old)
+                note_path(new)
+        else:
+            if not isinstance(data.get("tasks"), dict):
+                raise ValueError("任务身份映射必须是对象")
+            for task_id, entry in data["tasks"].items():
+                if (not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", task_id) or not isinstance(entry, dict)
+                        or entry.get("status") not in {"reserved", "written"}):
+                    raise ValueError("任务身份记录无效")
+                note_path(entry.get("path"))
+    except (UnicodeError, ValueError, TypeError) as error:
+        raise MigrationError("知识库管理元数据无效（" + relative + "）：" + str(error)) from error
+
+
 def _read_stable(path):
     _safe_file(path)
     before = path.stat()
@@ -179,10 +277,7 @@ def _read_stable(path):
 
 def _portable_config(cfg, state):
     result = {key: copy.deepcopy(value) for key, value in cfg.items() if key in CONFIG_KEYS}
-    result.setdefault("memory_roots", [
-        {"name": "Codex记忆仓", "path": r"D:\codex\codex"},
-        {"name": "OpenClaw提取记忆", "path": r"C:\Users\Administrator\.openclaw\workspace\memory"},
-    ])
+    result.setdefault("memory_roots", [])
     for key in ("watch_roots", "memory_roots"):
         result[key] = [{k: v for k, v in row.items() if k in {"name", "path", "max_depth", "max_files"}}
                        if isinstance(row, dict) else row for row in result.get(key, [])]
@@ -257,6 +352,20 @@ def _export_bundle(cfg, destination, *, validate, progress=None):
                 installers += path.suffix.lower() in SOFTWARE_INSTALLERS
                 continue
             files["vault/" + path.relative_to(vault).as_posix()] = path
+    # Keep layout/link aliases, task identities and native graph preferences,
+    # not the surrounding plugin settings. Note paths remain vault-relative.
+    for relative in sorted(VAULT_METADATA):
+        path = vault / relative
+        for parent in [path.parent, *path.parent.parents]:
+            if parent == vault:
+                break
+            if parent.exists():
+                _safe_file(parent)
+        if path.exists():
+            _safe_file(path)
+            if not path.is_file():
+                raise MigrationError("知识库管理元数据不是文件：" + relative)
+            files["vault/" + relative] = path
     for value in _references(state, "note"):
         path = Path(value).resolve()
         if not path.is_relative_to(vault) or "vault/" + path.relative_to(vault).as_posix() not in files:
@@ -270,9 +379,10 @@ def _export_bundle(cfg, destination, *, validate, progress=None):
     if receipts.is_dir():
         for path in receipts.glob("*.json"):
             files["runtime/receipts/" + path.name] = path
-    source_checks = data_root / "source-checks.json"
-    if source_checks.is_file():
-        files["runtime/source-checks.json"] = source_checks
+    for filename in ("source-checks.json", "weekly-archive.json"):
+        record = data_root / filename
+        if record.is_file():
+            files["runtime/" + filename] = record
     manifest = {
         "format": FORMAT, "version": 1, "created_at": datetime.now(timezone.utc).isoformat(),
         "config": portable, "excluded_file_or_directory_count": excluded,
@@ -293,6 +403,8 @@ def _export_bundle(cfg, destination, *, validate, progress=None):
                     progress(index, len(files))
                 current = path.stat()
                 content = _read_stable(path)
+                if name.startswith("vault/"):
+                    _validate_vault_metadata(name[6:], content)
                 after = path.stat()
                 if (current.st_size, current.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
                     raise MigrationError("文件在导出期间变化，请停止写入后重试：" + str(path))
@@ -327,9 +439,11 @@ def _members(archive):
             raise MigrationError("迁移包包含不安全或重复路径：" + name)
         if stat.S_ISLNK(info.external_attr >> 16) or info.is_dir():
             raise MigrationError("迁移包不接受链接或显式目录项。")
-        if _excluded(Path(name)):
+        managed = name.startswith("vault/") and name[6:] in VAULT_METADATA
+        if _excluded(Path(name)) and not managed:
             raise MigrationError("迁移包包含禁止迁移的文件：" + name)
-        allowed = (name in {"manifest.json", "checkpoint.json", "runtime/source-checks.json"} or
+        allowed = (name in {"manifest.json", "checkpoint.json", "runtime/source-checks.json",
+                            "runtime/weekly-archive.json"} or
                    name.startswith("vault/") or
                    re.fullmatch(r"runtime/receipts/[^/]+\.json", name) or
                    re.fullmatch(r"runtime/runs/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+-check\.md", name))
@@ -339,6 +453,8 @@ def _members(archive):
         total += info.file_size
         if total > MAX_UNPACKED_BYTES:
             raise MigrationError("迁移包解压内容超过 8 GiB 上限。")
+        if managed:
+            _validate_vault_metadata(name[6:], archive.read(info))
     if not {"manifest.json", "checkpoint.json"} <= seen:
         raise MigrationError("迁移包缺少说明或检查点。")
 

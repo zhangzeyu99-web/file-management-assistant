@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import copy
 import datetime as dt
+import json
 import math
 import os
 import re
@@ -90,12 +91,12 @@ QUERY_JOINER = re.compile(r"需要|避免|哪一天|哪个|区分|处理|怎么�
 SOFT_TERMS = {
     "步骤", "发布", "交付", "文件", "检查", "更新", "统计", "项目",
     "成果", "记录", "完成", "操作", "查询", "codex", "id", "没有",
-    "日期", "总结", "知识", "使用", "分开", "不能", "直接", "整理",
+    "日期", "总结", "知识", "使用", "采用", "分开", "不能", "直接", "整理",
 }
 QUERY_WORDS = SOFT_TERMS | {
     "合服", "重名", "安装包", "windows", "字幕", "转写", "飞书", "归档",
     "新增", "重复", "旧文件", "旧线程", "线程", "自动任务", "日报",
-    "登录用户数", "用户数", "登录", "除以", "统计口径", "战力", "付费",
+    "登录用户数", "用户数", "登录", "活跃", "除以", "统计口径", "战力", "付费",
     "分组", "规则", "边界", "名单", "技能名", "技能", "术语", "中文",
     "数据", "校验", "权限", "错误", "失败", "重试", "取消", "来源",
     "同步", "备份", "回滚", "报告", "维护", "测试", "结果", "版本",
@@ -329,6 +330,8 @@ class Library:
         self._notes: dict[str, dict[str, Any]] = {}
         self._passages: dict[str, dict[str, Any]] = {}
         self._signatures: dict[str, tuple[int, int]] = {}
+        self._note_aliases: dict[str, str] = {}
+        self._archive_paths: set[str] = set()
         self._warnings: list[dict[str, str]] = []
         self._lock = threading.RLock()
         self._refreshed_at: str | None = None
@@ -338,13 +341,22 @@ class Library:
         with self._lock:
             return self._refreshed_at
 
-    def _safe_path(self, relative: str) -> Path:
+    def _safe_path(self, relative: str, *, allow_archive: bool = False) -> Path:
         pure = PurePosixPath(relative)
-        if (pure.is_absolute() or not pure.parts or "\\" in relative
-                or any(part in {"", ".", ".."} or part.startswith(".") for part in pure.parts)
+        archive = len(pure.parts) > 1 and pure.parts[0] == ".source-history"
+        registered = archive and (allow_archive or relative in self._archive_paths)
+        if (pure.is_absolute() or not pure.parts or "\\" in relative or ":" in relative
+                or pure.as_posix() != relative
+                or any(part in {"", ".", ".."} or part.startswith(".")
+                       and not (index == 0 and registered) for index, part in enumerate(pure.parts))
                 or pure.suffix.lower() != ".md"):
             raise ValueError("只允许读取知识库内的 Markdown 笔记。")
-        path = (self.vault_root / Path(*pure.parts)).resolve()
+        candidate = self.vault_root / Path(*pure.parts)
+        if archive and any(parent.exists() and (parent.is_symlink() or
+                bool(getattr(parent.lstat(), "st_file_attributes", 0) & 0x400))
+                for parent in (candidate, *candidate.parents) if parent.is_relative_to(self.vault_root)):
+            raise ValueError("原文存档不允许链接或重解析路径。")
+        path = candidate.resolve()
         if not path.is_relative_to(self.vault_root):
             raise ValueError("资料路径不在知识库内。")
         if any(path.is_relative_to(root) for root in self.exclude_roots):
@@ -364,7 +376,7 @@ class Library:
                 if line.strip() == "---":
                     body_start = index + 1
                     break
-                match = re.match(r"^(title|project|项目|date|updated)\s*:\s*(.+?)\s*$", line)
+                match = re.match(r"^(title|project|项目|date|updated|type)\s*:\s*(.+?)\s*$", line)
                 if match:
                     metadata[match[1]] = match[2].strip("'\"")
         title = metadata.get("title") or next(
@@ -374,11 +386,20 @@ class Library:
         stat = path.stat()
         modified_at = dt.datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat()
         note_id = "n_" + _encode(relative)
+        root_folder = PurePosixPath(relative).parts[0]
+        archived = root_folder == ".source-history" or bool(re.fullmatch(r"90\s*历史", root_folder))
+        note_type = metadata.get("type", "").casefold()
+        navigation = bool(re.fullmatch(r"00\s*入口", root_folder)) or note_type == "navigation"
+        non_evidence = note_type in {"navigation", "template", "answer_archive"}
         note = {
             "id": note_id, "note_id": note_id, "title": title, "relative": relative,
             "path": str(path), "source_path": str(path), "markdown": markdown,
             "modified_at": modified_at, "date": modified_at[:10],
-            "thread_links": _links(indexed_markdown), "maintenance": bool(MAINTENANCE.search(title + "/" + relative)),
+            "thread_links": _links(indexed_markdown),
+            "archived": archived, "navigation": navigation, "type": note_type,
+            "searchable": not (archived or navigation or non_evidence),
+            "maintenance": navigation or non_evidence
+                or bool(MAINTENANCE.search(title + "/" + relative)),
             "passages": [],
         }
         stack: list[tuple[int, str]] = []
@@ -414,6 +435,9 @@ class Library:
         )
         if folder_project in {"Codex", "知识行动助手", "知识整理助手"}:
             folder_project = None
+        declared_project = explicit_project or folder_project or ""
+        scope_projects = ([declared_project] if declared_project in PROJECT_ALIASES
+                          else _projects_in(declared_project))
 
         for headings, start, content_lines in sections:
             section_title = headings[-1] if headings else title
@@ -444,15 +468,66 @@ class Library:
                     "text": text, "excerpt": _display(text), "line_start": first,
                     "line_end": last, "project": project, "project_id": "p_" + _encode(project),
                     "project_origin": project_origin, "topic_names": projects,
-                    "heading_projects": specific_heading,
+                    "heading_projects": specific_heading, "scope_projects": scope_projects,
                     "relative": relative, "path": str(path), "source_path": str(path),
                     "thread_links": own_links, "modified_at": modified_at,
                     "source_date": source_date, "date_basis": "recorded" if source_date else "file_modified",
-                    "maintenance": note["maintenance"], "navigation": bool(NAVIGATION.search(text)),
+                    "archived": note["archived"], "searchable": note["searchable"],
+                    "maintenance": note["maintenance"],
+                    "navigation": note["navigation"] or bool(NAVIGATION.search(text)),
                     "kind": ("historical_request" if re.search(r"首个需求|最近需求|新增问题", text)
                              else "evidence"), "answer_status": "evidence_only",
                 })
         return note
+
+    def _read_alias_paths(self, warnings: list[dict[str, str]]) -> dict[str, str]:
+        relative = ".obsidian/knowledge-layout.json"
+        path = self.vault_root / relative
+        if not path.exists():
+            return {}
+        try:
+            if not path.resolve().is_relative_to(self.vault_root):
+                raise ValueError("路径映射文件不在知识库内。")
+            if path.stat().st_size > MAX_NOTE_BYTES:
+                raise ValueError("路径映射文件超过读取上限。")
+            layout = json.loads(path.read_text(encoding="utf-8-sig"))
+            if not isinstance(layout, dict) or layout.get("version") != 1:
+                raise ValueError("不支持的路径映射版本。")
+            rows = layout.get("path_aliases", {})
+            if not isinstance(rows, dict):
+                raise ValueError("路径映射必须是旧路径到新路径的对象。")
+            validated: dict[str, str] = {}
+            for old, new in rows.items():
+                try:
+                    if not isinstance(old, str) or not isinstance(new, str):
+                        raise ValueError("路径映射必须使用相对 Markdown 路径。")
+                    self._safe_path(old, allow_archive=True)
+                    self._safe_path(new, allow_archive=True)
+                    validated[old] = new
+                except ValueError as exc:
+                    warnings.append({"path": relative, "reason": str(exc)})
+            return validated
+        except (OSError, UnicodeError, ValueError) as exc:
+            warnings.append({"path": relative, "reason": str(exc)})
+            return {}
+
+    @staticmethod
+    def _read_note_aliases(notes: dict[str, dict[str, Any]],
+                           validated: dict[str, str]) -> dict[str, str]:
+        aliases: dict[str, str] = {}
+        for old in validated:
+            old_id = "n_" + _encode(old)
+            if old_id in notes:
+                continue
+            target, seen = old, set()
+            while target in validated and target not in seen:
+                seen.add(target)
+                target = validated[target]
+                target_id = "n_" + _encode(target)
+                if target_id in notes:
+                    aliases[old_id] = target_id
+                    break
+        return aliases
 
     def refresh(self) -> dict[str, Any]:
         """Refresh only changed note files; do not read original source archives."""
@@ -461,9 +536,30 @@ class Library:
         warnings: list[dict[str, str]] = []
         with self._lock:
             if not self.vault_root.is_dir():
-                self._notes, self._passages, self._signatures = {}, {}, {}
+                self._notes, self._passages, self._signatures, self._note_aliases = {}, {}, {}, {}
+                self._archive_paths = set()
                 self._warnings = [{"path": str(self.vault_root), "reason": "知识库目录不存在。"}]
                 return {"ok": False, "note_count": 0, "warnings": copy.deepcopy(self._warnings)}
+            alias_paths = self._read_alias_paths(warnings)
+            self._archive_paths = {path for path in alias_paths.values()
+                                   if path.startswith(".source-history/")}
+
+            def read_candidate(candidate: Path, relative: str):
+                try:
+                    path = self._safe_path(relative)
+                    if candidate.is_symlink():
+                        return
+                    stat = path.stat()
+                    signature = (stat.st_mtime_ns, stat.st_size)
+                    note_id = "n_" + _encode(relative)
+                    note = self._notes.get(note_id)
+                    if self._signatures.get(relative) != signature or note is None:
+                        note = self._read(path, relative)
+                    notes[note_id] = note
+                    signatures[relative] = signature
+                except (OSError, UnicodeError, ValueError) as exc:
+                    warnings.append({"path": relative, "reason": str(exc)})
+
             for directory, subdirs, filenames in os.walk(self.vault_root, followlinks=False):
                 subdirs[:] = sorted([
                     name for name in subdirs if not name.startswith(".")
@@ -476,21 +572,14 @@ class Library:
                         continue
                     candidate = Path(directory) / filename
                     relative = candidate.relative_to(self.vault_root).as_posix()
-                    try:
-                        path = self._safe_path(relative)
-                        if candidate.is_symlink():
-                            continue
-                        stat = path.stat()
-                        signature = (stat.st_mtime_ns, stat.st_size)
-                        note_id = "n_" + _encode(relative)
-                        note = self._notes.get(note_id)
-                        if self._signatures.get(relative) != signature or note is None:
-                            note = self._read(path, relative)
-                        notes[note_id] = note
-                        signatures[relative] = signature
-                    except (OSError, UnicodeError, ValueError) as exc:
-                        warnings.append({"path": relative, "reason": str(exc)})
-            changed = signatures != self._signatures
+                    read_candidate(candidate, relative)
+            # Hidden archives are not ordinary notes. Load only exact targets
+            # registered by the portable layout, for old-link readback.
+            for relative in sorted(self._archive_paths):
+                read_candidate(self.vault_root / relative, relative)
+            aliases = self._read_note_aliases(notes, alias_paths)
+            changed = signatures != self._signatures or aliases != self._note_aliases
+            self._note_aliases = aliases
             self._notes = notes
             self._signatures = signatures
             self._passages = {
@@ -499,11 +588,15 @@ class Library:
             self._warnings = warnings
             if changed or not self._refreshed_at:
                 self._refreshed_at = dt.datetime.now().astimezone().isoformat()
-            return {"ok": True, "note_count": len(notes), "source_count": len(self._passages),
+            return {"ok": True, "note_count": sum(not note["archived"] for note in notes.values()),
+                    "archive_count": sum(note["archived"] for note in notes.values()),
+                    "source_count": sum(not p["archived"] for p in self._passages.values()),
                     "changed": changed, "refreshed_at": self._refreshed_at, "warnings": copy.deepcopy(warnings)}
 
     @staticmethod
     def _score(passage: dict[str, Any], query: str, plan: dict[str, Any] | None = None) -> float:
+        if passage.get("archived") or passage.get("searchable") is False:
+            return 0
         plan = plan or _query_plan(query, [passage])
         focus, terms = plan["focus"], plan["terms"]
         requested_projects = plan["requested"]
@@ -512,18 +605,24 @@ class Library:
         text, heading = plan["rows"][passage["id"]]
         combined = heading + text
         if requested_projects:
-            # A digest mentioning several unrelated projects is not evidence for
-            # a particular project's method. Its own focused section may be.
-            if (len(passage["topic_names"]) > 1
-                    and not set(requested_projects).intersection(passage["heading_projects"])):
-                return 0
-            allowed = any(
-                any(all(_normal(_canonical(part)) in combined for part in alias)
-                    for alias in PROJECT_ALIASES[project])
-                for project in requested_projects
-            )
-            if not allowed:
-                return 0
+            # A dedicated topic note can declare its project once in metadata
+            # or its project folder; each factual paragraph need not repeat it.
+            declared = passage.get("scope_projects", [])
+            if len(declared) == 1:
+                if not set(requested_projects).intersection(declared):
+                    return 0
+            else:
+                # Mixed digests still require a focused section or direct text.
+                if (len(passage["topic_names"]) > 1
+                        and not set(requested_projects).intersection(passage["heading_projects"])):
+                    return 0
+                allowed = any(
+                    any(all(_normal(_canonical(part)) in combined for part in alias)
+                        for alias in PROJECT_ALIASES[project])
+                    for project in requested_projects
+                )
+                if not allowed:
+                    return 0
         matches = [term for term in terms if term in combined]
         if plan["anchors"] and not any(term in combined for term in plan["anchors"]):
             return 0
@@ -610,14 +709,15 @@ class Library:
         query = str(query or "").strip()
         with self._lock:
             ranked = []
-            plan = _query_plan(query, self._passages.values()) if query else None
-            for passage in self._passages.values():
+            passages = [p for p in self._passages.values() if p["searchable"] and not p["archived"]]
+            plan = _query_plan(query, passages) if query else None
+            for passage in passages:
                 score = self._score(passage, query, plan) if query else 0
                 if score:
                     ranked.append({**passage, "score": round(score, 2)})
             ranked.sort(key=lambda item: (item["score"], item["source_date"] or item["modified_at"]),
                         reverse=True)
-            # Identical archived text is still kept as alternate provenance.
+            # Identical active text is still kept as alternate provenance.
             deduped: list[dict[str, Any]] = []
             seen: dict[str, dict[str, Any]] = {}
             for item in ranked:
@@ -661,12 +761,13 @@ class Library:
             note_id = source_id.split(":s_", 1)[0]
             if not note_id.startswith("n_"):
                 raise ValueError("无效的笔记 ID。")
-            self._safe_path(_decode(note_id[2:]))
-            if note_id not in self._notes:
-                raise KeyError("笔记不存在或尚未建立索引。")
+            self._safe_path(_decode(note_id[2:]), allow_archive=note_id in self._note_aliases)
             if source_id != note_id and source_id not in self._passages:
                 raise KeyError("所选段落已变化，请重新搜索。")
-            note = copy.deepcopy(self._notes[note_id])
+            resolved_id = self._note_aliases.get(note_id, note_id) if source_id == note_id else note_id
+            if resolved_id not in self._notes:
+                raise KeyError("笔记不存在或尚未建立索引。")
+            note = copy.deepcopy(self._notes[resolved_id])
             note["selected_source_id"] = source_id
             note["focus"] = copy.deepcopy(self._passages.get(source_id))
             return note
@@ -683,8 +784,8 @@ class Library:
                     source = copy.deepcopy(self._passages[source_id])
                     source["content_complete"] = True
                     result.append(source)
-                elif source_id in self._notes:
-                    note = self._notes[source_id]
+                elif source_id in self._notes or source_id in self._note_aliases:
+                    note = self._notes[self._note_aliases.get(source_id, source_id)]
                     passages = copy.deepcopy(note["passages"])
                     if query:
                         plan = _query_plan(query, self._passages.values())
@@ -695,7 +796,8 @@ class Library:
                         "relative": note["relative"], "path": note["path"],
                         "source_path": note["path"], "thread_links": copy.deepcopy(note["thread_links"]),
                         "passages": passages, "content_complete": True, "kind": "note",
-                        "modified_at": note["modified_at"], "answer_status": "evidence_only",
+                        "modified_at": note["modified_at"], "archived": note["archived"],
+                        "searchable": note["searchable"], "answer_status": "evidence_only",
                     })
                 else:
                     missing.append(source_id)
@@ -717,7 +819,7 @@ class Library:
                 guidance = PROJECT_GUIDE_NOTE.search(
                     note["title"] + " " + PurePosixPath(note["relative"]).stem
                 )
-                if (passage["maintenance"] or passage["navigation"]
+                if (passage["archived"] or passage["maintenance"] or passage["navigation"]
                         or guidance or PROJECT_NAVIGATION_HEADING.search(passage["title"])
                         or passage["note_id"] in source_only_notes
                         or passage["project"] == "其他资料"
@@ -754,18 +856,48 @@ class Library:
                                 for source_id in project["source_ids"]]
             return project
 
+    def topics(self) -> list[dict[str, Any]]:
+        """Readable knowledge by subject, without navigation or file receipts."""
+        with self._lock:
+            result = []
+            categories = {"10 项目": "项目", "20 方法": "方法", "30 资料": "资料"}
+            for note in self._notes.values():
+                parts = Path(note["relative"]).parts
+                if (note["archived"] or note["maintenance"] or note["navigation"]
+                        or not parts or parts[0] not in categories
+                        or SOURCE_PLACEHOLDER.search(note["markdown"])):
+                    continue
+                body = _without_comments(note["markdown"]).strip()
+                body = re.sub(r"\A---\s*\n.*?\n---\s*", "", body, count=1, flags=re.S)
+                paragraphs = [block.strip() for block in re.split(r"\n\s*\n", body)]
+                intro = next((block for block in paragraphs if block and not block.startswith(("#", "|", "[["))), "")
+                passages = note.get("passages", [])
+                project = next((p["project"] for p in passages if p.get("project") and p["project"] != "其他资料"), "")
+                group = parts[1] if len(parts) > 2 else project or "其他资料"
+                result.append({**{key: copy.deepcopy(note[key]) for key in
+                    ("id", "note_id", "title", "relative", "date", "modified_at")},
+                    "category": categories[parts[0]], "group": group, "project": project or group,
+                    "excerpt": _display(intro, 140)})
+            result.sort(key=lambda item: (item["category"], item["group"].casefold(), item["title"].casefold()))
+            return result
+
     def overview(self) -> dict[str, Any]:
         with self._lock:
-            notes = sorted(self._notes.values(), key=lambda item: item["modified_at"], reverse=True)
+            notes = sorted((n for n in self._notes.values() if not n["archived"]),
+                           key=lambda item: item["modified_at"], reverse=True)
             recent = [{
                 key: copy.deepcopy(note[key]) for key in (
                     "id", "note_id", "title", "relative", "modified_at", "date", "thread_links"
                 )
             } for note in notes if not note["maintenance"]
                 and not SOURCE_PLACEHOLDER.search(note["markdown"])][:12]
+            topics = self.topics()
             return {
                 "projects": self.projects()[:8], "recent": recent, "note_count": len(notes),
-                "source_count": len(self._passages), "refreshed_at": self._refreshed_at,
+                "topics": topics, "knowledge_count": len(topics),
+                "archive_count": len(self._notes) - len(notes),
+                "source_count": sum(not p["archived"] for p in self._passages.values()),
+                "refreshed_at": self._refreshed_at,
                 "warnings": copy.deepcopy(self._warnings), "vault_name": self.vault_root.name,
             }
 
@@ -783,9 +915,9 @@ class Library:
             ]
             sources = [
                 {**{key: copy.deepcopy(passage[key]) for key in (
-                    "id", "note_id", "title", "section", "text", "excerpt",
+                    "id", "note_id", "note_title", "title", "section", "text", "excerpt",
                     "line_start", "line_end", "project", "project_id", "thread_links",
-                    "topic_names", "heading_projects", "maintenance", "navigation",
+                    "topic_names", "heading_projects", "scope_projects", "maintenance", "navigation", "archived", "searchable",
                     "modified_at", "source_date", "date_basis", "kind",
                 )},
                  "scorehint": (-35 if passage["maintenance"] else 0)
@@ -796,5 +928,6 @@ class Library:
             return {
                 "schema_version": 1, "generated_at": self._refreshed_at,
                 "overview": self.overview(), "projects": self.projects(),
-                "notes": notes, "sources": sources, "answer_status": "evidence_only",
+                "notes": notes, "sources": sources, "note_aliases": copy.deepcopy(self._note_aliases),
+                "answer_status": "evidence_only",
             }

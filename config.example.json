@@ -2,7 +2,7 @@
   "data_root": "../obsidian-workspace-data",
   "state_path": "../obsidian-workspace-data/checkpoint/state.json",
   "obsidian_vault": "../Obsidian-Work",
-  "output_root": "../Obsidian-Work/04 例行工作/个人知识工作台",
+  "output_root": "../Obsidian-Work/30 资料",
   "old_output_roots": [],
   "watch_roots": [],
   "memory_roots": [],
@@ -10,6 +10,7 @@
   "runtime_roots": [],
   "exclude_dir_names": [".git", ".obsidian", ".codex", ".openclaw", "node_modules", "__pycache__", ".venv"],
   "cloud_url": "",
+  "feishu_enabled": false,
   "feishu_video_owner": "",
   "port": 8767,
   "web_port": 5174

@@ -2,6 +2,7 @@
 import argparse
 import json
 import shutil
+import time
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -27,6 +28,25 @@ def make_handler(runtime=None, *, migration=None):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            if self.command == "POST" and code >= 400:
+                # Closing before a rejected body arrives can reset the response.
+                # Drain a bounded tail without trusting a possibly false length.
+                previous_timeout = self.connection.gettimeout()
+                deadline, remaining = time.monotonic() + .1, 64 * 1024
+                try:
+                    while remaining:
+                        wait = deadline - time.monotonic()
+                        if wait <= 0:
+                            break
+                        self.connection.settimeout(wait)
+                        chunk = self.rfile.read1(min(remaining, 8192))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                except OSError:
+                    pass
+                finally:
+                    self.connection.settimeout(previous_timeout)
 
         def handle_request(self):
             try:

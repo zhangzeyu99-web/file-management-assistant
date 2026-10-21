@@ -28,7 +28,8 @@ export default function Markdown({ text, onWikiLink, onCopy }: Props) {
       else {
         const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
         const autolink = token.match(/^<(https?:\/\/[^\s<>]+)>$/i);
-        const href = link ? link[2].trim() : autolink ? autolink[1] : token.replace(/[。，；]+$/, "");
+        const rawHref = link ? link[2].trim() : autolink ? autolink[1] : token.replace(/[。，；]+$/, "");
+        const href = rawHref.startsWith("<") && rawHref.endsWith(">") ? rawHref.slice(1, -1) : rawHref;
         const label = link ? link[1] : href;
         if (safeLink(href)) node = <a href={href} target={/^https?:/i.test(href) ? "_blank" : undefined} rel="noopener noreferrer">{label}</a>;
         else if (/^file:\/\//i.test(href)) node = <span className="local-reference">{label}{onCopy && <button title="复制本机来源地址" aria-label={`复制${label}的来源地址`} onClick={() => onCopy(href)}><Copy size={13} /></button>}</span>;

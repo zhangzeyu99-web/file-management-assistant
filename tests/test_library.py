@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -31,6 +32,171 @@ class LibraryTest(unittest.TestCase):
         library = Library(self.root)
         library.refresh()
         return library
+
+    def test_archived_notes_stay_readable_but_do_not_supply_current_search_or_projects(self):
+        self.write("10 项目/热血合服/当前记录.md", "# 热血合服\n\n已确认按地区分组，仍需核对候选服务器名单，保留排除原因。\n")
+        self.write("90 历史/旧决策.md", "# Hell Asylum\n\n历史验收暗号 XYZZ742：已完成旧版交付并等待当年验收，不能代表最新进度。\n")
+        library = self.library()
+        overview = library.overview()
+        self.assertEqual(1, overview["note_count"])
+        self.assertEqual(1, overview["archive_count"])
+        self.assertEqual(["热血合服"], [p["title"] for p in library.projects()])
+        self.assertFalse(any("90 历史" in note["relative"] for note in overview["recent"]))
+        self.assertEqual(0, library.search("Hell Asylum XYZZ742")["total"])
+        snapshot = library.export_snapshot()
+        self.assertEqual(2, len(snapshot["notes"]))
+        archived = next(n for n in snapshot["notes"] if n["archived"])
+        self.assertIn("XYZZ742", library.get_note(archived["id"])["markdown"])
+        source = next(p for p in snapshot["sources"] if p["note_id"] == archived["id"])
+        self.assertTrue(source["archived"])
+        self.assertFalse(source["searchable"])
+        selected = library.context_sources([source["id"], archived["id"]])
+        self.assertEqual([], selected["missing"])
+        self.assertTrue(all(item["archived"] for item in selected["items"]))
+        refresh = library.refresh()
+        self.assertEqual((1, 1), (refresh["note_count"], refresh["archive_count"]))
+
+    def test_layout_alias_redirects_note_ids_only_and_layout_change_refreshes_snapshot(self):
+        old = self.write("旧目录/进展.md", "# 热血合服\n\n已确认三天登录人数直接使用，下一步保留合服名单和地区分组依据。\n")
+        library = self.library()
+        before = library.search("热血合服")["items"][0]
+        old_note_id, old_passage_id = before["note_id"], before["id"]
+        target = self.root / "10 项目/热血合服/进展.md"
+        target.parent.mkdir(parents=True)
+        old.rename(target)
+        library.refresh()
+        with self.assertRaises(KeyError):
+            library.get_note(old_note_id)
+        revision = library.refreshed_at
+        self.write(".obsidian/knowledge-layout.json", json.dumps({
+            "version": 1, "path_aliases": {
+                "旧目录/进展.md": "10 项目/热血合服/进展.md",
+                "越界.md": "../外部资料.md",
+            }}, ensure_ascii=False))
+        refreshed = library.refresh()
+        self.assertTrue(refreshed["changed"])
+        self.assertNotEqual(revision, library.refreshed_at)
+        self.assertTrue(refreshed["warnings"])
+        resolved = library.get_note(old_note_id)
+        self.assertEqual("10 项目/热血合服/进展.md", resolved["relative"])
+        self.assertNotEqual(old_note_id, resolved["id"])
+        self.assertIn("三天登录人数直接使用", resolved["markdown"])
+        with self.assertRaisesRegex(KeyError, "段落已变化"):
+            library.get_note(old_passage_id)
+        selected = library.context_sources([old_note_id, old_passage_id])
+        self.assertEqual([old_passage_id], selected["missing"])
+        self.assertEqual(resolved["id"], selected["items"][0]["id"])
+        self.assertEqual({old_note_id: resolved["id"]}, library.export_snapshot()["note_aliases"])
+        self.assertFalse(library.refresh()["changed"])
+
+    def test_entry_directory_and_answer_archive_do_not_become_methods_or_project_progress(self):
+        self.write("10 项目/当前.md", "# 热血合服\n\n按地区边界分组的规则已经确认，下一步补充服务器名单和排除原因。\n")
+        self.write("00 入口/项目导航.md", "# 热血合服\n\n导航示例法 XYZN111：已完成所有分组并交付，后续可从目录继续阅读项目资料。\n")
+        self.write("30 资料/回答留档.md", "---\ntype: answer_archive\n---\n# 热血合服\n\n问答留档法 XYZN222：已完成所有分组并交付，这份回答不能取代真实项目进展。\n")
+        self.write("10 项目/热血合服/项目概览.md", "---\ntype: navigation\n---\n# 热血合服\n\n项目导航法 NAVTYPE739：已完成全部检查，打开专题查看具体依据。\n")
+        self.write("40 日常/模板/记录.md", "---\ntype: template\n---\n# 工作记录\n\n模板占位法 TMPLTYPE739：在这里填写实际完成结果和下一步。\n")
+        library = self.library()
+        self.assertEqual(0, library.search("NAVTYPE739")["total"])
+        self.assertEqual(0, library.search("TMPLTYPE739")["total"])
+        self.assertEqual(0, library.search("XYZN111")["total"])
+        self.assertEqual(0, library.search("XYZN222")["total"])
+        project = library.projects()[0]
+        self.assertEqual(1, project["note_count"])
+        self.assertIn("补充服务器名单", project["excerpt"])
+        self.assertEqual(1, len(library.overview()["recent"]))
+        notes = library.export_snapshot()["notes"]
+        entry = next(n for n in notes if n["relative"].startswith("00 入口/"))
+        answer = next(n for n in notes if n["type"] == "answer_archive")
+        self.assertTrue(entry["navigation"])
+        for note in (entry, answer):
+            self.assertTrue(note["maintenance"])
+            self.assertFalse(note["searchable"])
+            self.assertEqual(note["markdown"], library.get_note(note["id"])["markdown"])
+
+    def test_hidden_archive_loads_only_registered_targets_and_old_note_links_remain_readable(self):
+        self.write("10 项目/热血合服/排单规则.md", "# 热血合服排单规则\n\n按地区边界核对名单。\n")
+        target = ".source-history/早期记录/知识库检查.md"
+        self.write(target, "# 知识库检查\n\n仅供原文回查 ARCHIVEONLY739。\n")
+        self.write(".source-history/未登记.md", "# 未登记\n\n不可读取 HIDDEN739。\n")
+        self.write(".other/资料.md", "# 其他隐藏目录\n\n不可读取。\n")
+        old = "90 历史/早期记录/知识库检查.md"
+        old_archive = ".source-history/旧位置.md"
+        layout = {"version": 1, "path_aliases": {
+            old: target, old_archive: target, "无效.md": ".source-history/.private/笔记.md",
+            "无效目录.md": ".other/资料.md", "越界.md": ".source-history/../资料.md"}}
+        metadata = self.write(".obsidian/knowledge-layout.json", json.dumps(layout, ensure_ascii=False))
+        library = self.library()
+        self.assertEqual((1, 1), (library.overview()["note_count"], library.overview()["archive_count"]))
+        self.assertEqual(0, library.search("ARCHIVEONLY739")["total"])
+        encode = lambda relative: "n_" + base64.urlsafe_b64encode(relative.encode()).decode().rstrip("=")
+        archived = library.get_note(encode(old))
+        self.assertEqual(target, archived["relative"])
+        self.assertTrue(archived["archived"])
+        self.assertFalse(archived["searchable"])
+        self.assertIn("ARCHIVEONLY739", library.get_note(encode(target))["markdown"])
+        self.assertEqual(target, library.get_note(encode(old_archive))["relative"])
+        with self.assertRaises(KeyError):
+            library.get_note(encode(old) + ":s_old-paragraph")
+        for relative in (".source-history/未登记.md", ".other/资料.md", ".source-history/.private/笔记.md"):
+            with self.subTest(relative=relative), self.assertRaises(ValueError):
+                library.get_note(encode(relative))
+        self.assertTrue(library.overview()["warnings"])
+        self.assertTrue(next(n for n in library.export_snapshot()["notes"] if n["relative"] == target)["archived"])
+        metadata.write_text('{"version":1,"path_aliases":{}}', encoding="utf-8")
+        self.assertTrue(library.refresh()["changed"])
+        self.assertEqual(0, library.overview()["archive_count"])
+        with self.assertRaises(ValueError):
+            library.get_note(encode(target))
+
+    def test_declared_project_scope_and_activity_tokens_retrieve_topic_notes_without_repeated_project_names(self):
+        self.write("10 项目/热血合服/口径.md", """---
+project: 热血合服
+---
+# 活跃与付费口径
+## 当前结论
+活跃取“近3天登录用户数”，不除以3；付费另取有付费的玩家登录数。
+""")
+        self.write("10 项目/TopData/日报.md", """---
+project: TopData
+---
+# 日报与月报口径
+## 当前结论
+最终要求保留原结构和顺序，两张运营表先展示；AI分析放最后，再列后续关注。
+""")
+        self.write("20 方法/知识库/迁移.md", """---
+project: Obsidian 知识库
+---
+# 备份与迁移
+换电脑时先导出迁移包，再在新电脑导入，保留笔记和增量记录，无需重新总结旧资料。
+""")
+        self.write("10 项目/洛克计算器/其他项目.md", """---
+project: 洛克计算器
+---
+# 活跃口径
+热血合服三天活跃不除以3只是历史参考，本篇采用其他指标，仅记录计算器的其他工作。
+""")
+        for number in range(4):
+            self.write(f"其他主题{number}.md", f"# 其他主题{number}\n\n日报最终顺序已确认，不能据此代替其他项目的真实记录。\n")
+        library = self.library()
+        questions = {
+            "热血合服三天活跃为什么不能除以3": "不除以3",
+            "热血合服的三天活跃人数为什么不能直接除以3？": "不除以3",
+            "TopData日报排列顺序": "AI分析放最后",
+            "TopData日报最终采用什么顺序？": "AI分析放最后",
+            "Obsidian换电脑怎么迁移": "新电脑导入",
+            "Obsidian怎么迁移到新电脑？": "新电脑导入",
+        }
+        for question, expected in questions.items():
+            with self.subTest(question=question):
+                result = library.search(question)
+                self.assertTrue(result["items"], result)
+                self.assertIn(expected, result["items"][0]["text"])
+                self.assertFalse(any("其他项目.md" in item["relative"] for item in result["items"]))
+        self.assertEqual(0, library.search("TopData日报 ZXQ739 口径")["total"])
+        folder_only = self.write("10 项目/TopData/指标.md", "# 指标说明\n\n复核暗号 SCOPE739：金额范围已经确认，不能混用累计与单日结果。\n")
+        library.refresh()
+        scoped = library.search("TopData SCOPE739")
+        self.assertEqual(folder_only.name, Path(scoped["items"][0]["relative"]).name)
 
     def test_blank_query_returns_empty_result(self):
         self.write("资料.md", "# 热血合服\n\n已确认三天活跃字段不除以三，按服务器分组。\n")
@@ -478,6 +644,23 @@ Obsidian 已完成本轮文件归档并保留失败原因，未移动或删除�
                                  for sid in project["source_ids"]))
         result = library.search("Obsidian 增量整理怎样避免重复总结，续聊怎么更新？")
         self.assertIn("旧文件跳过", result["items"][0]["text"])
+
+    def test_subject_catalog_lists_knowledge_without_templates_navigation_or_source_receipts(self):
+        self.write("10 项目/热血合服/热血合服排单.md", "# 热血合服排单\n\n按地区分组，保留排除原因。\n\n## 来源\n\n依据另一篇记录。\n")
+        self.write("20 方法/知识库/知识库换机迁移.md", "# 知识库换机迁移\n\n先导出，再在新电脑导入。\n")
+        self.write("30 资料/个人记录/学历认证材料.md", "# 学历认证材料\n\n成绩单已备份，申请尚未提交。\n")
+        self.write("30 资料/待归类/文件登记.md", "# 文件登记\n\n仅收录来源，尚未提取此格式正文。\n")
+        self.write("10 项目/热血合服/热血合服.md", "---\ntype: navigation\n---\n# 热血合服\n\n项目入口。\n")
+        self.write("40 日常/模板/项目笔记模板.md", "# {{title}}\n\n填入结论。\n")
+        self.write("90 历史/旧记录.md", "# 旧记录\n\n过去的记录。\n")
+        library = self.library()
+        overview = library.overview()
+        self.assertEqual(3, overview["knowledge_count"])
+        self.assertEqual({"项目", "方法", "资料"}, {n["category"] for n in overview["topics"]})
+        topic = next(n for n in overview["topics"] if n["category"] == "项目")
+        self.assertEqual("热血合服", topic["group"])
+        self.assertEqual("按地区分组，保留排除原因。", topic["excerpt"])
+        self.assertIn("排单", library.get_note(topic["id"])["title"])
 
     def test_compound_question_keeps_distinct_evidence_and_home_skips_placeholders(self):
         self.write("日报.md", "# Codex Daily Review\n\n" + "\n\n".join(

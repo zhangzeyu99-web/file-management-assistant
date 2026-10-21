@@ -1,4 +1,5 @@
 import io
+import json
 import tempfile
 import unittest
 import zipfile
@@ -145,6 +146,71 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(list((self.root / "notes").glob("*.md")), [])
         self.assertEqual(list((self.root / "notes").glob("*.tmp")), [])
         self.assertEqual(safe_title("CON"), "资料 CON")
+
+    def test_semantic_names_collide_safely_and_title_or_folder_change_reuses_identity(self):
+        notes = self.root / "notes"
+        task_id = "11111111-2222-4333-8444-555555555555"
+        markdown = "# 热血合服验收 " + task_id + "\n\n验收需要先补齐七天活跃数据。"
+        first = write_note(notes, "归档资料", markdown, task_id, folder="热血合服")
+        second = write_note(notes, "归档资料", markdown, "different-task", folder="热血合服")
+        self.assertEqual(Path(first["note"]).name, "热血合服验收.md")
+        self.assertEqual(Path(second["note"]).name, "热血合服验收（2）.md")
+        self.assertIn("<!-- obsidian-workspace task:" + task_id, first["expected_text"])
+        self.assertNotIn(task_id, first["expected_text"].split("-->\n\n", 1)[1])
+        retried = write_note(notes, "另一个原名", markdown, task_id, folder="待归类")
+        self.assertEqual(retried["note"], first["note"])
+        self.assertTrue(retried["reused"])
+
+    def test_reserved_filename_survives_failed_publish_and_other_same_title_task(self):
+        notes = self.root / "notes"
+        with patch("engine.ingest.os.link", side_effect=OSError("publication interrupted")):
+            with self.assertRaises(OSError):
+                write_note(notes, "具体方法", "正文", "original-task")
+        other = write_note(notes, "具体方法", "不同正文", "another-task")
+        retry = write_note(notes, "具体方法", "正文", "original-task")
+        self.assertEqual(Path(other["note"]).name, "具体方法（2）.md")
+        self.assertEqual(Path(retry["note"]).name, "具体方法.md")
+
+    def test_moved_legacy_note_is_read_only_reused_without_visible_identity(self):
+        vault = self.root / "vault"
+        history = vault / ".source-history"
+        history.mkdir(parents=True)
+        original = history / "早期验收.md"
+        text = "<!-- obsidian-workspace task:legacy-task -->\n\n# 早期验收\n\n等待实际验收。\n\n## 来源\n\n- file:original.md\n"
+        original.write_text(text, encoding="utf-8")
+        unrelated = vault / ".other" / "不可恢复.md"
+        unrelated.parent.mkdir()
+        unrelated.write_text(text, encoding="utf-8")
+        result = write_note(vault / "30 资料", "早期验收", "# 早期验收\n\n等待实际验收。",
+                            "legacy-task", ["file:original.md"], folder="待归类", identity_root=vault)
+        self.assertEqual(Path(result["note"]), original.resolve())
+        self.assertEqual(result["expected_text"], text)
+        self.assertTrue(result["reused"])
+        self.assertEqual(list((vault / "30 资料").rglob("*.md")), [])
+        original.write_text("# 人工重写\n必须保留。", encoding="utf-8")
+        with self.assertRaises(IngestError) as error:
+            write_note(vault / "30 资料", "早期验收", "# 早期验收\n\n等待实际验收。",
+                       "legacy-task", ["file:original.md"], identity_root=vault)
+        self.assertEqual(error.exception.code, "output_conflict")
+        index = vault / "30 资料" / ".note-index.json"
+        saved = json.loads(index.read_text(encoding="utf-8"))
+        for unsafe in (".other/不可恢复.md", ".source-history/.private/笔记.md", ".source-history/../其他.md"):
+            saved["tasks"]["legacy-task"]["path"] = unsafe
+            index.write_text(json.dumps(saved, ensure_ascii=False), encoding="utf-8")
+            with self.subTest(path=unsafe), self.assertRaises(IngestError) as error:
+                write_note(vault / "30 资料", "早期验收", "正文", "legacy-task", identity_root=vault)
+            self.assertEqual(error.exception.code, "invalid_note_index")
+
+    def test_sources_keep_targets_behind_readable_labels_and_deleted_notes_are_not_regenerated(self):
+        source = self.root / "验收数据.txt"
+        result = write_note(self.root / "notes", "验收方法", "验收需要补齐数据。", "sources-task", [str(source)])
+        self.assertIn("[验收数据](<", result["expected_text"])
+        self.assertIn(source.as_uri(), result["expected_text"])
+        self.assertNotIn("- " + str(source), result["expected_text"])
+        Path(result["note"]).unlink()
+        with self.assertRaises(IngestError) as error:
+            write_note(self.root / "notes", "验收方法", "验收需要补齐数据。", "sources-task", [str(source)])
+        self.assertEqual(error.exception.code, "missing_output")
 
 
 if __name__ == "__main__":

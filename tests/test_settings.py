@@ -29,8 +29,7 @@ class SettingsTest(unittest.TestCase):
         self.legacy = self.root / "old project"
         self.patches = [
             patch.object(settings, "ROOT", self.project),
-            patch.object(settings, "LEGACY_ROOT", self.legacy),
-            patch.dict(os.environ, {"OW_CONFIG": "", "OW_DISABLE_LEGACY_CONFIG": ""}),
+            patch.dict(os.environ, {"OW_CONFIG": ""}),
         ]
         for item in self.patches:
             item.start()
@@ -134,6 +133,17 @@ class SettingsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "未定义的环境变量"):
             settings.load_settings(path)
 
+    def test_runtime_and_knowledge_directories_cannot_contain_each_other(self):
+        path = self.root / "nested-config/config.json"
+        for data_root, vault in (("vault/runtime", "vault"), ("data", "data/vault"), ("same", "same")):
+            with self.subTest(data_root=data_root, vault=vault):
+                self.write_config(path, data_root=data_root, obsidian_vault=vault,
+                                  output_root=vault + "/30 资料")
+                with self.assertRaisesRegex(ValueError, "必须互不包含"):
+                    settings.load_settings(path)
+                self.assertFalse((path.parent / data_root).exists())
+                self.assertFalse((path.parent / vault).exists())
+
     def test_no_config_or_checkpoint_is_never_initialized(self):
         with self.assertRaisesRegex(ValueError, "未找到配置"):
             settings.load_settings()
@@ -163,23 +173,13 @@ class SettingsTest(unittest.TestCase):
             save.assert_not_called()
             self.assertIn("非空 token", error.getvalue())
 
-    def test_legacy_fallback_preserves_original_layout_and_source_scope(self):
+    def test_legacy_files_do_not_implicitly_select_a_workspace(self):
         self.legacy.mkdir()
-        (self.legacy / "config.json").write_text(json.dumps({
-            "obsidian_vault": "../old vault", "watch_roots": [{"name": "原资料", "path": "../sources"}],
-        }), encoding="utf-8")
-        (self.legacy / "config.local.json").write_text('{"exclude_dir_names":["build"]}', encoding="utf-8")
-        result = settings.load_settings()
-        self.assertEqual("legacy", result["_config_source"])
-        self.assertEqual(str(self.root / "obsidian-workspace-data"), result["data_root"])
-        self.assertEqual(str(self.root / "file-assistant/incremental-summary/state.json"), result["state_path"])
-        self.assertEqual(str(self.root / "old vault/04 例行工作/个人知识工作台"), result["output_root"])
-        self.assertEqual(str(self.root / "sources"), result["watch_roots"][0]["path"])
-        self.assertEqual(2, len(result["memory_roots"]))
-        self.assertEqual(["build"], result["exclude_dir_names"])
-        self.assertEqual((8767, 5174), (result["port"], result["web_port"]))
-        with patch.dict(os.environ, {"OW_DISABLE_LEGACY_CONFIG": "1"}), self.assertRaisesRegex(ValueError, "未找到配置"):
+        (self.legacy / "config.json").write_text('{"obsidian_vault":"old-vault"}', encoding="utf-8")
+        (self.legacy / "config.local.json").write_text('{}', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "未找到配置"):
             settings.load_settings()
+        self.assertFalse((self.project / "config.local.json").exists())
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL and shutil.which("py"), "Windows launcher")
     def test_isolated_bootstrap_launcher_opens_setup_without_a_config_or_checkpoint(self):
@@ -187,10 +187,9 @@ class SettingsTest(unittest.TestCase):
         for name in ("settings.py", "incremental.py"):
             shutil.copy2(PROJECT / "engine" / name, self.project / "engine" / name)
         shutil.copy2(PROJECT / "start.ps1", self.project / "start.ps1")
-        with patch.dict(os.environ, {"OW_DISABLE_LEGACY_CONFIG": "1"}):
-            checked = subprocess.run([POWERSHELL, "-NoProfile", "-File", str(self.project / "start.ps1"),
-                                      "-Bootstrap", "-Check", "-ApiPort", "18703", "-WebPort", "18704"],
-                                     cwd=self.root, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        checked = subprocess.run([POWERSHELL, "-NoProfile", "-File", str(self.project / "start.ps1"),
+                                  "-Bootstrap", "-Check", "-ApiPort", "18703", "-WebPort", "18704"],
+                                 cwd=self.root, capture_output=True, text=True, encoding="utf-8", timeout=30)
         self.assertEqual(0, checked.returncode, checked.stderr)
         result = json.loads(checked.stdout)
         self.assertTrue(result["setup_required"])

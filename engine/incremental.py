@@ -209,16 +209,11 @@ def plan_local(state, config, *, generated_roots=(), runtime_roots=(), memory_ro
     if config.get("obsidian_vault"):
         roots.append({"name": "Obsidian全库", "path": config["obsidian_vault"], "max_depth": None, "markdown_only": True})
     if memory_roots is None:
-        memory_roots = config.get("memory_roots", [
-            {"name": "Codex记忆仓", "path": r"D:\codex\codex"},
-            {"name": "OpenClaw提取记忆", "path": r"C:\Users\Administrator\.openclaw\workspace\memory"},
-        ])
+        memory_roots = config.get("memory_roots", [])
     roots.extend(dict(row, markdown_only=True) if isinstance(row, dict) else {"name": "提取记忆", "path": str(row), "markdown_only": True} for row in memory_roots)
     omit = [Path(p).resolve() for p in (*generated_roots, *runtime_roots,
-            *config.get("generated_roots", []), *config.get("runtime_roots", []),
-            *(config.get(k) for k in ("knowledge_root", "obsidian_run_dir", "runtime_root", "output_root", "data_root") if config.get(k)))]
-    # Production defaults cannot become candidates through a broad Documents/watch root.
-    omit.extend(Path(p).resolve() for p in (r"D:\codex\file-assistant", r"D:\codex\obsidian-workspace-data"))
+            *config.get("generated_roots", []), *config.get("runtime_roots", []), *config.get("old_output_roots", []),
+            *(config.get(k) for k in ("knowledge_root", "obsidian_run_dir", "runtime_root", "output_root", "data_root", "state_path") if config.get(k)))]
     if config.get("obsidian_vault"):
         routine = Path(config["obsidian_vault"]) / "04 例行工作"
         omit.extend(routine / name for name in ("文件管理助手", "知识行动助手", "知识整理助手"))
@@ -263,7 +258,9 @@ def plan_local(state, config, *, generated_roots=(), runtime_roots=(), memory_ro
             dirs[:] = sorted(kept, key=str.casefold)
             for filename in sorted(files, key=str.casefold):
                 target = current / filename
-                if filename.startswith("~$") or SENSITIVE_FILENAME.search(filename) or row.get("markdown_only") and target.suffix.lower() != ".md":
+                if (filename.startswith("~$") or SENSITIVE_FILENAME.search(filename)
+                        or row.get("markdown_only") and target.suffix.lower() != ".md"
+                        or any(_inside(target, skip) for skip in omit)):
                     continue
                 relative = target.relative_to(root)
                 position = (tuple(part.casefold() for part in relative.parts[:-1]), filename.casefold())
@@ -273,10 +270,12 @@ def plan_local(state, config, *, generated_roots=(), runtime_roots=(), memory_ro
                     if _reparse(target) or not target.is_file():
                         continue
                     identity = path_key(target)
+                    modified_at = target.stat().st_mtime
                 except OSError as error:
                     failed(error)
                     continue
-                found.setdefault(identity, {"path": str(target.resolve()), "root": name})
+                found.setdefault(identity, {"path": str(target.resolve()), "root": name,
+                                            "modified_at": modified_at})
                 enumerated += 1
                 last = str(relative)
                 if limit is not None and enumerated >= limit:
@@ -307,15 +306,20 @@ def thread_rows(data):
     return data.get("pinnedThreads", []) + data.get("threads", [])
 
 
-def select_plan(state, files=None, threads=None, feishu=None, *, boundary=None):
+def select_plan(state, files=None, threads=None, feishu=None, *, boundary=None, until=None):
     """Select additions without turning newly discovered old IDs into a replay.
 
     ``boundary`` must come from the accepted baseline manifest, never the largest
     per-thread timestamp. Historical gaps remain unacknowledged and unchanged.
+    ``until`` is forwarded to turn selection: a later metadata update does not
+    rule out earlier completed turns in that thread.
     """
     window = stamp(boundary) if boundary is not None else None
     if window is not None and window <= 0:
         raise IncrementalError("增量窗口必须使用已验收基线的完成时间。")
+    ceiling = stamp(until) if until is not None else None
+    if ceiling is not None and ceiling <= 0:
+        raise IncrementalError("增量窗口上界必须是有效时间。")
     file_rows, doc_rows = list(files or []), list(feishu or [])
     new_files = list({path_key(r["path"]): r for r in file_rows if path_key(r["path"]) not in state["files"]}.values())
     new_docs = list({r["token"]: r for r in doc_rows if r["token"] not in state["feishu"]}.values())
@@ -346,6 +350,8 @@ def select_plan(state, files=None, threads=None, feishu=None, *, boundary=None):
             continue
         planned = {**item, "action": "续聊检查" if previous else "新线程",
                    "after": previous.get("through", 0) if previous else window or 0}
+        if ceiling is not None:
+            planned["until"] = ceiling
         if previous is None and window is not None:
             planned["coverage"] = "increment_only"
         work.append(planned)
@@ -393,14 +399,24 @@ def _valid_completed(turn):
         return False
 
 
-def select_turns(state, thread_id, turns, *, after=None):
+def select_turns(state, thread_id, turns, *, after=None, until=None):
     previous = state["threads"].get(thread_id, {})
     seen = previous.get("turns", {})
     boundary = stamp(previous.get("through")) if thread_id in state["threads"] else stamp(after)
+    ceiling = stamp(until) if until is not None else None
+    if ceiling is not None and ceiling <= 0:
+        raise IncrementalError("增量窗口上界必须是有效时间。")
     selected, pending = [], []
     emitted = set()
     for raw in turns:
         turn = normalize_turn(raw)
+        if ceiling is not None:
+            try:
+                if stamp(turn.get("startedAt")) > ceiling or stamp(turn.get("completedAt")) > ceiling:
+                    continue
+            except (ValueError, TypeError):
+                pending.append(turn)
+                continue
         if not _valid_completed(turn):
             pending.append(turn)
             continue
@@ -431,9 +447,11 @@ class CheckpointStore:
             raise IncrementalError("交付笔记读回不一致，不推进检查点。")
         if "\ufffd" in expected or "\x00" in expected:
             raise IncrementalError("交付笔记有编码异常，不推进检查点。")
+        if lane in {"files", "feishu"} and item.get("check_only") and item.get("content_status") != "source_only":
+            raise IncrementalError("来源仅检查回执必须明确标记未总结正文。")
         if lane == "threads":
-            if item.get("check_only") and item.get("turns"):
-                raise IncrementalError("仅检查回执不能登记新轮次。")
+            if item.get("check_only") and item.get("turns") and item.get("content_status") != "source_only":
+                raise IncrementalError("仅检查回执登记新轮次必须明确为仅登记来源。")
             if item.get("coverage") == "increment_only" and not stamp(item.get("after")):
                 raise IncrementalError("仅增量登记必须保留已验收的基线边界。")
             if any(not _valid_completed(normalize_turn(t)) for t in item.get("turns", [])):
@@ -464,7 +482,7 @@ class CheckpointStore:
                         candidate = copy.deepcopy(state)
                         previous = candidate[lane].setdefault(identity, {})
                         prior_receipts = previous.setdefault("receipts", [])
-                        check_only = lane == "threads" and item.get("check_only")
+                        check_only = lane in {"files", "feishu", "threads"} and item.get("check_only")
                         note_field = "check_note" if check_only else "note"
                         note_path = str(Path(item["note"]).resolve())
                         prior = next((r for r in prior_receipts if r.get(note_field) == note_path), None)
@@ -475,8 +493,15 @@ class CheckpointStore:
                             prior_receipts.append(record)
                         if not check_only:
                             previous["note"] = note_path
+                            if lane == "threads":
+                                previous["content_status"] = "knowledge"
+                        if check_only and item.get("content_status") == "source_only":
+                            previous["check_note"] = note_path
+                            previous["content_status"] = record["content_status"] = "source_only"
                         if lane == "files":
                             previous["path"] = item["path"]
+                        elif lane == "feishu" and "updatedAt" in item:
+                            previous["updatedAt"] = item["updatedAt"]
                         elif lane == "threads":
                             turns = [normalize_turn(t) for t in item.get("turns", [])]
                             previous.setdefault("turns", {}).update({t["id"]: turn_version(t) for t in turns})

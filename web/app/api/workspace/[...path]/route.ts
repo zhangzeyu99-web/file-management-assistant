@@ -108,7 +108,9 @@ async function handler(req:Request) {
     }
     if(path.startsWith("notes/")) {
       const s=await snapshot(),id=decodeURIComponent(path.slice(6));
-      const source=s.sources.find((i:any)=>i.id===id),note=s.notes.find((i:any)=>i.id===(source?.note_id||id));
+      const source=s.sources.find((i:any)=>i.id===id);
+      const noteId=source?.note_id||(!id.includes(":")&&s.note_aliases?.[id])||id;
+      const note=s.notes.find((i:any)=>i.id===noteId);
       return note?json({...note,focus:source}):json({error:"未找到笔记，请检查最新同步结果"},404);
     }
     if(path==="jobs"&&req.method==="GET") {

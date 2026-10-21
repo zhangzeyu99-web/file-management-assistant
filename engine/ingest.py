@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import tempfile
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree
 
-from .incremental import IncrementalError, writer_lock
+from .incremental import IncrementalError, atomic_json, writer_lock
 
 
 class IngestError(ValueError):
@@ -75,6 +76,38 @@ def _markdown_title(text, fallback):
         except IngestError:
             return fallback
     return fallback
+
+
+def semantic_title(value, markdown=""):
+    """A readable title; operational identifiers belong in hidden metadata."""
+    fallback = safe_title(value)
+    heading = _markdown_title(markdown, fallback) if markdown else fallback
+    if heading in {"总结", "整理结果", "知识笔记", "新资料", "测试整理结果"}:
+        heading = fallback
+    heading = re.sub(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", "", heading)
+    heading = re.sub(r"(?<![A-Za-z0-9])[A-Za-z0-9_-]{24,}(?![A-Za-z0-9])", "", heading)
+    heading = re.sub(r"^\d{8}[-_ ]\d{6}(?:[-_ ]+|$)", "", heading)
+    heading = re.sub(r"[\s_-]{2,}", " ", heading).strip(" -_—·：:")
+    return safe_title(heading or "未命名资料")[:48].rstrip()
+
+
+def source_link(value, label=None):
+    """Keep the source target, while showing a name rather than an encoded path."""
+    if re.fullmatch(r"\[[^\n]+\]\([^\n]+\)", value):
+        return value
+    if re.match(r"^(?:https?://|codex://|file:)", value, re.I):
+        return f"[{label or '打开来源'}](<{value}>)"
+    if re.match(r"^(?:[A-Za-z]:[\\/]|/|\\\\)", value):
+        target = Path(value)
+        name = label or semantic_title(target.stem)
+        return f"[{name}](<{target.as_uri()}>)"
+    if re.fullmatch(r"[A-Za-z0-9_-]{24,}", value):
+        hidden = json.dumps(value, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e")
+        return (label or "来源记录") + "<!-- source-ref:" + hidden + " -->"
+    if re.search(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", value):
+        hidden = json.dumps(value, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e")
+        return (label or semantic_title(Path(value).stem)) + "<!-- source-ref:" + hidden + " -->"
+    return value
 
 
 def extract_text(text, title="新资料"):
@@ -179,39 +212,121 @@ def extract_path(path, *, allowed_roots=None, max_bytes=MAX_BYTES):
     return result
 
 
-def write_note(output_root, title, markdown, task_id, source_refs=()):
+def _note_matches(root, task_id):
+    marker = "<!-- obsidian-workspace task:" + task_id + " -->"
+    matches = []
+    for directory, directories, files in os.walk(root, followlinks=False):
+        directories[:] = [name for name in directories if (not name.startswith(".") or
+                          Path(directory) == root and name == ".source-history") and
+                          not (Path(directory) / name).is_symlink() and
+                          not bool(getattr((Path(directory) / name).stat(), "st_file_attributes", 0) & 0x400)]
+        for name in files:
+            if not name.endswith(".md"):
+                continue
+            path = Path(directory) / name
+            if path.is_symlink():
+                continue
+            legacy = name.endswith(" -- " + task_id + ".md")
+            with path.open(encoding="utf-8-sig", errors="replace") as handle:
+                header = handle.read(4096)
+            if legacy or marker in header:
+                matches.append(path)
+    return matches
+
+
+def _note_text(title, markdown, task_id, refs, *, readable):
+    body = markdown.rstrip() + "\n"
+    if body.lstrip().startswith("# "):
+        if readable:
+            body = re.sub(r"^\s*#[ \t]+[^\n]+", "# " + title, body, count=1)
+    else:
+        body = "# " + title + "\n\n" + body
+    if refs:
+        body += "\n## 来源\n\n" + "\n".join(
+            "- " + (source_link(ref) if readable else ref) for ref in dict.fromkeys(refs)) + "\n"
+    return "<!-- obsidian-workspace task:" + task_id + " -->\n\n" + body
+
+
+def write_note(output_root, title, markdown, task_id, source_refs=(), *, folder=None, identity_root=None):
     """Write one new Markdown note; exact retries reuse it, edits never overwrite."""
     if not isinstance(task_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", task_id):
         raise IngestError("任务 ID 不能包含路径。", "unsafe_task_id")
-    title = safe_title(title)
+    original_title = safe_title(title)
     # Normalize only the generated note; extraction retains original upload bytes/text.
     markdown = _check_text(markdown).replace("\r\n", "\n").replace("\r", "\n")
+    title = semantic_title(original_title, markdown)
     if not markdown.strip():
         raise IngestError("没有可交付内容，不写空笔记。", "empty_output")
     refs = list(source_refs)
     if any(not isinstance(ref, str) or not ref.strip() or "\n" in ref or "\r" in ref or "\x00" in ref for ref in refs):
         raise IngestError("来源引用必须是非空单行文字。", "invalid_source")
-    body = markdown.rstrip() + "\n"
-    if not body.lstrip().startswith("# "):
-        body = "# " + title + "\n\n" + body
-    if refs:
-        body += "\n## 来源\n\n" + "\n".join("- " + ref for ref in dict.fromkeys(refs)) + "\n"
-    text = "<!-- obsidian-workspace task:" + task_id + " -->\n\n" + body
+    legacy_text = _note_text(original_title, markdown, task_id, refs, readable=False)
     root = Path(output_root).resolve()
+    identities = Path(identity_root or root).resolve()
+    if not root.is_relative_to(identities):
+        raise IngestError("生成目录不在知识库内。", "unsafe_output")
+    destination = root / safe_title(folder) if folder else root
     root.mkdir(parents=True, exist_ok=True)
     with writer_lock(root / ".write.lock"):
-        matches = list(root.glob("* -- " + task_id + ".md"))
+        index_path = root / ".note-index.json"
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {"version": 1, "tasks": {}}
+            if index.get("version") != 1 or not isinstance(index.get("tasks"), dict):
+                raise ValueError("invalid index")
+            saved = index["tasks"].get(task_id)
+            if saved and (not isinstance(saved, dict) or saved.get("status") not in {"reserved", "written"} or
+                          not isinstance(saved.get("path"), str)):
+                raise ValueError("invalid entry")
+            if saved:
+                relative = saved["path"]
+                pure = PurePosixPath(relative)
+                if (not relative or pure.is_absolute() or "\\" in relative or ":" in relative
+                        or pure.as_posix() != relative or pure.suffix.lower() != ".md"
+                        or any(part.startswith(".") and not (index == 0 and part == ".source-history")
+                               for index, part in enumerate(pure.parts))):
+                    raise ValueError("invalid note path")
+        except (OSError, ValueError, TypeError, AttributeError) as error:
+            raise IngestError("笔记身份记录异常，未另建副本。", "invalid_note_index") from error
+        target = identities / saved["path"] if saved else None
+        # Scanning also recovers the identity after a directory move or a legacy save.
+        matches = _note_matches(identities, task_id) if not target or not target.exists() else [target]
         if len(matches) > 1:
             raise IngestError("同一任务存在多个输出，需要核对后再登记。", "duplicate_output")
-        target = matches[0] if matches else root / f"{title} -- {task_id}.md"
-        if not target.resolve().is_relative_to(root) or target.is_symlink():
+        if matches:
+            target = matches[0]
+        elif saved and saved["status"] == "written":
+            raise IngestError("已保存笔记被移走或删除，未重复生成。", "missing_output")
+        elif not target:
+            destination.mkdir(parents=True, exist_ok=True)
+            target = destination / (title + ".md")
+            number = 2
+            reserved = {os.path.normcase(entry.get("path", "")) for entry in index["tasks"].values() if isinstance(entry, dict)}
+            while target.exists() or os.path.normcase(target.relative_to(identities).as_posix()) in reserved:
+                target = destination / f"{title}（{number}）.md"
+                number += 1
+        if not target.resolve().is_relative_to(identities) or target.is_symlink() or any(
+                parent.is_symlink() or bool(getattr(parent.stat(), "st_file_attributes", 0) & 0x400)
+                for parent in [target.parent, *target.parent.parents] if parent.is_relative_to(identities)):
             raise IngestError("笔记路径超出生成目录。", "unsafe_output")
+        if saved:
+            title = safe_title(saved.get("title") or title)
+        text = _note_text(title, markdown, task_id, refs, readable=True)
         reused = target.exists()
         if reused:
-            if target.read_text(encoding="utf-8") != text:
+            existing = target.read_text(encoding="utf-8")
+            if existing not in (text, legacy_text):
                 raise IngestError("已有笔记内容不同；保留人工修改，未覆盖。", "output_conflict")
+            text = existing
+            title = _markdown_title(existing, title)
         else:
-            descriptor, temporary = tempfile.mkstemp(prefix=".note-", suffix=".tmp", dir=root)
+            if not target.resolve().is_relative_to(root):
+                raise IngestError("历史笔记只能读回复用，不能在历史目录中新建。", "unsafe_output")
+            # Reserve before publishing: a failed save keeps its name on retry, even
+            # if another task has the same title or the user removes the HTML marker.
+            index["tasks"][task_id] = {"path": target.relative_to(identities).as_posix(), "title": title, "status": "reserved"}
+            atomic_json(index_path, index)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            descriptor, temporary = tempfile.mkstemp(prefix=".note-", suffix=".tmp", dir=target.parent)
             try:
                 with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
                     handle.write(text)
@@ -225,4 +340,6 @@ def write_note(output_root, title, markdown, task_id, source_refs=()):
                 Path(temporary).unlink(missing_ok=True)
         if target.read_text(encoding="utf-8") != text:
             raise IngestError("笔记读回不一致，不得登记成功。", "readback_failed")
-        return {"note": str(target), "expected_text": text, "created": not reused, "reused": reused}
+        index["tasks"][task_id] = {"path": target.relative_to(identities).as_posix(), "title": title, "status": "written"}
+        atomic_json(index_path, index)
+        return {"note": str(target), "title": title, "expected_text": text, "created": not reused, "reused": reused}

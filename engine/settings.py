@@ -1,4 +1,4 @@
-"""Portable configuration with a final compatibility path for the original PC."""
+"""Explicit portable configuration; never bind a new checkout to another PC."""
 from __future__ import annotations
 
 import argparse
@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LEGACY_ROOT = Path("D:/codex/file-management-assistant")
 PATH_FIELDS = ("data_root", "state_path", "obsidian_vault", "output_root",
                "runtime_root", "knowledge_root", "obsidian_run_dir", "codex_executable")
 ROOT_LISTS = ("old_output_roots", "generated_roots", "runtime_roots", "allowed_open_roots")
@@ -45,27 +44,8 @@ def _port(value, field):
     return value
 
 
-def _legacy_settings():
-    result = _read_config(LEGACY_ROOT / "config.json")
-    result.update(_read_config(LEGACY_ROOT / "config.local.json"))
-    vault = Path(_path(result.get("obsidian_vault"), LEGACY_ROOT, "obsidian_vault"))
-    result.update({
-        "data_root": str(LEGACY_ROOT.parent / "obsidian-workspace-data"),
-        "state_path": str(LEGACY_ROOT.parent / "file-assistant/incremental-summary/state.json"),
-        "output_root": str(vault / "04 例行工作/个人知识工作台"),
-        "old_output_roots": [str(vault / "04 例行工作" / name) for name in ("知识行动助手", "知识整理助手")],
-        "cloud_url": "https://evenstar-obsidian-workspace.zhangzeyu99.chatgpt.site",
-        "port": 8767,
-    })
-    result.setdefault("memory_roots", [
-        {"name": "Codex记忆仓", "path": str(LEGACY_ROOT.parent / "codex")},
-        {"name": "OpenClaw提取记忆", "path": str(Path.home() / ".openclaw/workspace/memory")},
-    ])
-    return result
-
-
 def load_settings(path=None, *, api_port=None, web_port=None):
-    """Explicit path, browser-selected workspace, local config, environment, legacy."""
+    """Explicit path, browser-selected workspace, local config, then environment."""
     local = ROOT / "config.local.json"
     active = ROOT / ".workspace-active.json"
     if path:
@@ -76,13 +56,11 @@ def load_settings(path=None, *, api_port=None, web_port=None):
         selected, source = local.resolve(), "project"
     elif os.environ.get("OW_CONFIG"):
         selected, source = Path(_path(os.environ["OW_CONFIG"], Path.cwd(), "OW_CONFIG")), "environment"
-    elif os.environ.get("OW_DISABLE_LEGACY_CONFIG") != "1" and (LEGACY_ROOT / "config.json").is_file() and (LEGACY_ROOT / "config.local.json").is_file():
-        selected, source = None, "legacy"
     else:
-        raise ValueError("未找到配置。请复制 config.example.json 为 config.local.json 并填写迁移路径，"
-                         "或使用 -Config / --config / OW_CONFIG 指定配置；不会初始化空检查点。")
-    result = _read_config(selected) if selected else _legacy_settings()
-    base = selected.parent if selected else LEGACY_ROOT.resolve()
+        raise ValueError("未找到配置。请导入迁移包，或显式运行 scripts/setup_workspace.py 创建全新库；"
+                         "也可使用 -Config / --config / OW_CONFIG 指定已有配置；不会自动初始化空检查点。")
+    result = _read_config(selected)
+    base = selected.parent
     for key in PATH_FIELDS[:4]:
         if key not in result:
             raise ValueError(f"缺少配置：{key}")
@@ -108,7 +86,10 @@ def load_settings(path=None, *, api_port=None, web_port=None):
             else:
                 raise ValueError(f"配置 {field} 必须是包含 path 的对象")
         result[key] = normalized
-    if not Path(result["output_root"]).is_relative_to(Path(result["obsidian_vault"])):
+    data_root, vault = Path(result["data_root"]), Path(result["obsidian_vault"])
+    if data_root.is_relative_to(vault) or vault.is_relative_to(data_root):
+        raise ValueError("配置 data_root 与 obsidian_vault 必须互不包含，避免私有运行记录进入知识库")
+    if not Path(result["output_root"]).is_relative_to(vault):
         raise ValueError("配置 output_root 必须位于 obsidian_vault 内")
     result["port"] = _port(api_port if api_port is not None else result.get("port", 8767), "port")
     result["web_port"] = _port(web_port if web_port is not None else result.get("web_port", 5174), "web_port")

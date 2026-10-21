@@ -21,3 +21,10 @@ web/.agents/
 web/.codex/
 .workspace-active.json
 .migration-staging/
+artifacts/
+.obsidian/
+.source-history/
+.note-index.json
+weekly-active.json
+weekly-archive.json
+workspace.json

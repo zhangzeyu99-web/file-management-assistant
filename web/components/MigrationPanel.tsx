@@ -6,7 +6,7 @@ import { ArrowDownToLine, ArrowRight, CheckCircle2, Clock3, FileArchive, Loader2
 const API = "/api/workspace";
 const EXPORT_KEY = "obsidian-workspace-migration-export";
 const OPERATION_KEY = "obsidian-workspace-migration-operation";
-const WINDOWS_PACKAGE = "https://github.com/zhangzeyu99-web/file-management-assistant/releases/download/v0.3.0/Obsidian-Workspace-Windows.zip";
+const WINDOWS_PACKAGE = "https://github.com/zhangzeyu99-web/file-management-assistant/releases/latest/download/Obsidian-Workspace-Windows.zip";
 const LOCAL_WORKSPACE = "http://127.0.0.1:5174/#migration";
 const TERMINAL = new Set(["completed", "partial", "failed", "cancelled"]);
 const CHUNK_SIZE = 4 * 1024 * 1024;

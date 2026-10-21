@@ -52,7 +52,15 @@ class ApiTests(unittest.TestCase):
         status, result = self.request("jobs/" + job["id"])
         self.assertEqual(result["status"], "completed", result)
         card = result["result"]["notes"][0]
-        self.assertIn(UPLOAD_TEXT, self.request("notes/" + card["id"])[1]["markdown"])
+        status, note = self.request("notes/" + card["id"])
+        self.assertEqual(status, 200)
+        self.assertIn("只基于本次提供的测试资料，未执行历史任务。", note["markdown"])
+        self.assertIn("星河验收资料", note["markdown"])
+        self.assertNotIn(UPLOAD_TEXT, note["markdown"])
+        self.assertNotIn("## 收录原文", note["markdown"])
+        original = Path(self.runtime.cfg["data_root"]) / "runs" / job["id"] / "source.txt"
+        self.assertEqual(original.read_bytes(), UPLOAD_TEXT.encode("utf-8"))
+        self.assertIn(original.as_uri(), note["markdown"])
         self.assertEqual(self.request("overview")[1]["note_count"], before["note_count"] + 1)
         self.assertTrue(self.request("search?q=" + quote("星河验收资料"))[1]["items"])
         self.assertEqual(len(self.model.prompts), 1)
