@@ -210,8 +210,13 @@ class RuntimeTests(unittest.TestCase):
     def state(self):
         return load_state(self.runtime.cfg["state_path"])
 
-    def update(self):
-        return execute_one(self.runtime, self.runtime.create("update", {}))
+    def update_input(self, files):
+        return {"selection": {"threads": [row["id"] for row in self.native.rows],
+                              "files": [str(path) for path in files]}}
+
+    def update(self, files=None):
+        payload = {} if files is None else self.update_input(files)
+        return execute_one(self.runtime, self.runtime.create("update", payload))
 
     def note_ids(self):
         return [note["id"] for note in self.runtime.library.overview()["recent"]]
@@ -361,7 +366,7 @@ class RuntimeTests(unittest.TestCase):
                     "1234567890", "1234567890 (2)", "20261021-164500", "a1b2c3d4e5f6", "00000000-0000-4000-8000-000000000123")
         for heading in headings:
             with self.subTest(heading=heading), patch.object(self.model, "generate", return_value="# " + heading + "\n\n保留角色映射表。"):
-                result = self.update()
+                result = self.update(files=[source])
                 self.assertEqual("partial", result["status"], result)
                 self.assertEqual(0, result["result"]["counts"]["files"])
                 self.assertEqual([], result["result"]["notes"])
@@ -375,64 +380,18 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(1, completed["result"]["counts"]["files"])
         self.assertIn(path_key(source), self.state()["files"])
 
-    def test_unsupported_and_sensitive_files_only_record_private_checks_without_reading_or_modeling(self):
-        unsupported = self.root / "sources" / "12345.png"
-        sensitive = self.root / "sources" / "settings.md"
-        engineering = self.root / "sources" / "临时盘点.py"
-        unsupported.write_bytes(b"IMAGE_BODY_MUST_NOT_READ")
-        sensitive.write_text("SECRET_BODY_MUST_NOT_READ", encoding="utf-8")
-        engineering.write_text("raise RuntimeError('SCRIPT_BODY_MUST_NOT_READ')", encoding="utf-8")
-        before = self.runtime.library.overview()["note_count"]
-        with patch("engine.runtime.sensitive_path", side_effect=lambda path: Path(path).name == "settings.md"), \
-             patch("engine.runtime.extract_path", side_effect=AssertionError("source body must not be read")):
+    def test_unselected_files_are_never_read_or_registered_by_default(self):
+        for name in ("12345.png", "临时盘点.py", "空日记.md", "业务表导出.csv"):
+            (self.root / "sources" / name).write_bytes(b"" if name == "空日记.md" else b"BODY_MUST_NOT_READ")
+        before = Path(self.runtime.cfg["state_path"]).read_bytes()
+        with patch("engine.runtime.plan_local", side_effect=AssertionError("default must not scan files")), \
+             patch("engine.runtime.extract_path", side_effect=AssertionError("must not read files")):
             result = self.update()
         self.assertEqual("completed", result["status"], result)
         self.assertEqual([], result["result"]["notes"])
-        self.assertEqual(0, result["result"]["counts"]["files"])
-        self.assertEqual(3, len(result["result"]["source_checks"]))
-        self.assertTrue(any(check["reason"] == "脚本或工程文件，仅记录来源" for check in result["result"]["source_checks"]))
-        self.assertIn("按规则仅登记 3 项来源", result["result"]["markdown"])
-        self.assertNotIn("未读取或总结正文", result["result"]["markdown"])
-        self.assertEqual([], result["result"]["warnings"])
+        self.assertEqual([], result["result"]["source_checks"])
         self.assertEqual([], self.model.prompts)
-        self.assertEqual(before, self.runtime.library.overview()["note_count"])
-        self.assertEqual([], list(Path(self.runtime.cfg["output_root"]).rglob("*.md")))
-        state = self.state()
-        for source in (unsupported, sensitive, engineering):
-            entry = state["files"][path_key(source)]
-            self.assertNotIn("note", entry)
-            self.assertEqual("source_only", entry["content_status"])
-            check = Path(entry["check_note"])
-            self.assertTrue(check.is_relative_to(Path(self.runtime.cfg["data_root"]).resolve()))
-            self.assertTrue(check.name.endswith("-check.md"))
-            self.assertNotIn("BODY_MUST_NOT_READ", check.read_text(encoding="utf-8"))
-        unsupported.write_bytes(b"CHANGED_BUT_STILL_KNOWN")
-        again = self.update()
-        self.assertEqual([], again["result"]["source_checks"])
-        self.assertEqual(state["files"], self.state()["files"])
-
-    def test_empty_file_and_csv_exports_are_registered_without_model_calls(self):
-        empty = self.root / "sources" / "空日记.md"
-        table = self.root / "sources" / "业务表导出.csv"
-        empty.write_bytes(b"")
-        # A legacy-encoded export is data for a specialist workflow, not a prose note.
-        table.write_bytes("区域,金额\n合计,123\n".encode("gb18030"))
-        with patch("engine.runtime.extract_path", wraps=extract_path) as extract:
-            result = self.update()
-        self.assertEqual("completed", result["status"], result)
-        self.assertEqual([], result["result"]["errors"])
-        self.assertEqual([], result["result"]["notes"])
-        self.assertEqual([], self.model.prompts)
-        self.assertEqual(1, extract.call_count)
-        checks = {Path(row["source"]).name: row for row in result["result"]["source_checks"]}
-        self.assertTrue(checks[empty.name]["body_read"])
-        self.assertIn("空文件", checks[empty.name]["reason"])
-        self.assertFalse(checks[table.name]["body_read"])
-        self.assertIn("表格", checks[table.name]["reason"])
-        self.assertTrue({path_key(empty), path_key(table)}.issubset(self.state()["files"]))
-        again = self.update()
-        self.assertEqual([], again["result"]["source_checks"])
-        self.assertEqual([], self.model.prompts)
+        self.assertEqual(before, Path(self.runtime.cfg["state_path"]).read_bytes())
 
     def test_uploaded_csv_is_a_source_registration_not_a_model_summary(self):
         data = "区域,金额\n合计,123\n".encode("gb18030")
@@ -448,7 +407,7 @@ class RuntimeTests(unittest.TestCase):
         source = self.root / "sources" / "图片文档.docx"
         with zipfile.ZipFile(source, "w") as package:
             package.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:drawing /></w:r></w:p></w:body></w:document>')
-        result = self.update()
+        result = self.update(files=[source])
         self.assertEqual("partial", result["status"], result)
         self.assertEqual(1, len(result["result"]["errors"]))
         self.assertEqual([], result["result"]["source_checks"])
@@ -464,7 +423,7 @@ class RuntimeTests(unittest.TestCase):
                      "# 本周知识库复核\n\n按真实 ID 对齐。")
         for markdown in bad_notes:
             with self.subTest(markdown=markdown), patch.object(self.model, "generate", return_value=markdown):
-                automatic = self.update()
+                automatic = self.update(files=[source])
                 self.assertEqual(automatic["status"], "partial")
                 manual = execute_one(self.runtime, self.runtime.create("ingest", {
                     "title": "角色映射口径", "text": "角色以真实 ID 对齐，避免同名误判。"}))
@@ -479,14 +438,14 @@ class RuntimeTests(unittest.TestCase):
         decision = json.dumps({"content_status": "source_only", "reason": "仅有重复提醒，没有新增可复用事实"}, ensure_ascii=False)
         before = self.runtime.library.overview()["note_count"]
         with patch.object(self.model, "generate", return_value=decision) as model:
-            automatic = self.update()
+            automatic = self.update(files=[source])
             self.assertEqual(automatic["status"], "completed", automatic)
             self.assertEqual(automatic["result"]["notes"], [])
             entry = self.state()["files"][path_key(source)]
             self.assertEqual(entry["content_status"], "source_only")
             self.assertNotIn("note", entry)
             self.assertNotIn(raw, Path(entry["check_note"]).read_text(encoding="utf-8"))
-            self.update()
+            self.update(files=[source])
             self.assertEqual(model.call_count, 1)
             manual_job = self.runtime.create("ingest", {"title": "每日提醒", "text": raw})
             manual = execute_one(self.runtime, manual_job)
@@ -564,7 +523,7 @@ class RuntimeTests(unittest.TestCase):
                     "text": "实际报告内容：角色映射已核对，仍需实机验收。格式：" + path.suffix, "warnings": []}
 
         with patch("engine.runtime.extract_path", side_effect=extract_report):
-            result = self.update()
+            result = self.update(files=reports)
         self.assertEqual("completed", result["status"], result)
         self.assertEqual({".md", ".docx", ".pdf", ".html"}, set(extracted))
         self.assertEqual(4, len(self.model.prompts))
@@ -654,7 +613,7 @@ class RuntimeTests(unittest.TestCase):
         self.save_state(state)
         from engine.runtime import extract_path
         with patch("engine.runtime.extract_path", wraps=extract_path) as read:
-            result = self.update()
+            result = self.update(files=[old, new])
         self.assertEqual(result["status"], "completed", result)
         self.assertEqual([Path(c.args[0]).resolve() for c in read.call_args_list], [new.resolve()])
         saved = self.state()
@@ -662,7 +621,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn(path_key(new), saved["files"])
         self.assertTrue(Path(saved["files"][path_key(new)]["note"]).is_file())
         self.assertEqual(result["result"]["counts"]["files"], 1)
-        again = self.update()
+        again = self.update(files=[old, new])
         self.assertEqual(again["status"], "completed", again)
         self.assertEqual(again["result"]["notes"], [])
         self.assertEqual(len(self.model.prompts), 1)
@@ -856,13 +815,13 @@ class RuntimeTests(unittest.TestCase):
             return plan_local(*args, **kwargs)
 
         with patch("engine.runtime.plan_local", side_effect=bounded):
-            result = self.update()
+            result = self.update(files=new_paths)
         self.assertEqual(result["status"], "completed", result)
         self.assertEqual(result["result"]["counts"]["files"], 7)
         self.assertEqual(len(self.model.prompts), 7)
         self.assertTrue(all(row["status"] == "checked" for row in result["result"]["sources"]["local"]))
         self.assertTrue(all(path_key(p) in self.state()["files"] for p in new_paths))
-        second = self.update()
+        second = self.update(files=new_paths)
         self.assertEqual(second["status"], "completed", second)
         self.assertEqual(second["result"]["notes"], [])
         self.assertEqual(len(self.model.prompts), 7)
@@ -903,7 +862,7 @@ class RuntimeTests(unittest.TestCase):
     def test_update_readback_ack_failure_keeps_checkpoint_and_retry_reuses_summary(self):
         new = self.root / "sources" / "失败后重试.txt"
         new.write_text("新增已完成事实：纸面方案已整理，尚未实施。", encoding="utf-8")
-        job = self.runtime.create("update", {})
+        job = self.runtime.create("update", self.update_input([new]))
         with patch.object(self.runtime.checkpoints, "ack", return_value={
             "ok": False, "failed": [{"error": "测试读回不一致"}], "committed": []
         }):
@@ -931,7 +890,7 @@ class RuntimeTests(unittest.TestCase):
         cloud = TestCloud()
         new = self.root / "sources" / "同步测试.txt"
         new.write_text("新增已完成事实：本地结果已保存。", encoding="utf-8")
-        job = self.runtime.create("update", {})
+        job = self.runtime.create("update", self.update_input([new]))
         self.runtime.cloud = cloud
         failed = execute_one(self.runtime, job)
         self.assertEqual(failed["status"], "partial")
@@ -971,7 +930,7 @@ class RuntimeTests(unittest.TestCase):
                 raise OSError("测试第二篇暂时保存失败")
             return save_note(title, *args, **kwargs)
 
-        job = self.runtime.create("update", {})
+        job = self.runtime.create("update", self.update_input(list((self.root / "sources").glob("*.txt"))))
         with patch.object(self.runtime, "_note", side_effect=fail_pending_note):
             first = execute_one(self.runtime, job)
         self.assertEqual(first["status"], "partial", first)
@@ -1009,7 +968,7 @@ class RuntimeTests(unittest.TestCase):
                     payload = {"query": "准备测试", "ids": [runtime.library.overview()["recent"][0]["id"]]}
                 else:
                     (self.root / kind / "sources" / "新增.txt").write_text(UPLOAD_TEXT, encoding="utf-8")
-                    payload = {}
+                    payload = {"selection": {"threads": [], "files": [str(self.root / kind / "sources" / "新增.txt")]}}
                 job = runtime.create(kind, payload)
                 model.on_generate = lambda: runtime.jobs.cancel(job["id"])
                 result = execute_one(runtime, job)
@@ -1037,21 +996,21 @@ class RuntimeTests(unittest.TestCase):
         first = execute_one(self.runtime, self.runtime.create("update", {
             "weekly_archive": True, "until": "2026-10-20T19:00:00+08:00"}))
         self.assertEqual("completed", first["status"], first)
-        self.assertIn(path_key(old_file), self.state()["files"])
+        self.assertNotIn(path_key(old_file), self.state()["files"])
         self.assertNotIn(path_key(future_file), self.state()["files"])
         self.assertEqual({"eligible"}, set(self.state()["threads"]["weekly-thread"]["turns"]))
         self.assertEqual(until, self.state()["threads"]["weekly-thread"]["updatedAt"])
         self.assertNotIn("later-doc", self.state()["feishu"])
-        self.assertEqual(1, first["result"]["skipped"]["files_after_window"])
-        self.assertEqual(1, first["result"]["skipped"]["feishu_after_window"])
+        self.assertEqual(0, first["result"]["skipped"]["files_after_window"])
+        self.assertEqual([], FakeFeishu.calls)
         self.assertFalse((self.runtime.data / "weekly-archive.json").exists())
         prompt_count = len(self.model.prompts)
         second = execute_one(self.runtime, self.runtime.create("update", {
             "weekly_archive": True, "until": "2026-10-20T20:01:00+08:00"}))
         self.assertEqual("completed", second["status"], second)
-        self.assertEqual(prompt_count + 2, len(self.model.prompts))  # one file and one new turn
+        self.assertEqual(prompt_count + 1, len(self.model.prompts))  # only the newly completed user turn
         self.assertEqual({"eligible", "later"}, set(self.state()["threads"]["weekly-thread"]["turns"]))
-        self.assertIn("later-doc", self.state()["feishu"])
+        self.assertEqual({}, self.state()["feishu"])
 
     def test_weekly_retry_reuses_window_and_cannot_hide_unchanged_pending_debt(self):
         state = self.state()
@@ -1069,44 +1028,26 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual("partial", second["status"])
         self.assertFalse((self.runtime.data / "weekly-archive.json").exists())
 
-    def test_disabled_feishu_never_reads_or_marks_other_complete_sources_partial(self):
-        self.runtime.cfg["feishu_enabled"] = False
-        with patch("engine.feishu.FeishuSource", side_effect=AssertionError("disabled source must not run")):
-            disabled = self.update()
-        self.assertEqual(disabled["status"], "completed", disabled)
-        self.assertEqual(disabled["result"]["sources"]["feishu"], {"status": "disabled", "enabled": False})
-        self.runtime.cfg["feishu_enabled"] = True
-        with patch("engine.feishu.FeishuSource", side_effect=RuntimeError("测试来源读取失败")):
-            enabled = self.update()
-        self.assertEqual(enabled["status"], "partial", enabled)
-        self.assertEqual(enabled["result"]["sources"]["feishu"]["status"], "not_checked")
+    def test_feishu_is_disabled_even_when_legacy_config_enabled(self):
+        for enabled in (False, True):
+            self.runtime.cfg["feishu_enabled"] = enabled
+            with patch("engine.feishu.FeishuSource", side_effect=AssertionError("Feishu is outside update scope")):
+                result = self.update()
+            self.assertEqual(result["status"], "completed", result)
+            self.assertEqual(result["result"]["sources"]["feishu"], {"status": "disabled", "enabled": False})
+            self.assertEqual({}, self.state()["feishu"])
 
-    def test_feishu_new_metadata_only_and_unavailable_native_are_explicit(self):
-        FakeFeishu.items = [{"token": "fixture-doc", "title": "测试飞书来源", "updatedAt": 200,
-                             "url": "https://example.invalid/fixture-document"}]
+    def test_unavailable_native_is_explicit_without_falling_back_to_other_sources(self):
+        FakeFeishu.items = [{"token": "fixture-doc", "title": "测试飞书来源", "updatedAt": 200}]
         with patch.object(self.native, "list_threads", side_effect=RuntimeError("测试原生连接不可用")):
             result = self.update()
         self.assertEqual(result["status"], "partial")
         self.assertEqual(result["result"]["sources"]["threads"]["status"], "not_checked")
-        self.assertEqual(result["result"]["counts"]["feishu"], 0)
-        self.assertEqual(self.model.prompts, [])
-        self.assertIn("fixture-doc", self.state()["feishu"])
         self.assertEqual([], result["result"]["notes"])
-        self.assertEqual("feishu", result["result"]["source_checks"][0]["kind"])
-        recorded = self.state()["feishu"]["fixture-doc"]
-        self.assertNotIn("note", recorded)
-        self.assertEqual(200, recorded["updatedAt"])
-        self.assertEqual("source_only", recorded["content_status"])
-        check = Path(recorded["check_note"])
-        self.assertTrue(check.is_relative_to(Path(self.runtime.cfg["data_root"]).resolve()))
-        self.assertIn("未读取或总结正文", check.read_text(encoding="utf-8"))
-        self.assertEqual([], list(Path(self.runtime.cfg["output_root"]).rglob("*.md")))
-        FakeFeishu.items[0]["updatedAt"] = 300
-        again = self.update()
-        self.assertEqual([], again["result"]["notes"])
-        self.assertEqual([], again["result"]["source_checks"])
-        self.assertEqual(1, again["result"]["skipped"]["feishu"])
-        self.assertEqual(recorded, self.state()["feishu"]["fixture-doc"])
+        self.assertEqual([], result["result"]["source_checks"])
+        self.assertEqual({}, self.state()["feishu"])
+        self.assertEqual([], FakeFeishu.calls)
+        self.assertEqual([], self.model.prompts)
 
 
 if __name__ == "__main__":

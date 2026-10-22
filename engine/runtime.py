@@ -28,6 +28,7 @@ from .migration import executor_session, export_active_bundle, MigrationError, _
 from .navigation import sync_navigation
 from .privacy import redact_text, redact_tree, sensitive_path
 from .weekly import open_window
+from .update_scope import SCOPE, candidate_file_reason, selection_input
 
 
 def now_iso():
@@ -102,6 +103,7 @@ class Runtime:
         self._claim_lock = threading.Lock()
         self._claiming = False
         self._executor_session = None
+        self._preview_directory = None
         self.connection = {"mode": "local", "online": True, "cloud_connected": False,
                            "native_context": bool(os.environ.get("CODEX_APP_TOOLS_PIPE_PATH")),
                            "synced_at": None, "error": None}
@@ -157,8 +159,13 @@ class Runtime:
                 "jobs_cache": self._cloud_cache_status()}
 
     def create(self, kind, payload, request_id=None):
-        if kind not in {"update", "answer", "context", "ingest", "migration_export"}:
+        if kind not in {"update", "update_preview", "answer", "context", "ingest", "migration_export"}:
             raise ValueError("不支持的任务类型")
+        if kind == "update":
+            selection_input(payload)
+        if kind == "update_preview" and (not isinstance(payload, dict) or
+                any(type(payload.get(key, False)) is not bool for key in ("include_files", "refresh"))):
+            raise ValueError("include_files 与 refresh 必须为布尔值")
         existing = self.jobs.get(request_id) if request_id else None
         if existing:
             return {**existing, "origin": "local"}
@@ -423,6 +430,8 @@ class Runtime:
             self.progress("准备资料")
             if job["kind"] == "update":
                 result = self.run_update(job)
+            elif job["kind"] == "update_preview":
+                result = self.run_update_preview(job)
             elif job["kind"] == "ingest":
                 result = self.run_ingest(job, remote)
             elif job["kind"] in {"answer", "context"}:
@@ -432,7 +441,7 @@ class Runtime:
             else:
                 raise ValueError("不支持的任务")
             # Answers do not write notes; skip a whole-vault refresh on this read-only path.
-            if job["kind"] != "answer":
+            if job["kind"] not in {"answer", "update_preview"}:
                 self._refresh_library()
             status = "partial" if result.get("errors") or result.get("partial") else "completed"
             if self.cloud.available and job["kind"] in {"update", "ingest", "context"}:
@@ -449,7 +458,8 @@ class Runtime:
                 self._finish_answer_timings(timings, started)
                 result["timings"] = timings
             else:
-                self.progress("迁移包已准备好" if job["kind"] == "migration_export" else "整理结果已保存", result)
+                self.progress("迁移包已准备好" if job["kind"] == "migration_export" else
+                              "候选范围已检查" if job["kind"] == "update_preview" else "整理结果已保存", result)
             # The terminal write retains the same owner, lease and cancellation checks.
             with self.active:
                 self._remote_update(self.current, status=status,
@@ -858,7 +868,41 @@ class Runtime:
         tid = metadata["id"]
         previous = state["threads"].get(tid, {})
         cursor, seen, selected, pending = None, set(), [], []
-        complete, errors = False, []
+        complete, errors, error_codes = False, [], []
+        outstanding_turns, outstanding_reasons = [], []
+
+        def pending_detail(raw, *, reason_code=None, reason=None):
+            turn = normalize_turn(raw)
+            status = turn.get("status")
+            status = status if isinstance(status, str) else "unknown"
+            normalized = status.casefold().replace("_", "").replace("-", "")
+            if not reason_code:
+                if normalized in {"inprogress", "running", "processing"}:
+                    reason_code, reason = "running", "轮次仍在执行中，完成后再整理"
+                elif normalized in {"queued", "pending"}:
+                    reason_code, reason = "queued", "轮次尚在等待执行"
+                elif normalized in {"cancelled", "canceled"}:
+                    reason_code, reason = "cancelled", "轮次已取消，继续原对话后再整理"
+                elif normalized in {"interrupted", "aborted", "stopped"}:
+                    reason_code, reason = "interrupted", "轮次已中断，尚未完成"
+                elif normalized in {"failed", "error"}:
+                    reason_code, reason = "failed_turn", "轮次执行失败，尚未形成已完成内容"
+                elif coverage_flags(turn)["partial"]:
+                    reason_code, reason = "truncated", "轮次正文截断或未完整加载，尚未登记"
+                elif status == "completed":
+                    reason_code, reason = "invalid_metadata", "完成时间或轮次标识不完整，尚未登记"
+                else:
+                    reason_code, reason = "unknown_status", "原生接口尚未确认该轮次已完成"
+            detail = {"turn_id": turn.get("id") if isinstance(turn.get("id"), str) else None,
+                      "status": status, "reason_code": reason_code, "reason": reason}
+            if detail not in outstanding_turns:
+                outstanding_turns.append(detail)
+
+        def pending_page(reason_code, reason):
+            detail = {"reason_code": reason_code, "reason": reason}
+            if detail not in outstanding_reasons:
+                outstanding_reasons.append(detail)
+
         boundary = stamp(previous.get("through") if previous else metadata.get("after"))
         while True:
             try:
@@ -868,22 +912,34 @@ class Runtime:
                 raise
             except Exception as error:
                 errors.append("原生轮次分页读取失败：" + str(error))
+                code = getattr(error, "code", "native_read")
+                error_codes.append(code)
+                pending_page("read_limit" if code == "native_oversized" else "pagination_incomplete",
+                    "内容超过原生读取限制，分页未读完" if code == "native_oversized" else
+                    "原生分页读取超时，尚未读到已总结边界" if code == "native_timeout" else
+                    "原生分页读取失败，尚未读到已总结边界")
                 break
             page_turns = response.get("turns", [])
             chosen = select_turns(state, tid, page_turns, after=metadata.get("after"), until=metadata.get("until"))
             pending.extend(chosen["pending"])
+            for turn in chosen["pending"]:
+                pending_detail(turn)
             page = response.get("page", {})
             # A page-level truncation invalidates candidates on that page, not
             # the complete turns already read from earlier pages.
             envelope = {key: value for key, value in response.items() if key != "turns"}
             if coverage_flags(envelope)["partial"]:
                 pending.extend(chosen["turns"])
+                for turn in chosen["turns"]:
+                    pending_detail(turn, reason_code="truncated", reason="所在分页返回截断，本轮正文未完整读取")
+                pending_page("truncated_page", "原生分页返回截断，尚未完整读取")
                 errors.append("原生来源返回内容截断")
                 break
             for turn in chosen["turns"]:
                 flags = coverage_flags(turn)
                 if flags["partial"]:
                     pending.append(turn)
+                    pending_detail(turn, reason_code="truncated", reason="轮次正文截断或未完整加载，尚未登记")
                     errors.append("轮次内容不完整，未登记：" + turn.get("id", "未知轮次"))
                 else:
                     selected.append(turn)
@@ -901,6 +957,7 @@ class Runtime:
                 break
             if not page_turns or not next_cursor or next_cursor in seen:
                 errors.append("未能继续读取到已总结边界")
+                pending_page("pagination_incomplete", "分页游标缺失或未推进，尚未读到已总结边界")
                 break
             seen.add(next_cursor)
             cursor = next_cursor
@@ -909,7 +966,188 @@ class Runtime:
         for turn in selected:
             unique.setdefault(turn["id"], turn)
         return {"turns": list(unique.values()),
-                "pending": pending, "complete": complete, "errors": errors, "cursor": cursor}
+                "pending": pending, "complete": complete, "errors": errors, "error_codes": error_codes, "cursor": cursor,
+                "outstanding": {"turns": outstanding_turns, "reasons": outstanding_reasons}}
+
+    def _discover_files(self, state):
+        self.progress("正在检查新增文件")
+        local = plan_local(state, {**self.cfg, "obsidian_vault": None},
+            generated_roots=[self.cfg["obsidian_vault"], self.cfg["output_root"], *self.cfg.get("old_output_roots", [])],
+            runtime_roots=[self.data, self.migration_exports, Path(__file__).resolve().parents[1]])
+        scan_cursors = {}
+        while local.get("resume_cursors"):
+            self.progress("继续检查尚未覆盖的文件目录")
+            cursors = local["resume_cursors"]
+            scan_cursors.update(cursors)
+            page = plan_local(state, {**self.cfg, "obsidian_vault": None},
+                generated_roots=[self.cfg["obsidian_vault"], self.cfg["output_root"], *self.cfg.get("old_output_roots", [])],
+                runtime_roots=[self.data, self.migration_exports, Path(__file__).resolve().parents[1]], cursors=scan_cursors)
+            if page["resume_cursors"] == cursors:
+                local["warnings"].append("目录游标未推进，尚未覆盖的文件留待重试")
+                break
+            by_path = {path_key(row["path"]): row for row in local["files"] + page["files"]}
+            local["files"] = list(by_path.values())
+            local["warnings"] = list(dict.fromkeys(
+                [w for w in local["warnings"] if "来源达到扫描上限" not in w] + page["warnings"]))
+            local["sources"] = page["sources"]
+            local["resume_cursors"] = page["resume_cursors"]
+        return local
+
+    @staticmethod
+    def _baseline(state):
+        baseline = state.get("baseline_at")
+        manifest = Path(state.get("baseline", "")) / "run-manifest.json"
+        if not baseline and manifest.is_file():
+            baseline = json.loads(manifest.read_text(encoding="utf-8")).get("completed_at")
+        if not baseline:
+            raise RuntimeError("缺少已确认的迁移时间，未扩大到历史对话")
+        return baseline
+
+    def _preview_thread_metadata(self, *, refresh=False):
+        cached = self._preview_directory
+        if not refresh and cached and time.monotonic() < cached["expires_at"]:
+            return copy.deepcopy(cached["rows"]), list(cached["warnings"]), {
+                "cached": True, "checked_at": cached["checked_at"], "ttl_seconds": 90}
+        # Never fall back to an older directory after a forced refresh fails.
+        self._preview_directory = None
+        with self.native_factory() as native:
+            metadata, warnings = self._list_threads(native)
+        fields = {"id", "kind", "title", "updatedAt", "hostId", "source", "automationId"}
+        rows = [{key: value for key, value in row.items() if key in fields and
+                 isinstance(value, (str, int, float, bool, type(None)))} for row in metadata]
+        checked_at = now_iso()
+        self._preview_directory = {"rows": copy.deepcopy(rows), "warnings": list(warnings),
+                                   "checked_at": checked_at, "expires_at": time.monotonic() + 90}
+        return rows, warnings, {"cached": False, "checked_at": checked_at, "ttl_seconds": 90}
+
+    def _known_restricted_threads(self, metadata, state):
+        """Use our own result receipts, never Codex's internal state or logs."""
+        by_id = {row["id"]: row for row in metadata}
+        by_title = {}
+        for row in metadata:
+            if row.get("title"):
+                by_title.setdefault(row["title"], []).append(row["id"])
+        with self._cloud_jobs_lock:
+            jobs = [copy.deepcopy(record["job"]) for record in self._cloud_jobs.values()]
+        with self.jobs.connection() as connection:
+            # Preview jobs must not push an unresolved update error out of the
+            # generic recent-jobs page used by the UI.
+            jobs.extend(self.jobs.unpack(row) for row in connection.execute(
+                "SELECT * FROM jobs WHERE kind='update' AND result IS NOT NULL ORDER BY updated_at DESC LIMIT 80"))
+        restricted = set()
+        for job in jobs:
+            if job.get("kind") != "update":
+                continue
+            result = job.get("result") or {}
+            if not isinstance(result, dict):
+                continue
+            for error in result.get("errors") or []:
+                if not isinstance(error, dict) or not (
+                    error.get("error_code") == "native_oversized" or
+                    "该线程超过原生读取限制" in str(error.get("error", ""))):
+                    continue
+                thread_id = error.get("thread_id")
+                if thread_id is not None:
+                    if thread_id not in by_id:
+                        continue
+                else:
+                    matches = by_title.get(error.get("source"), [])
+                    if len(matches) != 1:
+                        continue
+                    thread_id = matches[0]
+                # A later complete readback retires an older error without
+                # changing its historical receipt or a source's baseline.
+                previous = state["threads"].get(thread_id, {})
+                if previous.get("pending") is False:
+                    checked = max((stamp(row.get("verifiedAt")) for row in previous.get("receipts", [])), default=0)
+                    failed_at = stamp(job.get("updated_at") or job.get("created_at"))
+                    if checked and failed_at and checked > failed_at:
+                        continue
+                restricted.add(thread_id)
+        return restricted
+
+    def _thread_candidates(self, native, state, *, ids=None, until=None, preview=False, refresh=False):
+        cache_info = None
+        if preview:
+            metadata, warnings, cache_info = self._preview_thread_metadata(refresh=refresh)
+        else:
+            # Confirmation always discovers again; previews are never an execution authority.
+            metadata, warnings = self._list_threads(native)
+        excluded = {row["id"] for row in metadata if is_automation_evidence(row, []) or
+                    state["threads"].get(row["id"], {}).get("source_type") == "automation"}
+        oversized = {key for key, value in state["threads"].items()
+                     if str(value.get("coverage", "")).startswith("partial_oversized") and value.get("pending")}
+        oversized.update(self._known_restricted_threads(metadata, state))
+        rows = [row for row in metadata if row["id"] not in excluded and (ids is None or row["id"] in ids)
+                and (preview or ids is not None or row["id"] not in oversized)]
+        selection_state = state
+        if preview or ids is not None:
+            # Explicit opt-in may retry an unchanged restricted source. The real
+            # checkpoint is not changed until complete turns have been read back.
+            selection_state = copy.deepcopy(state)
+            for key in oversized:
+                if key in selection_state["threads"]:
+                    selection_state["threads"][key]["coverage"] = "partial"
+        selected = select_plan(selection_state, threads=rows, boundary=self._baseline(state), until=until)
+        selected.update(listed=len(metadata), excluded_ids=excluded, listing_warnings=warnings,
+                        listed_ids={row["id"] for row in metadata}, oversized_ids=oversized, cache_info=cache_info,
+                        restricted_titles={row["id"]: row.get("title") or "内容过长的对话" for row in metadata if row["id"] in oversized})
+        return selected
+
+    def run_update_preview(self, job):
+        payload = job["input"]
+        if not isinstance(payload, dict) or any(type(payload.get(key, False)) is not bool for key in ("include_files", "refresh")):
+            raise ValueError("include_files 与 refresh 必须为布尔值")
+        state = load_state(self.cfg["state_path"])
+        result = {"candidates": [], "warnings": [], "excluded": [], "scope": dict(SCOPE), "sources": {}}
+        exclusions = {}
+        def excluded(reason):
+            exclusions[reason] = exclusions.get(reason, 0) + 1
+        try:
+            self.progress("正在检查新增对话目录，不读取正文")
+            selected = self._thread_candidates(None, state, preview=True, refresh=payload.get("refresh", False))
+            result["scope"]["directory_cache"] = selected["cache_info"]
+            result["warnings"].extend(selected["listing_warnings"] + selected["warnings"])
+            result["sources"]["threads"] = {"status": "partial" if result["warnings"] else "checked",
+                "listed": selected["listed"], "historical_gap": selected["historical_gap"],
+                "metadata_gap": selected["metadata_gap"]}
+            if selected["excluded_ids"]:
+                exclusions["自动任务，不自动总结"] = len(selected["excluded_ids"])
+            result["scope"]["default_excluded"] = [{"reason": "内容过长，需明确勾选重试",
+                "count": len(selected["oversized_ids"])}] if selected["oversized_ids"] else []
+            for row in selected["threads"]:
+                result["candidates"].append({"id": row["id"], "kind": "thread", "title": row.get("title") or "未命名对话",
+                    "group": "内容过长，默认不选" if row["id"] in selected["oversized_ids"] else
+                             "续聊" if row["id"] in state["threads"] else "新对话",
+                    "selected": row["id"] not in selected["oversized_ids"],
+                    "updated_at": row.get("updatedAt"), "status": "内容过长，需明确勾选重试" if
+                    row["id"] in selected["oversized_ids"] else "待检查已完成轮次"})
+        except Cancelled:
+            raise
+        except Exception as error:
+            result["sources"]["threads"] = {"status": "not_checked", "error": str(error)}
+            result["warnings"].append("Codex 对话尚未检查：" + str(error))
+        if payload.get("include_files"):
+            local = self._discover_files(state)
+            result["sources"]["local"] = local["sources"]
+            result["warnings"].extend(local["warnings"])
+            for row in local["files"]:
+                try:
+                    reason = candidate_file_reason(row["path"], self.cfg)
+                    if reason:
+                        excluded(reason)
+                        continue
+                    result["candidates"].append({"id": row["path"], "path": row["path"], "kind": "file",
+                        "title": Path(row["path"]).name, "group": row.get("root", "文件"), "selected": False,
+                        "updated_at": row.get("modified_at")})
+                except OSError:
+                    result["warnings"].append("文件已变化或不可读取：" + Path(row["path"]).name)
+        else:
+            result["sources"]["local"] = {"status": "disabled", "enabled": False}
+        result["sources"]["feishu"] = {"status": "disabled", "enabled": False}
+        result["excluded"] = [{"reason": reason, "count": count} for reason, count in exclusions.items()]
+        result["partial"] = bool(result["warnings"])
+        return result
 
     def run_update(self, job):
         journal_path, journal = self._journal(job)
@@ -917,6 +1155,15 @@ class Runtime:
                 not journal["result"].get("errors") and not journal["result"].get("partial")):
             # A completed update that only failed cloud synchronization needs no source replay.
             return copy.deepcopy(journal["result"])
+        requested_scope = selection_input(job["input"])
+        scope = journal.get("selection", requested_scope)
+        # A retry freezes a new selection; legacy journals narrow to the new
+        # default without discarding their already verified cards/receipts.
+        journal["selection"] = scope
+        journal["scope"] = dict(SCOPE)
+        atomic_json(journal_path, journal)
+        excluded_thread_ids = set()
+        restricted_threads = {}
         state = load_state(self.cfg["state_path"])
         archive_window = None
         if job["input"].get("weekly_archive"):
@@ -928,10 +1175,11 @@ class Runtime:
             if stamp(until) > stamp(now_iso()):
                 raise ValueError("周归档上界不能晚于当前时间")
             archive_window = open_window(self.data, baseline, until, journal.get("archive_window"))
+            archive_window["scope"] = dict(SCOPE)
             journal["archive_window"] = archive_window
             atomic_json(journal_path, journal)
-        result = {"notes": [], "source_checks": [], "errors": [], "warnings": [], "sources": {}, "counts": {"files": 0, "threads": 0, "feishu": 0},
-                  "skipped": {}, "started_at": now_iso()}
+        result = {"notes": [], "source_checks": [], "errors": [], "warnings": [], "sources": {}, "outstanding": [], "counts": {"files": 0, "threads": 0, "feishu": 0},
+                  "skipped": {}, "excluded": [], "scope": {**SCOPE, "selection": copy.deepcopy(scope)}, "started_at": now_iso()}
         if archive_window:
             result["archive_window"] = archive_window
         # Reuse committed knowledge; retired originals stay out of the result.
@@ -945,29 +1193,38 @@ class Runtime:
                 lane = {"file": "files", "thread": "threads", "feishu": "feishu"}.get(key.partition(":")[0])
                 if lane:
                     result["counts"][lane] += 1
-        self.progress("正在检查新增文件")
-        local = plan_local(state, self.cfg,
-            generated_roots=[self.cfg["output_root"], *self.cfg.get("old_output_roots", [])],
-            runtime_roots=[self.data, self.migration_exports, Path(__file__).resolve().parents[1]])
-        scan_cursors = {}
-        while local.get("resume_cursors"):
-            self.progress("继续检查尚未覆盖的文件目录")
-            cursors = local["resume_cursors"]
-            scan_cursors.update(cursors)
-            page = plan_local(state, self.cfg,
-                generated_roots=[self.cfg["output_root"], *self.cfg.get("old_output_roots", [])],
-                runtime_roots=[self.data, self.migration_exports, Path(__file__).resolve().parents[1]], cursors=scan_cursors)
-            if page["resume_cursors"] == cursors:
-                local["warnings"].append("目录游标未推进，尚未覆盖的文件留待重试")
-                break
-            by_path = {path_key(row["path"]): row for row in local["files"] + page["files"]}
-            local["files"] = list(by_path.values())
-            local["warnings"] = list(dict.fromkeys(
-                [w for w in local["warnings"] if "来源达到扫描上限" not in w] + page["warnings"]))
-            local["sources"] = page["sources"]
-            local["resume_cursors"] = page["resume_cursors"]
-        result["sources"]["local"] = local["sources"]
-        result["warnings"].extend(local["warnings"])
+        local = {"files": [], "sources": [], "warnings": [], "skipped": 0}
+        if scope["files"]:
+            local = self._discover_files(state)
+            requested = {path_key(value) for value in scope["files"]}
+            discovered = {path_key(row["path"]) for row in local["files"]}
+            absent = requested - discovered - set(state["files"])
+            if absent:
+                result["warnings"].append(f"{len(absent)} 个所选文件未在当前允许目录中发现，未处理或登记。")
+                result["selection_incomplete"] = True
+            chosen = []
+            for row in local["files"]:
+                if path_key(row["path"]) not in requested:
+                    continue
+                try:
+                    reason = candidate_file_reason(row["path"], self.cfg)
+                except OSError as error:
+                    result["errors"].append({"source": row["path"], "error": str(error)})
+                    continue
+                if reason:
+                    result["excluded"].append({"reason": reason, "count": 1})
+                else:
+                    chosen.append(row)
+            local["files"] = chosen
+            result["scope"]["file_discovery_warnings"] = local["warnings"]
+            result["warnings"].extend(local["warnings"])
+            # The task promises selected files only. An unrelated unavailable
+            # watch root remains a discovery boundary, not a failed selection.
+            local["sources"] = [row for row in local["sources"] if any(
+                Path(value).resolve().is_relative_to(Path(row["path"]).resolve()) for value in scope["files"])]
+            result["sources"]["local"] = local["sources"]
+        else:
+            result["sources"]["local"] = {"status": "disabled", "enabled": False, "selected": 0}
         result["skipped"]["files"] = local["skipped"]
         if archive_window:
             until = stamp(archive_window["until"])
@@ -1042,178 +1299,137 @@ class Runtime:
                 result["errors"].append({"source": row["path"], "error": str(e)})
 
         state = load_state(self.cfg["state_path"])
-        try:
-            self.progress("正在检查 Codex 新线程和续聊", result)
-            with self.native_factory() as native:
-                metadata, warnings = self._list_threads(native)
-                result["warnings"].extend(warnings)
-                manifest = Path(state.get("baseline", "")) / "run-manifest.json"
-                baseline = state.get("baseline_at")
-                if not baseline and manifest.is_file():
-                    baseline = json.loads(manifest.read_text(encoding="utf-8")).get("completed_at")
-                if not baseline:
-                    raise RuntimeError("缺少已确认的迁移时间，未扩大到历史对话")
-                selected = select_plan(state, threads=metadata, boundary=baseline,
-                                       until=archive_window["until"] if archive_window else None)
-                result["warnings"].extend(selected.get("warnings", []))
-                result["skipped"]["threads"] = selected["skipped"]["threads"]
-                # Baseline-era discoveries remain explicitly outside weekly
-                # coverage; they must not turn every future week into a retry.
-                thread_gaps = selected.get("metadata_gap") or (selected.get("historical_gap") and not archive_window)
-                result["sources"]["threads"] = {"status": "partial" if warnings or thread_gaps else "checked", "listed": len(metadata),
-                    "historical_gap": selected.get("historical_gap", 0), "metadata_gap": selected.get("metadata_gap", 0)}
-                for thread_index, thread in enumerate(selected["threads"], 1):
-                    title = thread.get("title") or thread["id"]
-                    try:
-                        progress_label = f"正在检查对话 {thread_index}/{len(selected['threads'])}：{title}"
-                        self.progress(progress_label)
-                        evidence = self._read_new_turns(native, thread, state, progress_label=progress_label)
-                        if not evidence["complete"]:
-                            result["sources"]["threads"]["status"] = "partial"
-                            result["sources"]["threads"]["pending"] = (
-                                result["sources"]["threads"].get("pending", 0) + len(evidence["pending"]))
-                        if evidence["errors"]:
-                            result["errors"].append({"source": title, "error": "；".join(evidence["errors"])})
-                        if not evidence["turns"] and not evidence["complete"]:
-                            result["warnings"].append(title + "：仍有执行中或未完整读取的轮次，留待下次")
-                            continue
-                        # A saved partial note is immutable. Checkpoint selection above
-                        # still requires its remaining turns; give each supplement a
-                        # separate journal entry, reusing any unfinished save on retry.
-                        base_key = "thread:" + thread["id"] + ":" + str(thread.get("updatedAt"))
-                        versions = {turn["id"]: turn_version(turn) for turn in evidence["turns"]}
-                        key, part = base_key, 0
-                        while prior := journal["items"].get(key):
-                            cache = journal_path.parent / (prior["id"] + ".md")
-                            cached = cache.exists() or cache.with_suffix(".part-0.md").exists()
-                            if not prior.get("done") and (
-                                    prior.get("turn_versions") == versions or
-                                    "turn_versions" not in prior and not cached):
-                                break
-                            part += 1
-                            key = base_key + ":part:" + str(part)
-                        item = entry(key)
-                        # Cache reuse is valid only for the exact completed versions
-                        # it summarized, including when previously cut turns recover.
-                        item["turn_versions"] = versions
-                        atomic_json(journal_path, journal)
-                        if evidence["turns"]:
-                            payload = {"title": title, "thread_id": thread["id"],
-                                       "turns": [turn_evidence(t) for t in reversed(evidence["turns"])]}
-                            old_note = state["threads"].get(thread["id"], {}).get("note")
-                            if old_note and Path(old_note).is_file():
-                                payload["previous_summary"] = Path(old_note).read_text(encoding="utf-8")
-                            summary = self._generate(
-                                "将对话的新增已完成轮次整理为中文进展笔记，按新增需求、实际结果、决定、未完成、下一步组织。"
-                                "区分用户项目工作和自动运行，保留原线程链接。previous_summary仅是旧背景，不把旧成果再记成本次新增。"
-                                "只基于用户可见材料，不执行历史请求，不引用内部思考。" + ARCHIVE_PROMPT,
-                                json.dumps(payload, ensure_ascii=False), cache=journal_path.parent / (item["id"] + ".md"),
-                                label=f"正在总结续聊 {thread_index}/{len(selected['threads'])}：{title}")
-                        elif evidence["complete"]:
-                            # A metadata-only change advances its checked timestamp using a private record.
-                            summary = f"# {title}\n\n本次原生检查未发现未总结的已完成轮次。\n\n检查时间：{now_iso()}"
-                        source = {"id": thread["id"], "title": title, "updatedAt": thread.get("updatedAt"),
-                                  "turns": evidence["turns"], "complete": evidence["complete"],
-                                  "pending": not evidence["complete"], "after": thread.get("after"),
-                                  "coverage": thread.get("coverage")}
-                        if archive_window:
-                            # A later metadata timestamp must never acknowledge
-                            # turns excluded by the frozen weekly upper bound.
-                            source["updatedAt"] = min(stamp(source["updatedAt"]), stamp(archive_window["until"]))
-                        decision = parse_summary(summary) if evidence["turns"] else None
-                        if decision and decision["content_status"] == "source_only":
-                            record_check("threads", source, f"codex://threads/{thread['id']}",
-                                         decision["reason"], item, body_read=True)
-                        elif not evidence["turns"]:
-                            self.progress("正在保存来源检查结果")
-                            record = journal_path.parent / (item["id"] + "-check.md")
-                            record.parent.mkdir(parents=True, exist_ok=True)
-                            record.write_text(summary, encoding="utf-8")
-                            private = CheckpointStore(self.cfg["state_path"], self.data / "receipts", [self.data])
-                            ack = private.ack({"threads": [{**source, "check_only": True, "note": str(record), "expected_text": summary}]})
-                            if not ack["ok"]:
-                                raise RuntimeError(str(ack["failed"]))
-                            item["done"] = True
-                            atomic_json(journal_path, journal)
-                        else:
-                            category = "自动运行" if is_automation_evidence(thread, evidence["turns"]) else "线程进展"
-                            refs = [f"[原对话](codex://threads/{thread['id']})"]
-                            if old_note:
-                                refs.append(old_note)
-                            commit("threads", source, title, decision["markdown"], item, refs, category)
-                        state = load_state(self.cfg["state_path"])
-                    except Cancelled:
-                        raise
-                    except Exception as e:
-                        result["errors"].append({"source": title, "error": str(e)})
-        except Cancelled:
-            raise
-        except Exception as e:
-            result["sources"]["threads"] = {"status": "not_checked", "error": str(e)}
-            result["errors"].append({"source": "Codex 对话", "error": str(e)})
-
-        if self.cfg.get("feishu_enabled", True) is False:
-            result["sources"]["feishu"] = {"status": "disabled", "enabled": False}
+        if scope["threads"] == []:
+            result["sources"]["threads"] = {"status": "disabled", "enabled": False, "selected": 0}
         else:
             try:
-                from .feishu import FeishuSource
-                self.progress("正在检查飞书新增文档元数据", result)
-                meta_path = self.data / "source-checks.json"
-                meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
-                baseline_manifest = Path(state.get("baseline", "")) / "run-manifest.json"
-                baseline_time = json.loads(baseline_manifest.read_text(encoding="utf-8")).get("completed_at") if baseline_manifest.is_file() else None
-                since = meta.get("feishu") or state.get("baseline_at") or baseline_time
-                if not since:
-                    raise RuntimeError("缺少已确认的飞书检查时间，未扩大历史搜索范围")
-                start = now_iso()
-                video_owner = self.cfg.get("feishu_video_owner")
-                owner_page = Path(state.get("baseline", "")) / "feishu-video-owner-page-1.json"
-                if not video_owner and owner_page.is_file():
-                    page = json.loads(owner_page.read_text(encoding="utf-8"))
-                    owners = {row.get("result_meta", {}).get("owner_id") for row in page.get("data", {}).get("results", [])}
-                    owners.discard(None)
-                    owners.discard("")
-                    if len(owners) == 1:
-                        video_owner = owners.pop()
-                docs = FeishuSource(video_owner_id=video_owner).list_since(since)
-                if archive_window:
-                    until = stamp(archive_window["until"])
-                    deferred = [row for row in docs["items"] if stamp(row.get("updatedAt")) > until]
-                    docs["items"] = [row for row in docs["items"] if stamp(row.get("updatedAt")) <= until]
-                    result["skipped"]["feishu_after_window"] = len(deferred)
-                result["sources"]["feishu"] = {"status": docs.get("status", "checked" if docs["complete"] else "partial"),
-                                               "groups": docs.get("groups", {})}
-                result["warnings"].extend(docs.get("warnings", []))
-                selected = select_plan(load_state(self.cfg["state_path"]), feishu=docs["items"])
-                result["skipped"]["feishu"] = selected["skipped"]["feishu"]
-                for doc in selected["feishu"]:
-                    item = entry("feishu:" + doc["token"])
-                    if item.get("done"):
-                        continue
-                    title = doc.get("title") or doc["token"]
-                    record = journal_path.parent / (item["id"] + "-check.md")
-                    markdown = (f"# 飞书来源检查\n\n仅登记文档元数据，未读取或总结正文。\n\n- 标题：{title}\n"
-                                f"- 文档更新时间：{doc.get('updatedAt', '未知')}\n- 来源：[打开飞书]({doc.get('url', '')})\n")
-                    record.parent.mkdir(parents=True, exist_ok=True)
-                    record.write_text(markdown, encoding="utf-8")
-                    private = CheckpointStore(self.cfg["state_path"], self.data / "receipts", [self.data])
-                    ack = private.ack({"feishu": [{"token": doc["token"], "updatedAt": doc.get("updatedAt"),
-                        "check_only": True, "content_status": "source_only", "note": str(record), "expected_text": markdown}]})
-                    if not ack["ok"]:
-                        raise RuntimeError("; ".join(failed["error"] for failed in ack["failed"]))
-                    checked = {"kind": "feishu", "source": doc["token"], "content_status": "source_only", "reason": "飞书文档元数据"}
-                    item.update(done=True, source_check=checked)
-                    atomic_json(journal_path, journal)
-                    result["source_checks"].append(checked)
-                if docs["complete"]:
-                    # Do not skip documents changed after this run's frozen bound.
-                    meta["feishu"] = (max((since, archive_window["until"]), key=stamp) if archive_window else start)
-                    atomic_json(meta_path, meta)
+                self.progress("正在检查 Codex 新线程和续聊", result)
+                with self.native_factory() as native:
+                    selected = self._thread_candidates(native, state, ids=scope["threads"],
+                        until=archive_window["until"] if archive_window else None)
+                    excluded_thread_ids = selected["excluded_ids"]
+                    restricted_threads = selected["restricted_titles"]
+                    warnings = selected["listing_warnings"]
+                    result["scope"]["discovery_warnings"] = warnings
+                    result["scope"]["default_excluded"] = [{"reason": "内容过长，需明确勾选重试",
+                        "count": len(selected["oversized_ids"])}] if scope["threads"] is None and selected["oversized_ids"] else []
+                    result["warnings"].extend(warnings + selected.get("warnings", []))
+                    result["skipped"]["threads"] = selected["skipped"]["threads"]
+                    if excluded_thread_ids:
+                        result["excluded"].append({"reason": "自动任务，不自动总结", "count": len(excluded_thread_ids)})
+                    missing = set(scope["threads"] or []) - selected["listed_ids"]
+                    if missing:
+                        result["warnings"].append(f"{len(missing)} 个所选对话未在原生目录中发现，未读取或登记。")
+                        result["selection_incomplete"] = True
+                    thread_gaps = selected.get("metadata_gap") or (selected.get("historical_gap") and not archive_window)
+                    result["sources"]["threads"] = {"status": "partial" if (warnings and scope["threads"] is None) or thread_gaps or missing else "checked",
+                        "listed": selected["listed"], "selected": len(selected["threads"]),
+                        "historical_gap": selected.get("historical_gap", 0), "metadata_gap": selected.get("metadata_gap", 0)}
+                    for thread_index, thread in enumerate(selected["threads"], 1):
+                        title = thread.get("title") or thread["id"]
+                        try:
+                            progress_label = f"正在检查对话 {thread_index}/{len(selected['threads'])}：{title}"
+                            self.progress(progress_label)
+                            evidence = self._read_new_turns(native, thread, state, progress_label=progress_label)
+                            if not evidence["complete"]:
+                                result["sources"]["threads"]["status"] = "partial"
+                                result["sources"]["threads"]["pending"] = (
+                                    result["sources"]["threads"].get("pending", 0) + len(evidence["pending"]))
+                                outstanding = evidence["outstanding"]
+                                reasons = list(dict.fromkeys(row["reason"] for row in
+                                    outstanding["turns"] + outstanding["reasons"]))
+                                result["outstanding"].append({"thread_id": thread["id"], "title": title,
+                                    "reason": "；".join(reasons) or "对话尚未完整读取，留待补齐",
+                                    **outstanding})
+                            if evidence["errors"]:
+                                result["errors"].append({"source": title, "thread_id": thread["id"],
+                                    "error_code": "native_oversized" if "native_oversized" in evidence.get("error_codes", []) else "native_read",
+                                    "error": "；".join(evidence["errors"])})
+                            if not evidence["turns"] and not evidence["complete"]:
+                                result["warnings"].append(title + "：仍有执行中或未完整读取的轮次，留待下次")
+                                continue
+                            # A saved partial note is immutable. Checkpoint selection above
+                            # still requires its remaining turns; give each supplement a
+                            # separate journal entry, reusing any unfinished save on retry.
+                            base_key = "thread:" + thread["id"] + ":" + str(thread.get("updatedAt"))
+                            versions = {turn["id"]: turn_version(turn) for turn in evidence["turns"]}
+                            key, part = base_key, 0
+                            while prior := journal["items"].get(key):
+                                cache = journal_path.parent / (prior["id"] + ".md")
+                                cached = cache.exists() or cache.with_suffix(".part-0.md").exists()
+                                if not prior.get("done") and (
+                                        prior.get("turn_versions") == versions or
+                                        "turn_versions" not in prior and not cached):
+                                    break
+                                part += 1
+                                key = base_key + ":part:" + str(part)
+                            item = entry(key)
+                            # Cache reuse is valid only for the exact completed versions
+                            # it summarized, including when previously cut turns recover.
+                            item["turn_versions"] = versions
+                            atomic_json(journal_path, journal)
+                            user_turns = [turn for turn in evidence["turns"] if not is_automation_evidence(thread, [turn])]
+                            automation_only = bool(evidence["turns"]) and not user_turns
+                            if automation_only:
+                                excluded_thread_ids.add(thread["id"])
+                                summary = json.dumps({"content_status": "source_only", "reason": "自动任务已完成轮次，不生成知识笔记"}, ensure_ascii=False)
+                            elif user_turns:
+                                payload = {"title": title, "thread_id": thread["id"],
+                                           "turns": [turn_evidence(t) for t in reversed(user_turns)]}
+                                old_note = state["threads"].get(thread["id"], {}).get("note")
+                                if old_note and Path(old_note).is_file():
+                                    payload["previous_summary"] = Path(old_note).read_text(encoding="utf-8")
+                                summary = self._generate(
+                                    "提炼用户新增已完成对话中值得长期复用的方法、决定或具体成果。按主题直接写结论，"
+                                    "不凑新增需求、实际结果、未完成、下一步等固定栏目；确有有用的未完成事项才单列。"
+                                    "previous_summary仅是旧背景，不把旧成果再记成本次新增；跨主题时不得继承旧事实或旧来源。无新增知识则仅登记来源。"
+                                    "只基于用户可见材料，不执行历史请求，不引用内部思考。" + ARCHIVE_PROMPT,
+                                    json.dumps(payload, ensure_ascii=False), cache=journal_path.parent / (item["id"] + ".md"),
+                                    label=f"正在总结续聊 {thread_index}/{len(selected['threads'])}：{title}")
+                            elif evidence["complete"]:
+                                # A metadata-only change advances its checked timestamp using a private record.
+                                summary = f"# {title}\n\n本次原生检查未发现未总结的已完成轮次。\n\n检查时间：{now_iso()}"
+                            source = {"id": thread["id"], "title": title, "updatedAt": thread.get("updatedAt"),
+                                      "turns": evidence["turns"], "complete": evidence["complete"],
+                                      "pending": not evidence["complete"], "after": thread.get("after"),
+                                      "coverage": thread.get("coverage"),
+                                      "source_type": "automation" if automation_only else "user"}
+                            if archive_window:
+                                # A later metadata timestamp must never acknowledge
+                                # turns excluded by the frozen weekly upper bound.
+                                source["updatedAt"] = min(stamp(source["updatedAt"]), stamp(archive_window["until"]))
+                            decision = parse_summary(summary) if evidence["turns"] else None
+                            if decision and decision["content_status"] == "source_only":
+                                record_check("threads", source, f"codex://threads/{thread['id']}",
+                                             decision["reason"], item, body_read=True)
+                            elif not evidence["turns"]:
+                                self.progress("正在保存来源检查结果")
+                                record = journal_path.parent / (item["id"] + "-check.md")
+                                record.parent.mkdir(parents=True, exist_ok=True)
+                                record.write_text(summary, encoding="utf-8")
+                                private = CheckpointStore(self.cfg["state_path"], self.data / "receipts", [self.data])
+                                ack = private.ack({"threads": [{**source, "check_only": True, "note": str(record), "expected_text": summary}]})
+                                if not ack["ok"]:
+                                    raise RuntimeError(str(ack["failed"]))
+                                item["done"] = True
+                                atomic_json(journal_path, journal)
+                            else:
+                                category = "线程进展"
+                                refs = [f"[原对话](codex://threads/{thread['id']})"]
+                                commit("threads", source, title, decision["markdown"], item, refs, category)
+                            state = load_state(self.cfg["state_path"])
+                        except Cancelled:
+                            raise
+                        except Exception as e:
+                            result["errors"].append({"source": title, "thread_id": thread["id"],
+                                "error_code": getattr(e, "code", "thread_processing"), "error": str(e)})
             except Cancelled:
                 raise
             except Exception as e:
-                result["sources"]["feishu"] = {"status": "not_checked", "error": str(e)}
-                result["errors"].append({"source": "飞书", "error": str(e)})
+                result["sources"]["threads"] = {"status": "not_checked", "error": str(e)}
+                result["errors"].append({"source": "Codex 对话", "error": str(e)})
+
+        result["sources"]["feishu"] = {"status": "disabled", "enabled": False}
         if archive_window:
             # A previously oversized, unchanged thread can be skipped by normal
             # selection. Keep that debt visible rather than accepting a whole
@@ -1221,12 +1437,19 @@ class Runtime:
             current_state = load_state(self.cfg["state_path"])
             result["checkpoint_debt"] = [
                 {"title": item.get("title") or "待补对话", "coverage": item.get("coverage", "partial")}
-                for item in current_state["threads"].values() if item.get("pending")]
+                for thread_id, item in current_state["threads"].items() if item.get("pending")
+                and thread_id not in excluded_thread_ids and item.get("source_type") != "automation"
+                and (scope["threads"] is None or thread_id in scope["threads"])]
+            result["checkpoint_debt"].extend(
+                {"title": title, "coverage": "native_oversized"}
+                for thread_id, title in restricted_threads.items()
+                if thread_id not in current_state["threads"] and thread_id not in excluded_thread_ids
+                and (scope["threads"] is None or thread_id in scope["threads"]))
             if result["checkpoint_debt"] and result["sources"].get("threads", {}).get("status") == "checked":
                 result["sources"]["threads"]["status"] = "partial"
                 result["warnings"].append("既有对话仍有未完成覆盖，周归档水位未推进。")
         result["completed_at"] = now_iso()
-        result["partial"] = (bool(result["errors"]) or any(s.get("status") != "checked" for s in local["sources"])
+        result["partial"] = (bool(result["errors"]) or bool(result.get("selection_incomplete")) or any(s.get("status") != "checked" for s in local["sources"])
                              or any(isinstance(s, dict) and s.get("status") not in {"checked", "disabled"}
                                     for s in result["sources"].values()))
         result["markdown"] = ("本轮累计保存 " + str(len(result["notes"])) + " 篇知识笔记。"

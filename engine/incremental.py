@@ -516,6 +516,8 @@ class CheckpointStore:
                                 previous["through"] = max(stamp(previous["through"]), max((stamp(t["startedAt"]) for t in turns), default=0))
                             if "title" in item:
                                 previous["title"] = item["title"]
+                            if item.get("source_type") in {"user", "automation"}:
+                                previous["source_type"] = item["source_type"]
                         record_path = self.receipt_dir / f"{receipt_id}.json"
                         atomic_json(record_path, {**record, "status": "verified", "checkpoint_committed": False})
                         atomic_json(self.path, candidate)

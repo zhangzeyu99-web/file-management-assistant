@@ -125,7 +125,7 @@ async function handler(req:Request) {
     }
     if(path==="jobs"&&req.method==="POST") {
       const data=await req.json() as any;
-      if(!["update","answer","context","ingest","migration_export"].includes(data.kind))return json({error:"不支持的操作"},400);
+      if(!["update","update_preview","answer","context","ingest","migration_export"].includes(data.kind))return json({error:"不支持的操作"},400);
       if(data.kind==="migration_export" && data.request_id && !/^[a-zA-Z0-9-]{10,80}$/.test(data.request_id))return json({error:"请求标识无效"},400);
       if(JSON.stringify(data).length>180000)return json({error:"文字过长，请通过文件上传"},413);
       return json(await createJob(data.kind,data.input||{},data.request_id),202);

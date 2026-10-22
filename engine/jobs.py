@@ -43,7 +43,7 @@ class JobStore:
         return item
 
     def create(self, kind, payload, request_id=None):
-        if kind not in {"update", "answer", "context", "ingest", "migration_export"}:
+        if kind not in {"update", "update_preview", "answer", "context", "ingest", "migration_export"}:
             raise ValueError("不支持的任务类型")
         now = int(time.time() * 1000)
         key = kind if kind in {"update", "migration_export"} else None
