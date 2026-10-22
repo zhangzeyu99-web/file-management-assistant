@@ -111,11 +111,13 @@ export function updateJobView(job: UpdateJob, jobs: UpdateJob[], notes?: readonl
     return item.thread_id && failed.thread_id ? item.thread_id === failed.thread_id : sourceLabel(item.title) === sourceLabel(failed.source);
   })).map(item => {
     const reasons = codes(item);
-    const action = reasons.includes("read_limit") ? "当前无法自动补齐；可通过“添加资料”收录所需内容。"
+    const reason = typeof item.reason === "string" ? item.reason : "还有未完成的对话内容。";
+    const action = reasons.every(code => waitForSource.has(code)) && /(?:完成后|继续原对话后)再整理/.test(reason) ? ""
+      : reasons.includes("read_limit") ? "当前无法自动补齐；可通过“添加资料”收录所需内容。"
       : reasons.some(code => ["pagination_incomplete", "truncated_page", "truncated", "invalid_metadata"].includes(code)) ? "重新读取后补充，已完成内容保留。"
       : reasons.some(code => ["interrupted", "cancelled", "failed_turn"].includes(code)) ? "继续原对话后再补充，已完成内容保留。"
       : "原对话完成后再补充，已完成内容保留。";
-    return {source: sourceLabel(item.title), reason: typeof item.reason === "string" ? item.reason : "还有未完成的对话内容。", action};
+    return {source: sourceLabel(item.title), reason, action};
   })];
   const scopes = record(result.sources), threads = record(scopes.threads);
   const coverage: string[] = [];

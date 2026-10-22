@@ -162,6 +162,10 @@ test("named unfinished conversations show the real cause without an ineffective 
   assert.doesNotMatch(text,/重试未完成来源/);
   const page = {...job,result:{...job.result,outstanding:[{thread_id:"thread-a",title:"项目甲讨论",reason:"分页读取中断。",reasons:[{reason_code:"pagination_incomplete"}]}]}};
   assert.equal(updateJobView(page,[]).canRetry,true);
+  const running = {...job,result:{...job.result,outstanding:[{thread_id:"thread-a",title:"项目甲讨论",reason:"轮次仍在执行中，完成后再整理",turns:[{reason_code:"running"}]}]}};
+  const runningText=renderedText(UpdateResult({job:running,jobs:[],onOpenJob(){},onRetry(){},onOpenNote(){}}));
+  assert.equal((runningText.match(/完成后再整理/g)||[]).length,1);
+  assert.doesNotMatch(runningText,/原对话完成后再补充/);
 });
 function elements(node, type) {
   if (Array.isArray(node)) return node.flatMap(item => elements(item, type));

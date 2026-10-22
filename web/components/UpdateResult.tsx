@@ -35,7 +35,7 @@ export default function UpdateResult({ job, jobs, notes, historical = [], unavai
     {view.notes.length > 0 && <section className="written-notes"><h3>已完成</h3>{noteLinks(view.notes.slice(0, 5))}
       {view.notes.length > 5 && <details><summary>查看全部 {view.notes.length} 篇成果</summary>{noteLinks(view.notes.slice(5))}</details>}
     </section>}
-    {view.pending.length > 0 && <section className="written-notes"><h3>待补 · {view.pending.length} 项</h3>{view.pending.map((item, index) => <div key={index}><div><strong>{item.source}</strong>：{item.reason}</div><div className="muted">{item.action}</div></div>)}</section>}
+    {view.pending.length > 0 && <section className="written-notes"><h3>待补 · {view.pending.length} 项</h3>{view.pending.map((item, index) => <div key={index}><div><strong>{item.source}</strong>：{item.reason}</div>{item.action && <div className="muted">{item.action}</div>}</div>)}</section>}
     {view.canRetry && <><div className="result-actions"><button className="primary-button" onClick={() => onRetry(job)}><RefreshCw size={16} />{view.retryLabel}</button></div><p className="muted">{view.retryHint}</p></>}
     {view.registrationCount > 0 && <details className="scope-details"><summary>已跳过总结 · {view.registrationCount} 项</summary><p className="muted">已按规则登记，不生成知识笔记。</p><ul>{view.registrations.map(group => <li key={group.label}>{group.label} · {group.count} 项</li>)}</ul></details>}
     {view.coverage.length > 0 && <details className="scope-details"><summary>覆盖范围</summary><ul>{view.coverage.map(item => <li key={item}>{item}</li>)}</ul></details>}
