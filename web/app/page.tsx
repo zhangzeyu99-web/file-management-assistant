@@ -5,6 +5,7 @@ import { Archive, ArrowDownToLine, ArrowLeft, ArrowRight, BookOpen, Check, Check
 import Markdown, { answerForExport, citationHref, citationTitle, safeLink } from "@/components/Markdown";
 import MigrationPanel from "@/components/MigrationPanel";
 import { groupJobNotes, locateNoteAnchorWhenReady } from "@/lib/knowledge";
+import { updateResultView } from "@/lib/update-result";
 
 type ThreadLink = { url: string; label: string; thread_id?: string };
 type Source = {
@@ -108,7 +109,7 @@ function issueText(value: unknown): string {
   return item.source ? `${String(item.source)}：${message}` : message;
 }
 function sourceStatus(value: unknown): string {
-  return ({ checked: "已检查", completed: "已完成", partial: "覆盖不完整", unavailable: "目录不可用", not_checked: "未检查", not_connected: "未连接", not_configured: "未配置", failed: "读取失败", pending: "待处理" } as Record<string, string>)[String(value)] || "状态未确认";
+  return ({ checked: "已检查", completed: "已完成", partial: "覆盖不完整", unavailable: "目录不可用", not_checked: "未检查", not_connected: "未连接", not_configured: "未配置", failed: "读取失败", pending: "待处理", disabled: "未启用" } as Record<string, string>)[String(value)] || "状态未确认";
 }
 function download(text: string, filename = "接续内容.md") {
   const url = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
@@ -521,17 +522,18 @@ export default function Workspace() {
     const scope = asRecord(result.sources), thread = asRecord(scope.threads), feishu = asRecord(scope.feishu);
     const local = Array.isArray(scope.local) ? scope.local.map(asRecord) : [];
     const groups = Object.entries(asRecord(feishu.groups));
-    const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+    const updateView = job.kind === "update" ? updateResultView(result) : null;
+    const warnings = updateView?.warnings || (Array.isArray(result.warnings) ? result.warnings : []);
     const errors = Array.isArray(result.errors) ? result.errors : [];
     const skipped = asRecord(result.skipped);
-    const hasScope = local.length || Object.keys(thread).length || Object.keys(feishu).length || warnings.length || errors.length;
+    const hasScope = local.length || Object.keys(thread).length || Object.keys(feishu).length || warnings.length;
     return <>
       {evidence.length > 0 && <details className="answer-sources"><summary>参考资料 · {evidence.length} 条</summary><ol>{evidence.map((item, index) => <li key={item.id || index}><a className="note-link" href={citationHref(item)}><span className="citation-label">{index + 1}</span><span>{citationTitle(item)}</span><ArrowRight size={15} /></a></li>)}</ol></details>}
-      {Boolean(hasScope) && <details className="scope-details"><summary>检查范围与未完成项{errors.length ? ` · ${errors.length} 项失败` : job.status === "partial" ? " · 覆盖不完整" : ""}</summary>
-        {errors.length > 0 && <section className="scope-group"><h3>未完成项</h3><ul className="issue-list">{errors.map((item, index) => <li key={index}>{issueText(item)}</li>)}</ul></section>}
-        {Object.keys(skipped).length > 0 && <p className="scope-counts muted">已处理并跳过：{[["files", "文件"], ["threads", "线程"], ["feishu", "飞书文档"]].filter(([key]) => typeof skipped[key] === "number").map(([key, label]) => `${label} ${skipped[key]}`).join(" · ") || "按已有检查点保留"}</p>}
+      {errors.length > 0 && <details className="scope-details"><summary>处理失败 · {errors.length} 项</summary><section className="scope-group"><ul className="issue-list">{errors.map((item, index) => <li key={index}>{issueText(item)}</li>)}</ul></section></details>}
+      {Boolean(hasScope) && <details className="scope-details"><summary>来源检查与覆盖范围</summary>
+        {Object.keys(skipped).length > 0 && <p className="scope-counts muted">按增量范围跳过：{[["files", "文件"], ["threads", "线程"], ["feishu", "飞书文档"]].filter(([key]) => typeof skipped[key] === "number").map(([key, label]) => `${label} ${skipped[key]}`).join(" · ") || "按已有检查点保留"}</p>}
         {local.length > 0 && <section className="scope-group"><h3>本地资料</h3><ul>{local.map((item, index) => <li key={String(item.path || index)}><div><strong>{String(item.name || "本地目录")}</strong><span className={`scope-status ${item.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(item.status)}</span></div>{typeof item.enumerated === "number" && <p>本次枚举 {item.enumerated} 个文件{item.coverage === "continued" ? " · 从上次扫描位置继续" : ""}</p>}{item.path ? <small>{String(item.path)}</small> : null}{item.error ? <p className="scope-warning">{issueText(item.error)}</p> : null}</li>)}</ul></section>}
-        {Object.keys(thread).length > 0 && <section className="scope-group"><h3>Codex 对话 <span className={`scope-status ${thread.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(thread.status)}</span></h3><p>{typeof thread.listed === "number" ? `已取得 ${thread.listed} 条线程元数据。` : "本次未确认完整的线程列表。"}</p>{typeof thread.historical_gap === "number" && thread.historical_gap > 0 && <p className="scope-warning">保留历史覆盖缺口 {thread.historical_gap} 条，未记作已完整总结。</p>}{typeof thread.metadata_gap === "number" && thread.metadata_gap > 0 && <p className="scope-warning">{thread.metadata_gap} 条线程元数据不完整，待核实。</p>}{typeof thread.pending === "number" && thread.pending > 0 && <p className="scope-warning">{thread.pending} 个轮次仍在执行或读取不完整，留待下次。</p>}{thread.error ? <p className="scope-warning">{issueText(thread.error)}</p> : null}</section>}
+        {Object.keys(thread).length > 0 && <section className="scope-group"><h3>Codex 对话 <span className={`scope-status ${thread.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(thread.status)}</span></h3><p>{typeof thread.listed === "number" ? `已取得 ${thread.listed} 条线程元数据。` : "本次未确认完整的线程列表。"}</p>{typeof thread.historical_gap === "number" && thread.historical_gap > 0 && <p className="scope-warning">基线前 {thread.historical_gap} 条历史对话未纳入本轮新增，历史覆盖缺口仍保留。</p>}{typeof thread.metadata_gap === "number" && thread.metadata_gap > 0 && <p className="scope-warning">{thread.metadata_gap} 条线程元数据不完整，待核实。</p>}{typeof thread.pending === "number" && thread.pending > 0 && <p className="scope-warning">{thread.pending} 个轮次仍在执行或读取不完整，留待下次。</p>}{thread.error ? <p className="scope-warning">{issueText(thread.error)}</p> : null}</section>}
         {Object.keys(feishu).length > 0 && <section className="scope-group"><h3>飞书文档元数据 <span className={`scope-status ${feishu.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(feishu.status)}</span></h3>{groups.length > 0 && <ul>{groups.map(([key, value]) => {
           const item = asRecord(value);
           return <li key={key}><div><strong>{({ owned: "本人拥有的文档", edited: "近期编辑的文档", video_owner: "视频归档所有者的文档" } as Record<string, string>)[key] || key}</strong><span className={`scope-status ${item.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(item.status)}</span></div>{typeof item.pages === "number" && <p>已读取 {item.pages} 页元数据{item.complete === true ? " · 本组检查完成" : ""}</p>}{item.error ? <p className="scope-warning">{issueText(item.error)}</p> : null}</li>;
@@ -542,7 +544,9 @@ export default function Workspace() {
   }
   function jobPanel(job: Job | undefined, title?: string) {
     if (!job) return <div className="waiting-state"><Loader2 size={18} className="spin" /><span>正在读取任务…</span></div>;
-    const text = resultText(job), active = !TERMINAL.has(job.status);
+    const active = !TERMINAL.has(job.status);
+    const updateView = job.kind === "update" && job.result ? updateResultView(job.result, { active }) : null;
+    const text = updateView ? updateView.summary : resultText(job);
     const citations = job.kind === "answer" && Array.isArray(job.result?.sources) ? job.result.sources as Source[] : undefined;
     const exportText = citations?.length ? answerForExport(text, citations, typeof window === "undefined" ? "" : window.location.origin) : text;
     const canRetry = ["failed", "partial", "cancelled"].includes(job.status);
@@ -551,22 +555,25 @@ export default function Workspace() {
     const sourceCheckCount = Array.isArray(job.result?.source_checks) ? job.result.source_checks.length : 0;
     const notesExpanded = Boolean(expandedJobNotes[job.id]);
     const counts = asRecord(job.result?.counts);
-    const countSummary = [["files", "文件处理"], ["threads", "线程续聊"], ["feishu", "飞书入口（元数据）"]]
+    const countSummary = updateView ? updateView.noteSources : [["files", "文件处理"], ["threads", "线程续聊"], ["feishu", "飞书入口（元数据）"]]
       .filter(([key]) => typeof counts[key] === "number")
       .map(([key, label]) => `${label} ${counts[key]}`).join(" · ");
     return <section className={`job-panel ${job.status}`}><div className="section-heading"><h2>{title || KINDS[job.kind]}</h2><span className={`status-tag ${job.status}`}>{active ? <Loader2 size={13} className="spin" /> : job.status === "completed" ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}{STATUS[job.status] || job.status}</span></div>
-      {(active || job.status !== "completed") && <p className="job-stage" role="status">{job.kind === "answer" && active && online ? "AI 正在整理，可先阅读下方资料。" : job.stage}{active && !online ? " · 等待本机连接" : ""}</p>}
+      {(active || (job.status !== "completed" && !updateView)) && <p className="job-stage" role="status">{job.kind === "answer" && active && online ? "AI 正在整理，可先阅读下方资料。" : job.stage}{active && !online ? " · 等待本机连接" : ""}</p>}
       {job.error && <div className="inline-error" role="alert">{job.error}</div>}
-      {canRetry && <div className="result-actions"><button className="primary-button" onClick={() => void jobAction(job, "retry")}><RefreshCw size={16} />重试未完成部分</button></div>}
+      {canRetry && job.kind !== "update" && <div className="result-actions"><button className="primary-button" onClick={() => void jobAction(job, "retry")}><RefreshCw size={16} />重试未完成部分</button></div>}
       {text && job.kind === "update" && <p>{text}</p>}
       {text && job.kind !== "update" && <><div className="result-actions"><button className="primary-button" onClick={() => void copy(exportText)}><Copy size={16} />复制内容</button><button className="secondary-button" onClick={() => download(exportText, job.kind === "answer" ? "资料回答.md" : "接续内容.md")}><ArrowDownToLine size={16} />下载 Markdown</button></div><Markdown text={text} citations={citations} onCopy={copy} onWikiLink={openWikiLink} /></>}
       {!text && active && job.kind !== "answer" && <p className="muted">结果会在这里出现，可以先阅读来源。</p>}
       {job.result?.message && !text && <p>{String(job.result.message)}</p>}
       {job.kind === "migration_export" && <button className="primary-button" onClick={() => go("migration", job.id)}><Archive size={16} />{job.status === "completed" ? "下载迁移包" : "查看导出进度"}</button>}
       {countSummary && <p className="scope-counts">{countSummary}</p>}
-      {sourceCheckCount > 0 && <p className="scope-counts muted">仅登记来源，未总结正文 · {sourceCheckCount} 项</p>}
+      {updateView && updateView.registrationCount > 0 && <details className="scope-details"><summary>按规则仅登记 · {updateView.registrationCount} 项</summary><p className="scope-counts muted">来源记录已保存，本轮不生成知识笔记。</p><section className="scope-group"><ul>{updateView.registrations.map(group => <li key={group.label}><div><span>{group.label}</span><span>{group.count} 项</span></div></li>)}</ul></section></details>}
+      {!updateView && sourceCheckCount > 0 && <p className="scope-counts muted">仅登记来源 · {sourceCheckCount} 项</p>}
       {job.kind === "update" && resultDetails(job)}
-      {notes.length > 0 && <div className="written-notes"><h3>{hasTopics ? "对应现行主题" : "本次收录"}</h3><div id={`job-notes-${job.id}`}>{(notesExpanded ? notes : notes.slice(0, 8)).map((item, index) => typeof item === "string" ? <p key={index}>{item}</p> : <button className="note-link" key={item.id || index} onClick={() => item.id ? go("note", item.id) : go("search", item.title)}><FileText size={17} />{item.title || "查看新笔记"}<ArrowRight size={16} /></button>)}</div>{notes.length > 8 && <button className="show-more" aria-expanded={notesExpanded} aria-controls={`job-notes-${job.id}`} onClick={() => setExpandedJobNotes(previous => ({ ...previous, [job.id]: !previous[job.id] }))}>{notesExpanded ? "收起" : `查看全部 ${notes.length} 篇`}<ChevronRight size={15} /></button>}</div>}
+      {canRetry && job.kind === "update" && <div className="result-actions"><button className="primary-button" onClick={() => void jobAction(job, "retry")}><RefreshCw size={16} />重试未完成部分</button></div>}
+      {canRetry && job.kind === "update" && <p className="scope-counts muted">{updateView?.nativeLimited ? "已保存和仅登记项会跳过；重试不会解除原生接口限制。" : "仅补未完成来源，已保存和仅登记项会跳过。"}</p>}
+      {notes.length > 0 && <div className="written-notes"><h3>{hasTopics ? "对应现行主题" : job.kind === "update" ? "本轮累计笔记" : "本次收录"}</h3><div id={`job-notes-${job.id}`}>{(notesExpanded ? notes : notes.slice(0, 8)).map((item, index) => typeof item === "string" ? <p key={index}>{item}</p> : <button className="note-link" key={item.id || index} onClick={() => item.id ? go("note", item.id) : go("search", item.title)}><FileText size={17} />{item.title || "查看新笔记"}<ArrowRight size={16} /></button>)}</div>{notes.length > 8 && <button className="show-more" aria-expanded={notesExpanded} aria-controls={`job-notes-${job.id}`} onClick={() => setExpandedJobNotes(previous => ({ ...previous, [job.id]: !previous[job.id] }))}>{notesExpanded ? "收起" : `查看全部 ${notes.length} 篇`}<ChevronRight size={15} /></button>}</div>}
       {historical.length > 0 && <div className="written-notes"><p>当次保存的 {historical.length} 条记录已归档或合并，<button className="inline-link" onClick={() => go("projects")}>当前知识见目录</button>。</p><details><summary>查看当次原始记录</summary>{historical.map(item => <button className="note-link" key={item.id} onClick={() => go("note", item.id)}><FileText size={17} />{item.title || "查看原记录"}<ArrowRight size={16} /></button>)}</details></div>}
       {unavailable > 0 && <p className="muted">另有 {unavailable} 条旧成果未定位到当前笔记，原处理记录仍保留。</p>}
       {job.kind !== "update" && resultDetails(job)}

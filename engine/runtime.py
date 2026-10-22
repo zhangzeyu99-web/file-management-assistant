@@ -1000,7 +1000,6 @@ class Runtime:
             item.update(done=True, source_check=checked)
             atomic_json(journal_path, journal)
             result["source_checks"].append(checked)
-            result["warnings"].append(reason + "，仅记录来源，未生成知识笔记")
 
         for file_index, row in enumerate(local["files"], 1):
             title = Path(row["path"]).stem
@@ -1019,6 +1018,10 @@ class Runtime:
                 source = extract_path(row["path"])
                 if archive_window and Path(row["path"]).stat().st_mtime > stamp(archive_window["until"]):
                     result["skipped"]["files_after_window"] += 1
+                    continue
+                if source["status"] == "empty" and source["format"] in {"text", "markdown"}:
+                    record_check("files", {"path": row["path"]}, row["path"],
+                                 "空文件，没有可归档正文", item, body_read=True)
                     continue
                 if source["status"] != "ready":
                     raise RuntimeError("；".join(source["warnings"]) or "正文提取不完整")
@@ -1202,7 +1205,6 @@ class Runtime:
                     item.update(done=True, source_check=checked)
                     atomic_json(journal_path, journal)
                     result["source_checks"].append(checked)
-                    result["warnings"].append(title + "：仅登记飞书入口，未读取或总结正文")
                 if docs["complete"]:
                     # Do not skip documents changed after this run's frozen bound.
                     meta["feishu"] = (max((since, archive_window["until"]), key=stamp) if archive_window else start)
@@ -1227,17 +1229,14 @@ class Runtime:
         result["partial"] = (bool(result["errors"]) or any(s.get("status") != "checked" for s in local["sources"])
                              or any(isinstance(s, dict) and s.get("status") not in {"checked", "disabled"}
                                     for s in result["sources"].values()))
-        if result["notes"]:
-            result["markdown"] = "本次已保存 " + str(len(result["notes"])) + " 篇笔记。"
-        else:
-            result["markdown"] = "本次未新增知识笔记。" if result["source_checks"] else "已检查范围暂无新增资料。"
+        result["markdown"] = ("本轮累计保存 " + str(len(result["notes"])) + " 篇知识笔记。"
+                              if result["notes"] else "本轮未新增知识笔记。")
         if result["source_checks"]:
-            result["markdown"] += str(len(result["source_checks"])) + " 项来源仅作登记，未生成知识笔记。"
-            unread = sum(not check.get("body_read") for check in result["source_checks"])
-            if unread:
-                result["markdown"] += str(unread) + " 项未读取或总结正文。"
+            result["markdown"] += " 按规则仅登记 " + str(len(result["source_checks"])) + " 项来源。"
+        if result["errors"]:
+            result["markdown"] += " " + str(len(result["errors"])) + " 项处理失败，原因见详情。"
         if result["partial"]:
-            result["markdown"] += " 部分来源未完成，请查看详情。"
+            result["markdown"] += " 仍有未完成范围，已保存内容保留。"
         journal["result"] = result
         atomic_json(journal_path, journal)
         return result

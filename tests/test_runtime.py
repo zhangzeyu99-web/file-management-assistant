@@ -5,11 +5,13 @@ import json
 import os
 import tempfile
 import unittest
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
 from engine.incremental import load_state, path_key
+from engine.ingest import extract_path
 from engine.jobs import JobStore
 from engine.runtime import Runtime
 
@@ -389,7 +391,9 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(0, result["result"]["counts"]["files"])
         self.assertEqual(3, len(result["result"]["source_checks"]))
         self.assertTrue(any(check["reason"] == "脚本或工程文件，仅记录来源" for check in result["result"]["source_checks"]))
-        self.assertIn("未读取或总结正文", result["result"]["markdown"])
+        self.assertIn("按规则仅登记 3 项来源", result["result"]["markdown"])
+        self.assertNotIn("未读取或总结正文", result["result"]["markdown"])
+        self.assertEqual([], result["result"]["warnings"])
         self.assertEqual([], self.model.prompts)
         self.assertEqual(before, self.runtime.library.overview()["note_count"])
         self.assertEqual([], list(Path(self.runtime.cfg["output_root"]).rglob("*.md")))
@@ -406,6 +410,50 @@ class RuntimeTests(unittest.TestCase):
         again = self.update()
         self.assertEqual([], again["result"]["source_checks"])
         self.assertEqual(state["files"], self.state()["files"])
+
+    def test_empty_file_and_csv_exports_are_registered_without_model_calls(self):
+        empty = self.root / "sources" / "空日记.md"
+        table = self.root / "sources" / "业务表导出.csv"
+        empty.write_bytes(b"")
+        # A legacy-encoded export is data for a specialist workflow, not a prose note.
+        table.write_bytes("区域,金额\n合计,123\n".encode("gb18030"))
+        with patch("engine.runtime.extract_path", wraps=extract_path) as extract:
+            result = self.update()
+        self.assertEqual("completed", result["status"], result)
+        self.assertEqual([], result["result"]["errors"])
+        self.assertEqual([], result["result"]["notes"])
+        self.assertEqual([], self.model.prompts)
+        self.assertEqual(1, extract.call_count)
+        checks = {Path(row["source"]).name: row for row in result["result"]["source_checks"]}
+        self.assertTrue(checks[empty.name]["body_read"])
+        self.assertIn("空文件", checks[empty.name]["reason"])
+        self.assertFalse(checks[table.name]["body_read"])
+        self.assertIn("表格", checks[table.name]["reason"])
+        self.assertTrue({path_key(empty), path_key(table)}.issubset(self.state()["files"]))
+        again = self.update()
+        self.assertEqual([], again["result"]["source_checks"])
+        self.assertEqual([], self.model.prompts)
+
+    def test_uploaded_csv_is_a_source_registration_not_a_model_summary(self):
+        data = "区域,金额\n合计,123\n".encode("gb18030")
+        job = self.runtime.upload("表格导出.csv", base64.b64encode(data).decode())
+        result = execute_one(self.runtime, job)
+        self.assertEqual("completed", result["status"], result)
+        self.assertEqual([], result["result"]["notes"])
+        self.assertEqual([], self.model.prompts)
+        self.assertIn("表格", result["result"]["source_checks"][0]["reason"])
+        self.assertFalse(result["result"]["source_checks"][0]["body_read"])
+
+    def test_empty_extraction_from_image_only_docx_is_not_acknowledged_as_empty_file(self):
+        source = self.root / "sources" / "图片文档.docx"
+        with zipfile.ZipFile(source, "w") as package:
+            package.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:drawing /></w:r></w:p></w:body></w:document>')
+        result = self.update()
+        self.assertEqual("partial", result["status"], result)
+        self.assertEqual(1, len(result["result"]["errors"]))
+        self.assertEqual([], result["result"]["source_checks"])
+        self.assertNotIn(path_key(source), self.state()["files"])
+        self.assertEqual([], self.model.prompts)
 
     def test_manual_and_automatic_archives_reject_empty_or_generic_model_notes(self):
         source = self.root / "sources" / "角色映射口径.md"

@@ -48,6 +48,8 @@ def source_only_reason(filename, *, sensitive=False):
     if sensitive or sensitive_path(filename):
         return "凭据或配置文件"
     suffix = Path(filename).suffix.lower()
+    if suffix == ".csv":
+        return "表格数据，正文分析需使用专项流程"
     if suffix in _ENGINEERING:
         return "脚本或工程文件，仅记录来源"
     if suffix not in SUPPORTED:

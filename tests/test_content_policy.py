@@ -31,7 +31,7 @@ class ContentPolicyTests(unittest.TestCase):
                 validate_note("发布断点恢复", text)
 
     def test_file_classification_uses_metadata_and_leaves_explicit_prose_to_admission(self):
-        for filename in ("临时盘点.py", "config.local.json", "settings.yaml", "工具安装包.exe"):
+        for filename in ("临时盘点.py", "config.local.json", "settings.yaml", "工具安装包.exe", "业务表导出.csv"):
             with self.subTest(filename=filename):
                 self.assertIsNotNone(source_only_reason(filename))
         self.assertIsNone(source_only_reason("发布脚本断点恢复.md"))
