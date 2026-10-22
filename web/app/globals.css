@@ -153,6 +153,13 @@ svg { flex-shrink:0; }
 .answer-sources .note-link { align-items:flex-start; font-size:15px; gap:10px; }
 .answer-sources .note-link>span:nth-child(2) { min-width:0; overflow-wrap:anywhere; }
 .citation-label { font-size:12px; color:#728466; padding:1px 5px; border:1px solid #cbd7bf; border-radius:3px; white-space:nowrap; flex-shrink:0; margin-top:2px; }
+.answer-sources summary { cursor:pointer; font-size:14px; color:var(--green); padding:4px 0; }
+.answer-sources a.note-link { text-decoration:none; }
+.markdown a.answer-citation { display:inline-block; font-size:13px; font-weight:600; line-height:1.7; margin:0 2px; padding:1px 4px; border-radius:3px; text-decoration:none; background:#e7eedf; vertical-align:baseline; }
+.markdown a.answer-citation:hover, .markdown a.answer-citation:focus-visible { background:#d8e5cf; text-decoration:underline; }
+.search-answer-action { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:24px 0; flex-wrap:wrap; }
+.search-answer-action p { color:var(--muted); font-size:14px; margin:0; }
+.search-answer-action button { flex-shrink:0; }
 .scope-details { margin-top:22px; padding-top:16px; border-top:1px solid #d8e1cd; font-size:13px; }
 .scope-details>summary { font-weight:550; color:#49603f; }
 .scope-counts { margin-top:14px; color:#536a48; }

@@ -16,6 +16,11 @@ const plain=(s:string)=>withoutComments(s)
   .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,(_match,target,label)=>label||target)
   .replace(/^\s*(?:#{1,6}|[-*+]|\d+[.)])\s+/gm,"")
   .replace(/[`*_]/g,"").trim();
+const referenceOnly=(p:any)=> {
+  if(!/^(来源|相关链接|参考来源|参考资料|原文|出处|依据)$/.test(String(p.title||"")))return false;
+  const body=withoutComments(p.text),remainder=body.replace(/\[\[[^\]]+\]\]|\[[^\]]+\]\([^\n]*?\)|(?:https?:\/\/|codex:\/\/)[^\s<>]+/g,"");
+  return remainder!==body&&!remainder.replace(/[\s\d\-*+.)·、，,；;|/]/g,"");
+};
 const wordAliases:[RegExp,string][]=[
   [/服务器合并|合并服务器|并服/g,"合服"],
   [/名称冲突|名字冲突|中文撞名|撞名|同名/g,"重名"],
@@ -49,6 +54,42 @@ const searchText=(value:string)=>{
 // Snapshot identity changes on publication; normalized source strings are reused
 // across queries without retaining previous snapshots.
 const rowCache=new WeakMap<object,Map<string,[string,string]>>();
+function exampleForAnotherSubject(p:any,requested:string[],focus:string,terms:string[],relative:string) {
+  if(!/例如|示例|试一次|试着问|这样问/.test(String(p.section)+"\n"+String(p.text)))return false;
+  const declared=p.scope_projects||[],owned=["explicit","folder"].includes(p.project_origin);
+  if(!declared.length&&!owned&&!/(?:^|\s)(?:user[_ -]?guide|readme)(?:$|[\s._-])|使用说明|使用指南|用户指南|操作指南|入门指南/i.test(p.note_title||""))return false;
+  if(requested.some(project=>declared.includes(project)))return false;
+  const guide=/(?:^|\s)(?:user[_ -]?guide|readme)(?:$|[\s._-])|使用说明|使用指南|用户指南|操作指南|入门指南/i.test(String(p.note_title||"")+" "+relative)
+    ||/^20\s*方法\/知识库\//.test(relative);
+  const foreign=(p.topic_names||[]).filter((project:string)=>!declared.includes(project));
+  const foreignQuery=requested.some(project=>foreign.includes(project))
+    ||foreign.some((project:string)=>terms.some(term=>!soft.has(term)&&searchText(project).includes(term)));
+  if(!guide&&!foreignQuery)return false;
+  const subject=searchText(String(p.note_title||"")+(owned?" "+String(p.project||""):""));
+  return !(focus&&subject.includes(focus))&&!terms.some(term=>!soft.has(term)&&subject.includes(term));
+}
+function completeShortTopics(snapshot:any,items:any[]) {
+  const result:any[]=[],completed=new Set<string>(),notes=new Map((snapshot.notes||[]).map((note:any)=>[note.id,note]));
+  const sourcesByNote=new Map<string,any[]>(),matched=new Map<string,string[]>();
+  for(const source of snapshot.sources||[]) {const group=sourcesByNote.get(source.note_id)||[];group.push(source);sourcesByNote.set(source.note_id,group);}
+  for(const source of items) {const group=matched.get(source.note_id)||[];group.push(source.id);matched.set(source.note_id,group);}
+  for(const seed of items) {
+    if(completed.has(seed.note_id))continue;
+    const note:any=notes.get(seed.note_id),body=String(note?.markdown||"");
+    const passages=sourcesByNote.get(seed.note_id)||[];
+    if(!note||!/^20\s*方法\/|^10\s*项目\/|^30\s*资料\//.test(String(note.relative||""))||note.archived||note.searchable===false||note.maintenance
+      ||body.length>12000||(withoutComments(body).match(/^#\s+/gm)||[]).length!==1
+      ||new Set(passages.map((p:any)=>p.project)).size!==1||sourcePlaceholder.test(body)) {result.push(seed);continue;}
+    completed.add(note.id);
+    const sourceDate=note.source_date||seed.source_date;
+    const {other_sources:unused,...base}=seed;
+    result.push({...base,id:note.id,note_id:note.id,kind:"note",title:note.title,note_title:note.title,section:note.title,
+      text:body,line_start:1,line_end:body.split("\n").length,thread_links:note.thread_links||[],content_complete:true,
+      source_date:sourceDate,date_basis:sourceDate?"recorded":"file_modified",retrieval_reason:"complete_short_topic",
+      supporting_source_ids:matched.get(note.id)});
+  }
+  return result;
+}
 function supplementResultTable(snapshot:any,items:any[],requested:string[]) {
   // Keep the first lexical match. A complete note is a visible source with its
   // existing note ID, not hidden extra model context or a fabricated table.
@@ -93,7 +134,7 @@ export function searchSnapshot(snapshot:any,query:string,limit=50) {
     t=normal(t);if(t.length<2)return[];
     return /^[\u3400-\u9fff]+$/.test(t)&&t.length>3&&!words.has(t)?Array.from({length:t.length-1},(_,i)=>t.slice(i,i+2)):[t];
   }))];
-  const sources=(snapshot.sources||[]).filter((p:any)=>!p.archived&&p.searchable!==false);
+  const sources=(snapshot.sources||[]).filter((p:any)=>!p.archived&&p.searchable!==false&&!referenceOnly(p));
   let rows=rowCache.get(snapshot);
   if(!rows){rows=new Map(sources.map((p:any)=>[p.id,[searchText(p.text),searchText(p.section)]]));rowCache.set(snapshot,rows);}
   const counts=new Map(terms.map(term=>[term,[...rows!.values()].reduce((n,[text,heading])=>n+Number((text+heading).includes(term)),0)]));
@@ -114,7 +155,9 @@ export function searchSnapshot(snapshot:any,query:string,limit=50) {
   const anchors=strong.filter(term=>weights.get(term)!>=maximum*.85);
   const missingIds=terms.some(term=>!soft.has(term)&&/[a-z]/.test(term)&&!counts.get(term));
   const weight=[...weights.values()].reduce((a,b)=>a+b,0);
+  const noteRelative=new Map((snapshot.notes||[]).map((note:any)=>[note.id,String(note.relative||"")]));
   const ranked=sources.map((p:any)=>{
+    if(exampleForAnotherSubject(p,requested,focus,terms,p.relative||noteRelative.get(p.note_id)||""))return null;
     if(missingIds||!query||(!requested.length&&!terms.length))return null;
     const [text,heading]=rows!.get(p.id)!,combined=heading+text;
     if(requested.length) {
@@ -170,6 +213,7 @@ export function searchSnapshot(snapshot:any,query:string,limit=50) {
     }
     ordered=[...diversified,...remaining];
   }
+  ordered=completeShortTopics(snapshot,ordered);
   ordered=supplementResultTable(snapshot,ordered,requested);
   const items=limit<=0?ordered:ordered.slice(0,limit);
   return {query,items,total:ordered.length,returned:items.length,has_more:items.length<ordered.length,status:ordered.length?"found":"empty",answer_status:"evidence_only"};

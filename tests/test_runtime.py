@@ -214,6 +214,89 @@ class RuntimeTests(unittest.TestCase):
     def note_ids(self):
         return [note["id"] for note in self.runtime.library.overview()["recent"]]
 
+    def test_answer_uses_compact_citation_prompt_keeps_full_evidence_and_records_timing(self):
+        note = next(item for item in self.runtime.library.overview()["recent"] if item["title"] == "热血测试方案")
+        before = {path.name: path.read_bytes() for path in Path(self.runtime.cfg["obsidian_vault"]).glob("*.md")}
+        job = self.runtime.create("answer", {"query": "合服前必须确认什么？", "ids": [note["id"]]})
+        with patch.object(self.runtime, "_refresh_library", side_effect=AssertionError("answer must not re-index")), \
+                patch.object(self.runtime, "sync_snapshot", side_effect=AssertionError("answer must not sync the vault")), \
+                patch.object(self.runtime, "_remote_update", wraps=self.runtime._remote_update) as writes:
+            done = execute_one(self.runtime, job)
+        self.assertEqual("completed", done["status"], done)
+        prompt = self.model.prompts[0]
+        self.assertIn("笔记：热血测试方案", prompt)
+        self.assertIn("章节：", prompt)
+        self.assertIn(PLAN_TEXT, prompt)
+        self.assertIn("每个事实段末", prompt)
+        self.assertIn("不在末尾另列来源清单", prompt)
+        self.assertNotIn("知识笔记只输出最终 Markdown", prompt)
+        self.assertNotIn("标题必须含具体项目", prompt)
+        timings = done["result"]["timings"]
+        self.assertEqual(1, timings["model_calls"])
+        self.assertFalse(timings["cache_hit"])
+        for field in ("queue_ms", "prepare_ms", "model_ms", "after_model_ms", "worker_ms"):
+            self.assertGreaterEqual(timings[field], 0)
+        self.assertLessEqual(timings["model_started_at"], timings["model_finished_at"])
+        self.assertLessEqual(timings["model_finished_at"], timings["ready_at"])
+        self.assertEqual(["准备资料", "AI 正在根据所选证据整理"], [row["stage"] for row in timings["stages"]])
+        result_writes = [call for call in writes.call_args_list if (call.kwargs.get("result") or {}).get("markdown")]
+        self.assertEqual(1, len(result_writes), "answer returns its text once, with the terminal guarded write")
+        self.assertEqual("completed", result_writes[0].kwargs["status"])
+        self.assertEqual(before, {path.name: path.read_bytes() for path in Path(self.runtime.cfg["obsidian_vault"]).glob("*.md")})
+        self.assertEqual([], done["result"]["notes"])
+
+    def test_answer_cache_retry_has_zero_model_calls_and_failure_keeps_timing(self):
+        payload = {"query": "合服前核对什么？", "ids": self.note_ids()[:1]}
+        failed = self.runtime.create("answer", payload)
+        with patch.object(self.model, "generate", side_effect=RuntimeError("隔离模型失败")):
+            result = execute_one(self.runtime, failed)
+        self.assertEqual("failed", result["status"])
+        self.assertEqual(1, result["result"]["timings"]["model_calls"])
+        self.assertIn("model_finished_at", result["result"]["timings"])
+        job = self.runtime.create("answer", payload)
+        execute_one(self.runtime, job)
+        count = len(self.model.prompts)
+        retry = self.runtime.create("answer", {**payload, "retry_of": job["id"]})
+        done = execute_one(self.runtime, retry)
+        self.assertEqual("completed", done["status"])
+        self.assertEqual(count, len(self.model.prompts))
+        self.assertEqual(0, done["result"]["timings"]["model_calls"])
+        self.assertEqual(0, done["result"]["timings"]["model_ms"])
+        self.assertTrue(done["result"]["timings"]["cache_hit"])
+
+    def test_answer_cloud_cancel_and_expired_lease_still_block_terminal_result(self):
+        for failure in ("cancel", "lease"):
+            with self.subTest(failure=failure):
+                runtime, model, _ = fixture(self.root / failure)
+                store = JobStore(self.root / failure / "cloud.sqlite")
+
+                class AnswerCloud:
+                    available = True
+
+                    def request(self, path, payload=None):
+                        if not path.startswith("agent/jobs/"):
+                            raise AssertionError("answer must only write its job progress")
+                        fields = {key: value for key, value in payload.items() if key != "owner"}
+                        store.update(path.rsplit("/", 1)[-1], payload["owner"], **fields)
+                        return {"ok": True}
+
+                runtime.cloud = AnswerCloud()
+                job = store.create("answer", {"query": "合服前检查？", "ids": [runtime.library.overview()["recent"][0]["id"]]})
+                claimed = store.claim(runtime.owner)
+
+                def invalidate():
+                    if failure == "cancel":
+                        store.cancel(job["id"])
+                    else:
+                        with store.connection() as connection:
+                            connection.execute("UPDATE jobs SET lease_until=0 WHERE id=?", (job["id"],))
+
+                model.on_generate = invalidate
+                runtime.execute(claimed, remote=True)
+                final = store.get(job["id"])
+                self.assertNotEqual("completed", final["status"])
+                self.assertNotIn("markdown", final["result"] or {})
+
     def test_upload_bytes_generate_readback_and_immediate_search(self):
         before = self.runtime.library.overview()["note_count"]
         job = self.runtime.upload("热血上传.txt", base64.b64encode(UPLOAD_TEXT.encode()).decode())

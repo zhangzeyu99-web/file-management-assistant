@@ -87,7 +87,60 @@ class LibraryTest(unittest.TestCase):
         self.assertEqual([old_passage_id], selected["missing"])
         self.assertEqual(resolved["id"], selected["items"][0]["id"])
         self.assertEqual({old_note_id: resolved["id"]}, library.export_snapshot()["note_aliases"])
+        self.assertEqual({old_note_id: resolved["id"]}, library.overview()["note_aliases"])
+        self.assertEqual({"note_id": resolved["id"], "anchor": "合服规则"},
+                         library.resolve_wiki_note("旧目录/进展#合服规则"))
         self.assertFalse(library.refresh()["changed"])
+
+    def test_wiki_reading_links_resolve_history_headings_and_disambiguate_names(self):
+        self.write("10 项目/甲/当前.md", "# 当前\n\n保留有用结论。\n\n## 用法\n\n按步骤继续。\n")
+        self.write("10 项目/乙/当前.md", "# 当前\n\n另一项目的结论。\n")
+        self.write("90 历史/主题依据/甲/计算依据.md", "# 计算依据\n\n## 原始口径\n\n保留原始字段。\n")
+        library = self.library()
+        origin = "10 项目/甲/当前.md"
+        current = library.resolve_wiki_note("#用法", origin)
+        self.assertEqual(current, library.resolve_wiki_note("当前.md#用法", origin))
+        self.assertEqual("用法", current["anchor"])
+        historical = library.resolve_wiki_note("90 历史/主题依据/甲/计算依据#原始口径", origin)
+        self.assertEqual("原始口径", historical["anchor"])
+        self.assertTrue(library.get_note(historical["note_id"])["archived"])
+        self.assertEqual(0, library.search("计算依据")["total"])
+        with self.assertRaisesRegex(ValueError, "同名"):
+            library.resolve_wiki_note("当前")
+        with self.assertRaisesRegex(ValueError, "相对路径"):
+            library.resolve_wiki_note("../库外#资料", origin)
+        with self.assertRaises(KeyError):
+            library.resolve_wiki_note("不存在/当前#用法", origin)
+
+    def test_link_only_source_sections_are_readable_but_not_answer_evidence(self):
+        self.write("10 项目/TopData/日报口径.md", """---
+project: TopData
+---
+# TopData 日报口径
+
+## 最终展示顺序
+
+日报最终采用两张运营表、七列新服表，AI分析放最后。
+
+## 来源
+
+[[90 历史/原文#最终结构|最终结构决定]] · [计算口径](https://example.invalid/report)
+
+## 参考来源
+
+当期数据来自10月20日实际取数，留存差异仍待复核。
+""")
+        library = self.library()
+        results = library.search("TopData日报最终采用什么顺序", limit=0)["items"]
+        self.assertTrue(results)
+        self.assertFalse(any(p["title"] == "来源" for p in results))
+        snapshot = library.export_snapshot()
+        reference = next(p for p in snapshot["sources"] if p["title"] == "来源")
+        self.assertFalse(reference["searchable"])
+        self.assertTrue(reference["navigation"])
+        self.assertIn("最终结构决定", library.get_note(reference["note_id"])["markdown"])
+        factual = next(p for p in snapshot["sources"] if p["title"] == "参考来源")
+        self.assertTrue(factual["searchable"], "a source heading must not hide factual prose")
 
     def test_entry_directory_and_answer_archive_do_not_become_methods_or_project_progress(self):
         self.write("10 项目/当前.md", "# 热血合服\n\n按地区边界分组的规则已经确认，下一步补充服务器名单和排除原因。\n")
@@ -197,6 +250,125 @@ project: 洛克计算器
         library.refresh()
         scoped = library.search("TopData SCOPE739")
         self.assertEqual(folder_only.name, Path(scoped["items"][0]["relative"]).name)
+
+    def test_generic_merge_answers_choose_business_topics_and_complete_short_note_tables(self):
+        self.write("20 方法/知识库/知识笔记写作与去重.md", """---
+project: Obsidian 知识库
+---
+# 知识笔记写作与去重
+
+## 写什么
+
+一句结论直接回答问题，例如“热血合服使用近三天登录人数，不除以三”；保留方法、口径和决定。
+
+## 提问示例
+
+例如问“热血合服的名单怎么分组”，再找来源继续做。
+""")
+        self.write("20 方法/知识库/知识库使用入口.md", """---
+project: Obsidian 知识库
+---
+# 知识库使用入口
+
+**试一次：**搜索“热血合服的三天活跃人数为什么不能直接除以3？”，打开来源核对。
+""")
+        self.write("20 方法/知识库/知识库提问与接续.md", """---
+project: Obsidian 知识库
+---
+# 知识库提问与接续
+
+## 这样问更容易找到
+
+- “热血合服的三天活跃人数为什么不能直接除以3？”
+
+## 找到以后继续做
+
+写本次目标，例如“沿用原统计口径，整理下一批合服名单”。
+""")
+        self.write("10 项目/热血合服/热血合服排单规则.md", """---
+project: 热血合服
+date: 2026-08-21
+---
+# 热血合服排单规则
+
+## 排单步骤
+
+1. 排除已合服务器，按地区和允许区间分组，确定优先级。
+2. 对照当期规则检查候选服，保留合服方案与实际执行状态。
+""")
+        calculation = """---
+project: 热血合服
+date: 2026-08-21
+---
+# 热血合服活跃与付费计算
+
+热血合服三日活跃直接使用原始字段，单服与每组均值使用不同分母。
+
+## 当前结论
+
+- 活跃取近3天登录用户数，不除以3；付费取近3天有付费的玩家登录数。
+
+## 关键做法
+
+| 指标 | 计算方式 | 示例 |
+|---|---|---|
+| 单服平均活跃 | 三日活跃合计÷入单服数 | 120÷10＝12人 |
+| 每组平均活跃 | 主从服活跃合计÷组数 | 120÷5＝24人 |
+| 单服平均付费 | 付费登录人数合计÷入单服数 | 30÷10＝3人 |
+| 每组平均付费 | 主从服付费登录人数合计÷组数 | 30÷5＝6人 |
+"""
+        self.write("10 项目/热血合服/热血合服活跃与付费计算.md", calculation)
+        self.write("10 项目/欧美冒险合服/欧美冒险合服批次.md", """---
+project: 欧美冒险合服
+date: 2026-10-12
+---
+# 欧美冒险合服批次
+
+第8批已形成共12服的名单，后台执行结果待核对。
+
+## 排下一批
+
+先取得合服候选表，再核对允许区间与历史安排，分别登记名单和执行结果。
+""")
+        library = self.library()
+        selected = library.search("合服", limit=6)["items"]
+        with self.subTest(check="business topics before cross-project tutorial examples"):
+            self.assertFalse(any(p["project"] == "Obsidian 知识库" for p in selected))
+            self.assertEqual({"热血合服", "欧美冒险合服"}, {p["project"] for p in selected})
+            self.assertEqual(len(selected), len({p["note_id"] for p in selected}))
+        with self.subTest(check="the exact runtime evidence contains the complete calculation table"):
+            material = library.context_sources([p["id"] for p in selected], query="合服")
+            evidence = next(p for p in material["items"] if p.get("note_title", p["title"]) == "热血合服活跃与付费计算")
+            self.assertIn("| 指标 | 计算方式 | 示例 |", evidence["text"])
+            for formula in ("120÷10＝12人", "120÷5＝24人", "30÷10＝3人", "30÷5＝6人", "不除以3"):
+                self.assertIn(formula, evidence["text"])
+            self.assertEqual("2026-08-21", evidence["source_date"])
+            self.assertEqual(calculation, evidence["text"])
+        guide = library.search("Obsidian怎么提问", limit=6)["items"]
+        self.assertTrue(any("热血合服" in p["text"] for p in guide), "tutorial examples remain useful for tutorial questions")
+        precise = library.search("热血合服活跃计算", limit=6)["items"]
+        self.assertTrue(precise)
+        self.assertTrue(all(p["project"] == "热血合服" for p in precise))
+
+    def test_complete_topics_do_not_widen_long_or_mixed_documents(self):
+        self.write("10 项目/热血合服/长资料.md", "---\nproject: 热血合服\n---\n# 热血合服长资料\n\n"
+                   + "旧背景。" * 3500 + "\n\n## 目标步骤\n\nLONGPKG739：按候选名单核对区间。\n")
+        self.write("10 项目/热血合服/混合资料.md", "---\nproject: 热血合服\n---\n"
+                   "# 第一主题\n\nMIXPKG739：按候选名单核对区间。\n\n# 第二主题\n\n另一段独立主题内容。\n")
+        library = self.library()
+        for query in ("热血合服 LONGPKG739", "热血合服 MIXPKG739"):
+            with self.subTest(query=query):
+                selected = library.search(query, limit=6)["items"]
+                self.assertTrue(selected)
+                self.assertTrue(all(p["kind"] != "note" for p in selected))
+                self.assertTrue(all(len(p["text"]) < 1000 for p in selected))
+
+    def test_business_examples_remain_evidence_for_their_actual_rule(self):
+        self.write("10 项目/TopData/报表口径.md", "---\nproject: TopData\n---\n# TopData 报表口径\n\n"
+                   "人数采用去重统计，例如同一用户跨服只算一次，保留统计范围和计算步骤。\n")
+        result = self.library().search("人数去重", limit=6)
+        self.assertTrue(result["items"])
+        self.assertIn("同一用户跨服只算一次", result["items"][0]["text"])
 
     def test_blank_query_returns_empty_result(self):
         self.write("资料.md", "# 热血合服\n\n已确认三天活跃字段不除以三，按服务器分组。\n")

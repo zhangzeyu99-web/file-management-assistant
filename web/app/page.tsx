@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Archive, ArrowDownToLine, ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Clock3, Copy, FilePlus2, FileText, FolderOpen, History, Home, Layers3, Loader2, Menu, Plus, RefreshCw, Search, Upload, X } from "lucide-react";
-import Markdown, { safeLink } from "@/components/Markdown";
+import Markdown, { answerForExport, citationHref, citationTitle, safeLink } from "@/components/Markdown";
 import MigrationPanel from "@/components/MigrationPanel";
+import { groupJobNotes, locateNoteAnchorWhenReady } from "@/lib/knowledge";
 
 type ThreadLink = { url: string; label: string; thread_id?: string };
 type Source = {
@@ -15,14 +16,14 @@ type Source = {
 type Project = { id: string; title: string; name?: string; query?: string; excerpt?: string; source_count?: number; note_count?: number; latest_at?: string; date_basis?: string; thread_links?: ThreadLink[]; items?: Source[] };
 type Category = "项目" | "方法" | "资料";
 type Topic = Source & { category: Category; group: string; date?: string };
-type Overview = { projects: Project[]; recent: Source[]; topics?: Topic[]; knowledge_count?: number; note_count: number; synced_at?: string; refreshed_at?: string; mode?: string };
+type Overview = { projects: Project[]; recent: Source[]; topics?: Topic[]; note_aliases?: Record<string, string>; knowledge_count?: number; note_count: number; synced_at?: string; refreshed_at?: string; mode?: string };
 type Note = Source & { markdown: string; path?: string; focus?: Source };
 type JobResult = { markdown?: string; answer?: string; text?: string; notes?: (Source | string)[]; message?: string; [key: string]: unknown };
 type Job = { id: string; kind: string; status: string; stage: string; created_at?: number | string; updated_at?: number | string; error?: string; input?: { query?: string; title?: string; request?: string; filename?: string }; result?: JobResult | null };
 type JobsCache = { configured?: boolean; stale?: boolean; error?: string | null; refreshed_at?: string | number | null };
 type Health = { mode?: string; online?: boolean; setup_required?: boolean; synced_at?: string | number; index_version?: string; jobs_cache?: JobsCache; heartbeat?: { at?: number; device?: string } };
 type SearchResult = { query: string; items: Source[]; total: number; has_more?: boolean };
-type Route = { kind: string; id?: string; query?: string };
+type Route = { kind: string; id?: string; query?: string; anchor?: string };
 type AnswerReference = { id: string; version: string };
 
 const API = "/api/workspace";
@@ -68,10 +69,25 @@ function when(value?: string | number): string {
 }
 function readRoute(): Route {
   const [kind, ...rest] = (window.location.hash.slice(1) || "home").split("=");
-  try { const value = decodeURIComponent(rest.join("=")); return kind === "search" ? { kind, query: value } : { kind, id: value || undefined }; }
+  try {
+    const value = decodeURIComponent(rest.join("="));
+    if (kind === "search") return { kind, query: value };
+    if (kind === "note") { const [id, ...anchor] = value.split("#"); return { kind, id: id || undefined, anchor: anchor.join("#") }; }
+    return { kind, id: value || undefined };
+  }
   catch { return { kind: "home" }; }
 }
 function go(kind: string, value?: string) { window.location.hash = kind + (value ? "=" + encodeURIComponent(value) : ""); }
+function scrollToHeading(anchor: string) {
+  const key = (value: string) => value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+  const heading = Array.from(document.querySelectorAll<HTMLElement>(".reader-body [data-heading], .reader-heading h1"))
+    .find(item => key(item.textContent || item.dataset.heading || "") === key(anchor));
+  if (heading) {
+    const headerHeight = document.querySelector(".topbar")?.getBoundingClientRect().height || 0;
+    window.scrollTo({ top: window.scrollY + heading.getBoundingClientRect().top - headerHeight - 16 });
+  }
+  return Boolean(heading);
+}
 function sourcePreview(item: Source): string {
   return String(item.excerpt || item.text || item.section || "").split(/\r?\n/)
     .filter(line => !/^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/.test(line))
@@ -128,6 +144,7 @@ export default function Workspace() {
   const [showAll, setShowAll] = useState(false);
   const [answerId, setAnswerId] = useState("");
   const [answerError, setAnswerError] = useState("");
+  const [answerPending, setAnswerPending] = useState(false);
   const [note, setNote] = useState<Note | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -265,7 +282,7 @@ export default function Workspace() {
   const createJob = useCallback(async (kind: string, input: Record<string, unknown>, id?: string) => {
     return putJob(await api<Job>("jobs", { kind, input, request_id: id || crypto.randomUUID() }));
   }, [putJob]);
-  const runSearch = useCallback(async (value: string, force = false) => {
+  const runSearch = useCallback(async (value: string) => {
     if (!value.trim()) return;
     const version = indexVersion.current;
     const seq = ++searchSequence.current; currentSearch.current = value; currentSearchVersion.current = version;
@@ -275,22 +292,54 @@ export default function Workspace() {
       if (seq !== searchSequence.current) return;
       setSearch(found); setSearching(false);
       if (!found.items.length) return;
-      const existing = force ? undefined : answers.current[value];
-      if (existing && existing.version === version) {
+      const existing = answers.current[value];
+      if (existing && existing.version === `${version}:answer-v2`) {
         const job = await api<Job>(`jobs/${encodeURIComponent(existing.id)}`);
         if (seq === searchSequence.current) { putJob(job); setAnswerId(job.id); }
+        return;
+      }
+    } catch (cause) {
+      if (seq === searchSequence.current) { setSearching(false); setAnswerError(cause instanceof Error ? cause.message : "请求未完成，可重试。"); }
+    }
+  }, [putJob]);
+  async function requestAnswer(force = false) {
+    if (!search?.items.length || answerPending) return;
+    const value = search.query, version = `${indexVersion.current}:answer-v2`;
+    setAnswerPending(true); setAnswerError("");
+    try {
+      const existing = !force && answers.current[value];
+      if (existing && existing.version === version) {
+        const saved = await api<Job>(`jobs/${encodeURIComponent(existing.id)}`);
+        putJob(saved); if (currentSearch.current === value) setAnswerId(saved.id);
         return;
       }
       const previousRequest = answerRequests.current[value];
       const id = !force && previousRequest?.version === version ? previousRequest.id : crypto.randomUUID();
       answerRequests.current[value] = { id, version };
-      const job = await createJob("answer", { query: value, ids: found.items.slice(0, 6).map(item => item.id) }, id);
+      const job = await createJob("answer", { query: value, ids: search.items.slice(0, 6).map(item => item.id) }, id);
       answers.current[value] = { id: job.id, version };
-      if (seq === searchSequence.current) setAnswerId(job.id);
+      if (currentSearch.current === value) setAnswerId(job.id);
     } catch (cause) {
-      if (seq === searchSequence.current) { setSearching(false); setAnswerError(cause instanceof Error ? cause.message : "请求未完成，可重试。"); }
-    }
-  }, [createJob, putJob]);
+      if (currentSearch.current === value) setAnswerError(cause instanceof Error ? cause.message : "AI 整理未提交，可重试。");
+    } finally { setAnswerPending(false); }
+  }
+  const watchedAnswer = jobs.find(job => job.id === answerId);
+  const answerActive = Boolean(watchedAnswer && !TERMINAL.has(watchedAnswer.status));
+  useEffect(() => {
+    if (!answerId || !answerActive) return;
+    let stopped = false, timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const job = await api<Job>(`jobs/${encodeURIComponent(answerId)}`);
+        if (stopped) return;
+        putJob(job);
+        if (TERMINAL.has(job.status)) return;
+      } catch { /* The normal connection check reports temporary disconnects. */ }
+      if (!stopped) timer = setTimeout(poll, 1000);
+    };
+    timer = setTimeout(poll, 1000);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [answerId, answerActive, putJob]);
   useEffect(() => {
     if (!ready || loading) return;
     if (route.kind === "search" && route.query && (currentSearch.current !== route.query || currentSearchVersion.current !== indexVersion.current)) void runSearch(route.query);
@@ -316,6 +365,21 @@ export default function Workspace() {
     }).catch(cause => { if (active) setDetailError(cause.message); }).finally(() => { if (active) setDetailLoading(false); });
     return () => { active = false; };
   }, [route, ready, loading, contextId, runSearch, putJob]);
+  useEffect(() => {
+    if (route.kind !== "note") return;
+    return locateNoteAnchorWhenReady(route.id, route.anchor, note, loading || detailLoading,
+      overview.note_aliases || {}, scrollToHeading, () => setToast("已打开笔记，该段落标题可能已变动。"));
+  }, [route, note, loading, detailLoading, overview.note_aliases]);
+
+  async function openWikiLink(target: string) {
+    try {
+      const origin = route.kind === "note" ? note?.relative || "" : "";
+      const linked = await api<{ note_id: string; anchor: string }>(`notes/resolve?target=${encodeURIComponent(target)}&from=${encodeURIComponent(origin)}`);
+      if (route.kind === "note" && route.id === linked.note_id && route.anchor === linked.anchor) {
+        if (linked.anchor) scrollToHeading(linked.anchor); else window.scrollTo({ top: 0 });
+      } else go("note", linked.note_id + (linked.anchor ? "#" + linked.anchor : ""));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "未能打开链接笔记。"); }
+  }
 
   async function copy(text: string) {
     try { await navigator.clipboard.writeText(text); setToast("已复制。"); }
@@ -327,7 +391,7 @@ export default function Workspace() {
   function submitSearch(event: FormEvent) {
     event.preventDefault(); const value = query.trim();
     if (!value) { inputRef.current?.focus(); return; }
-    if (route.kind === "search" && route.query === value) void runSearch(value, true);
+    if (route.kind === "search" && route.query === value) void runSearch(value);
     else go("search", value);
   }
   async function update() {
@@ -415,7 +479,6 @@ export default function Workspace() {
   const updateNeedsAttention = latestUpdate && ["partial", "failed", "cancelled"].includes(latestUpdate.status);
   const hasTopics = Array.isArray(overview.topics);
   const topics = overview.topics || [];
-  const topicIds = new Set(topics.map(item => item.note_id || item.id));
   const knowledgeCount = overview.knowledge_count ?? overview.note_count;
   const allProjects = projects.length ? projects : overview.projects;
   const projectForGroup = (group: string) => allProjects.find(item => item.title === group || item.name === group);
@@ -463,7 +526,7 @@ export default function Workspace() {
     const skipped = asRecord(result.skipped);
     const hasScope = local.length || Object.keys(thread).length || Object.keys(feishu).length || warnings.length || errors.length;
     return <>
-      {evidence.length > 0 && <div className="answer-sources"><h3>本次依据 · {evidence.length} 条</h3><ol>{evidence.map((item, index) => <li key={item.id || index}><button className="note-link" onClick={() => go("note", item.id || item.note_id)}><span className="citation-label">来源 {index + 1}</span><span>{item.title}</span><ArrowRight size={15} /></button></li>)}</ol></div>}
+      {evidence.length > 0 && <details className="answer-sources"><summary>参考资料 · {evidence.length} 条</summary><ol>{evidence.map((item, index) => <li key={item.id || index}><a className="note-link" href={citationHref(item)}><span className="citation-label">{index + 1}</span><span>{citationTitle(item)}</span><ArrowRight size={15} /></a></li>)}</ol></details>}
       {Boolean(hasScope) && <details className="scope-details"><summary>检查范围与未完成项{errors.length ? ` · ${errors.length} 项失败` : job.status === "partial" ? " · 覆盖不完整" : ""}</summary>
         {errors.length > 0 && <section className="scope-group"><h3>未完成项</h3><ul className="issue-list">{errors.map((item, index) => <li key={index}>{issueText(item)}</li>)}</ul></section>}
         {Object.keys(skipped).length > 0 && <p className="scope-counts muted">已处理并跳过：{[["files", "文件"], ["threads", "线程"], ["feishu", "飞书文档"]].filter(([key]) => typeof skipped[key] === "number").map(([key, label]) => `${label} ${skipped[key]}`).join(" · ") || "按已有检查点保留"}</p>}
@@ -480,12 +543,11 @@ export default function Workspace() {
   function jobPanel(job: Job | undefined, title?: string) {
     if (!job) return <div className="waiting-state"><Loader2 size={18} className="spin" /><span>正在读取任务…</span></div>;
     const text = resultText(job), active = !TERMINAL.has(job.status);
+    const citations = job.kind === "answer" && Array.isArray(job.result?.sources) ? job.result.sources as Source[] : undefined;
+    const exportText = citations?.length ? answerForExport(text, citations, typeof window === "undefined" ? "" : window.location.origin) : text;
     const canRetry = ["failed", "partial", "cancelled"].includes(job.status);
-    const notes = (Array.isArray(job.result?.notes) ? job.result.notes : []).filter(item => {
-      if (typeof item === "string") return !hasTopics;
-      if (item.archived || item.source_only || item.kind === "source_only") return false;
-      return !hasTopics || topicIds.has(item.note_id || item.id);
-    });
+    const { current: notes, historical, unavailable } = groupJobNotes(
+      Array.isArray(job.result?.notes) ? job.result.notes : [], hasTopics ? topics : undefined, overview.note_aliases);
     const sourceCheckCount = Array.isArray(job.result?.source_checks) ? job.result.source_checks.length : 0;
     const notesExpanded = Boolean(expandedJobNotes[job.id]);
     const counts = asRecord(job.result?.counts);
@@ -493,18 +555,20 @@ export default function Workspace() {
       .filter(([key]) => typeof counts[key] === "number")
       .map(([key, label]) => `${label} ${counts[key]}`).join(" · ");
     return <section className={`job-panel ${job.status}`}><div className="section-heading"><h2>{title || KINDS[job.kind]}</h2><span className={`status-tag ${job.status}`}>{active ? <Loader2 size={13} className="spin" /> : job.status === "completed" ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}{STATUS[job.status] || job.status}</span></div>
-      <p className="job-stage">{job.stage}{active && !online ? " · 等待本机连接" : ""}</p>
+      {(active || job.status !== "completed") && <p className="job-stage" role="status">{job.kind === "answer" && active && online ? "AI 正在整理，可先阅读下方资料。" : job.stage}{active && !online ? " · 等待本机连接" : ""}</p>}
       {job.error && <div className="inline-error" role="alert">{job.error}</div>}
       {canRetry && <div className="result-actions"><button className="primary-button" onClick={() => void jobAction(job, "retry")}><RefreshCw size={16} />重试未完成部分</button></div>}
       {text && job.kind === "update" && <p>{text}</p>}
-      {text && job.kind !== "update" && <><div className="result-actions"><button className="primary-button" onClick={() => void copy(text)}><Copy size={16} />复制内容</button><button className="secondary-button" onClick={() => download(text)}><ArrowDownToLine size={16} />下载 Markdown</button></div><Markdown text={text} onCopy={copy} onWikiLink={name => go("search", name)} /></>}
+      {text && job.kind !== "update" && <><div className="result-actions"><button className="primary-button" onClick={() => void copy(exportText)}><Copy size={16} />复制内容</button><button className="secondary-button" onClick={() => download(exportText, job.kind === "answer" ? "资料回答.md" : "接续内容.md")}><ArrowDownToLine size={16} />下载 Markdown</button></div><Markdown text={text} citations={citations} onCopy={copy} onWikiLink={openWikiLink} /></>}
       {!text && active && job.kind !== "answer" && <p className="muted">结果会在这里出现，可以先阅读来源。</p>}
       {job.result?.message && !text && <p>{String(job.result.message)}</p>}
       {job.kind === "migration_export" && <button className="primary-button" onClick={() => go("migration", job.id)}><Archive size={16} />{job.status === "completed" ? "下载迁移包" : "查看导出进度"}</button>}
       {countSummary && <p className="scope-counts">{countSummary}</p>}
       {sourceCheckCount > 0 && <p className="scope-counts muted">仅登记来源，未总结正文 · {sourceCheckCount} 项</p>}
       {job.kind === "update" && resultDetails(job)}
-      {notes.length > 0 && <div className="written-notes"><h3>本次收录</h3><div id={`job-notes-${job.id}`}>{(notesExpanded ? notes : notes.slice(0, 8)).map((item, index) => typeof item === "string" ? <p key={index}>{item}</p> : <button className="note-link" key={item.id || index} onClick={() => item.id ? go("note", item.id) : go("search", item.title)}><FileText size={17} />{item.title || "查看新笔记"}<ArrowRight size={16} /></button>)}</div>{notes.length > 8 && <button className="show-more" aria-expanded={notesExpanded} aria-controls={`job-notes-${job.id}`} onClick={() => setExpandedJobNotes(previous => ({ ...previous, [job.id]: !previous[job.id] }))}>{notesExpanded ? "收起" : `查看全部 ${notes.length} 篇`}<ChevronRight size={15} /></button>}</div>}
+      {notes.length > 0 && <div className="written-notes"><h3>{hasTopics ? "对应现行主题" : "本次收录"}</h3><div id={`job-notes-${job.id}`}>{(notesExpanded ? notes : notes.slice(0, 8)).map((item, index) => typeof item === "string" ? <p key={index}>{item}</p> : <button className="note-link" key={item.id || index} onClick={() => item.id ? go("note", item.id) : go("search", item.title)}><FileText size={17} />{item.title || "查看新笔记"}<ArrowRight size={16} /></button>)}</div>{notes.length > 8 && <button className="show-more" aria-expanded={notesExpanded} aria-controls={`job-notes-${job.id}`} onClick={() => setExpandedJobNotes(previous => ({ ...previous, [job.id]: !previous[job.id] }))}>{notesExpanded ? "收起" : `查看全部 ${notes.length} 篇`}<ChevronRight size={15} /></button>}</div>}
+      {historical.length > 0 && <div className="written-notes"><p>当次保存的 {historical.length} 条记录已归档或合并，<button className="inline-link" onClick={() => go("projects")}>当前知识见目录</button>。</p><details><summary>查看当次原始记录</summary>{historical.map(item => <button className="note-link" key={item.id} onClick={() => go("note", item.id)}><FileText size={17} />{item.title || "查看原记录"}<ArrowRight size={16} /></button>)}</details></div>}
+      {unavailable > 0 && <p className="muted">另有 {unavailable} 条旧成果未定位到当前笔记，原处理记录仍保留。</p>}
       {job.kind !== "update" && resultDetails(job)}
       <div className="job-footer"><span>{when(job.updated_at || job.created_at)}</span>{active ? <button className="text-button" onClick={() => void jobAction(job, "cancel")}>取消后续处理</button> : null}</div>
     </section>;
@@ -542,8 +606,8 @@ export default function Workspace() {
             })}</div>{!topicGroups.length && <div className="empty-state"><p>这个分类还没有知识笔记。</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>添加资料</button></div>}
           </> : projects.length ? projectCards(projects) : <div className="empty-state"><p>还没有可阅读的知识笔记。</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>添加资料</button></div>}</>}
           {route.kind === "search" && <><div className="page-heading"><span className="eyebrow">找回以前的做法</span><h1>问问已有的资料</h1></div>{searchBox}{searching ? <div className="waiting-state"><Loader2 size={19} className="spin" />正在查找相关证据…</div> : <>
-            {answerError && <div className="inline-error" role="alert">{answerError}<button className="text-button" onClick={() => void runSearch(query)}>重新尝试</button></div>}
-            {search && search.items.length > 0 && <>{(answerId || !answerError) && jobPanel(answerJob, "依据资料回答")}<div className="section-heading evidence-heading"><h2>来源证据 <span>{search.total}</span></h2></div>{sources(search.items)}{search.total > search.items.length && <p className="muted">已显示 {search.items.length} / {search.total} 条；可补充关键词缩小范围。</p>}</>}
+            {answerError && <div className="inline-error" role="alert">{answerError}</div>}
+            {search && search.items.length > 0 && <><div className="search-answer-action">{!answerId && <p>先看资料，或让 AI 归纳成答案。</p>}<button className="secondary-button" disabled={answerPending || answerActive} onClick={() => void requestAnswer(Boolean(answerId && answerJob && TERMINAL.has(answerJob.status)))}>{answerPending || answerActive ? <Loader2 size={16} className="spin" /> : <Layers3 size={16} />}{answerPending ? "正在提交" : answerActive ? "正在整理" : answerId ? "重新整理答案" : "AI 整理答案"}</button></div>{answerId && jobPanel(answerJob, "依据资料回答")}<div className="section-heading evidence-heading"><h2>相关资料 <span>{search.total}</span></h2></div>{sources(search.items)}{search.total > search.items.length && <p className="muted">已显示 {search.items.length} / {search.total} 条；可补充关键词缩小范围。</p>}</>}
             {search && !search.items.length && <div className="empty-state empty-search"><Search size={27} /><h2>还没有找到相关资料</h2><p>换一个项目名或关键句，也可以把这份资料补进来。</p><div className="button-row"><button className="secondary-button" onClick={() => inputRef.current?.focus()}>修改问题</button><button className="primary-button" onClick={() => setUploadOpen(true)}><Plus size={16} />添加资料</button></div></div>}
           </>}</>}
           {["project", "note", "job"].includes(route.kind) && detailLoading && <div className="waiting-state"><Loader2 size={20} className="spin" />正在读取…</div>}
@@ -551,7 +615,7 @@ export default function Workspace() {
           {route.kind === "project" && project && <><button className="back-link" onClick={() => go("projects")}><ArrowLeft size={16} />知识目录</button><div className="page-heading"><span className="eyebrow">项目资料 · {project.source_count || project.items?.length || 0} 段记录</span><h1>{project.title}</h1></div><div className="project-tools"><button className="primary-button" onClick={() => { if (!request) setRequest(`继续${project.title}，明确已完成、未完成和下一步。`); setBasketOpen(true); }}><Layers3 size={16} />准备接续</button><div className="project-progress-action"><button className="secondary-button" disabled={submitting || !project.items?.length || Boolean(projectAnswerJob && !TERMINAL.has(projectAnswerJob.status))} onClick={() => void summarizeProject()}>{submitting ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}{projectAnswerId ? "重新整理进展" : "整理当前进展"}</button><p>{projectAnswerId && answers.current[`project:${project.id}`]?.version !== indexVersion.current ? "资料已更新，可重新整理。" : selected.filter(item => project.items?.some(source => source.id === item.id)).length ? "依据已选的本项目资料" : `依据下方前 ${Math.min(6, project.items?.length || 0)} 条记录`}</p></div></div>{Boolean(project.thread_links?.length) && <details className="project-origins"><summary>原对话 · {project.thread_links?.length} 个</summary>{threadLinks(project.thread_links)}</details>}
             {projectAnswerId && jobPanel(projectAnswerJob, "项目进展 · 依据记录整理")}
             <div className="section-heading"><h2>资料与原记录</h2><button className="text-button" onClick={() => go("search", project.query || project.title)}>问这个项目 <Search size={15} /></button></div>{sources(project.items || [], 8)}</>}
-          {route.kind === "note" && note && <><button className="back-link" onClick={() => window.history.length > 1 ? window.history.back() : go("home")}><ArrowLeft size={16} />返回</button><div className="reader-heading"><span className="eyebrow">{note.focus?.project || "知识笔记"}</span><h1>{note.title}</h1>{note.focus && <p className="reader-section">{note.focus.title}</p>}<details className="reader-details"><summary>来源与更新时间</summary><p className="reader-location">{note.relative || note.path || "知识笔记"}<br />{when(note.modified_at)}</p></details><div className="button-row"><button className="primary-button" onClick={() => select(note.focus || note)}>{selected.some(item => item.id === (note.focus?.id || note.id)) ? <Check size={16} /> : <Plus size={16} />}{selected.some(item => item.id === (note.focus?.id || note.id)) ? "已加入接续" : note.focus ? "把这段加入接续" : "加入接续"}</button>{note.focus && <button className="secondary-button" onClick={() => select(note)}>{selected.some(item => item.id === note.id) ? "已选整篇" : "加入整篇笔记"}</button>}</div>{threadLinks(note.focus?.thread_links || note.thread_links)}</div>{note.focus ? <><article className="reader-body"><div className="reader-source-label">原文证据 · 第 {note.focus.line_start}–{note.focus.line_end} 行</div><Markdown text={note.focus.text || ""} onCopy={copy} onWikiLink={name => go("search", name)} /></article><details className="full-note"><summary>展开完整笔记 · {note.title}</summary><Markdown text={withoutRepeatedTitle(note.markdown, note.title)} onCopy={copy} onWikiLink={name => go("search", name)} /></details></> : <article className="reader-body"><Markdown text={withoutRepeatedTitle(note.markdown, note.title)} onCopy={copy} onWikiLink={name => go("search", name)} /></article>}</>}
+          {route.kind === "note" && note && <><button className="back-link" onClick={() => window.history.length > 1 ? window.history.back() : go("home")}><ArrowLeft size={16} />返回</button><div className="reader-heading"><span className="eyebrow">{note.archived ? "历史依据" : note.focus?.project || "知识笔记"}</span><h1>{note.title}</h1>{note.focus && <p className="reader-section">{note.focus.title}</p>}<details className="reader-details"><summary>来源与更新时间</summary><p className="reader-location">{note.relative || note.path || "知识笔记"}<br />{when(note.modified_at)}</p></details><div className="button-row"><button className="primary-button" onClick={() => select(note.focus || note)}>{selected.some(item => item.id === (note.focus?.id || note.id)) ? <Check size={16} /> : <Plus size={16} />}{selected.some(item => item.id === (note.focus?.id || note.id)) ? "已加入接续" : note.focus ? "把这段加入接续" : "加入接续"}</button>{note.focus && <button className="secondary-button" onClick={() => select(note)}>{selected.some(item => item.id === note.id) ? "已选整篇" : "加入整篇笔记"}</button>}</div>{threadLinks(note.focus?.thread_links || note.thread_links)}</div>{note.focus ? <><article className="reader-body"><div className="reader-source-label">原文证据 · 第 {note.focus.line_start}–{note.focus.line_end} 行</div><Markdown text={note.focus.text || ""} onCopy={copy} onWikiLink={openWikiLink} /></article><details className="full-note"><summary>展开完整笔记 · {note.title}</summary><Markdown text={withoutRepeatedTitle(note.markdown, note.title)} onCopy={copy} onWikiLink={openWikiLink} /></details></> : <article className="reader-body"><Markdown text={withoutRepeatedTitle(note.markdown, note.title)} onCopy={copy} onWikiLink={openWikiLink} /></article>}</>}
           {route.kind === "updates" && <><div className="page-heading heading-with-action"><div><span className="eyebrow">新增资料与线程续聊</span><h1>更新记录</h1><p>{online ? "本机已连接，可执行更新。" : "本机未连接。提交的本地任务会等待上线。"}</p></div><button className="primary-button" onClick={() => void update()} disabled={submitting}><RefreshCw size={16} />检查并更新</button></div>{jobs.length ? <div className="jobs-list">{jobs.map(job => <button className="job-row" key={job.id} onClick={() => go("job", job.id)}><span className={`job-icon ${job.status}`}>{!TERMINAL.has(job.status) ? <Loader2 size={20} className="spin" /> : job.status === "completed" ? <CheckCircle2 size={20} /> : <History size={20} />}</span><span className="job-row-main"><strong>{KINDS[job.kind] || job.kind}</strong><span>{job.input?.query || job.input?.title || job.input?.filename || (job.kind === "update" ? "检查新增资料和线程续聊" : job.stage)}</span></span><span className="job-row-status"><span>{STATUS[job.status] || job.status}</span><time>{when(job.created_at)}</time></span><ChevronRight size={17} /></button>)}</div> : <div className="empty-state"><History size={25} /><p>还没有执行记录。完成和未完成的范围都会留在这里。</p></div>}</>}
           {route.kind === "job" && currentJob && <><button className="back-link" onClick={() => go("updates")}><ArrowLeft size={16} />全部记录</button>{jobPanel(currentJob)}</>}
           {route.kind === "context" && <><div className="page-heading heading-with-action"><div><span className="eyebrow">让下一次对话接得上</span><h1>接续内容</h1><p>{request || "从已选资料中准备背景、决定和下一步。"}</p></div><button className="secondary-button" onClick={() => setBasketOpen(true)}><Layers3 size={16} />调整资料 · {selected.length}</button></div>{contextJob ? jobPanel(contextJob, "给下一次工作的上下文") : <div className="empty-state"><Layers3 size={25} /><p>先加入需要的资料，再写一句这次想做什么。</p><button className="primary-button" onClick={() => setBasketOpen(true)}>准备接续</button></div>}</>}

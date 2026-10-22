@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { searchSnapshot } from "../../../../lib/search";
+import { resolveWikiNote } from "../../../../lib/knowledge";
 import { migrationCloudRoute, MIGRATION_CLOUD_LIMIT } from "../../../../lib/migration-cloud";
 
 export const dynamic = "force-dynamic";
@@ -89,7 +90,7 @@ async function handler(req:Request) {
     }
     if(path==="overview") {
       const s=await snapshot();
-      return json({...s.overview,synced_at:s.generated_at,mode:"cloud"});
+      return json({...s.overview,note_aliases:s.note_aliases||s.overview.note_aliases||{},synced_at:s.generated_at,mode:"cloud"});
     }
     if(path==="projects") return json({items:(await snapshot()).projects});
     if(path.startsWith("projects/")) {
@@ -105,6 +106,11 @@ async function handler(req:Request) {
     if(path==="search") {
       const s=await snapshot(),query=url.searchParams.get("q")||"";
       return json(searchSnapshot(s,query,Math.max(0,Math.min(5000,Number(url.searchParams.get("limit")??50)))));
+    }
+    if(path==="notes/resolve") {
+      const s=await snapshot();
+      try { return json(resolveWikiNote(s.notes,s.note_aliases||{},url.searchParams.get("target")||"",url.searchParams.get("from")||"")); }
+      catch(error) { return json({error:error instanceof Error?error.message:"未找到链接笔记"},404); }
     }
     if(path.startsWith("notes/")) {
       const s=await snapshot(),id=decodeURIComponent(path.slice(6));

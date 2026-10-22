@@ -46,6 +46,7 @@ PROJECT_GUIDE_NOTE = re.compile(
     r"使用说明|使用指南|用户指南|操作指南|入门指南", re.I,
 )
 PROJECT_NAVIGATION_HEADING = re.compile(r"^(?:资料入口|资料目录|相关链接|快捷入口|原文入口|来源|索引)$")
+EXAMPLE_CUE = re.compile(r"例如|示例|试一次|试着问|这样问")
 PROJECT_COMPARISON = re.compile(
     r"(?:避免|防止|不要|不能|不得|不可|切勿|别)"
     r"[^。！？!?；;\n]{0,30}?(?:与|和|跟)"
@@ -145,6 +146,14 @@ def _plain(text: str) -> str:
     return re.sub(r"[`*_]", "", text).strip()
 
 
+def _reference_only(title: str, text: str) -> bool:
+    if not re.fullmatch(r"来源|相关链接|参考来源|参考资料|原文|出处|依据", title.strip()):
+        return False
+    body = _without_comments(text)
+    remainder = re.sub(r"\[\[[^\]]+\]\]|\[[^\]]+\]\([^\n]*?\)|(?:https?://|codex://)[^\s<>]+", "", body)
+    return remainder != body and not re.sub(r"[\s\d\-*+.)·、，,；;|/]", "", remainder)
+
+
 def _display(text: str, limit: int = 320) -> str:
     """A labeled display excerpt, never the text sent to a model."""
     lines = [line for line in text.splitlines() if not METADATA_LINE.match(line)]
@@ -199,6 +208,28 @@ def _comparison_only_reference(passage: dict[str, Any]) -> bool:
     # warning; ordinary negative statuses such as "未发布" remain evidence.
     remaining = PROJECT_COMPARISON.sub("", passage["text"])
     return remaining != passage["text"] and project not in _projects_in(remaining)
+
+
+def _example_for_another_subject(passage: dict[str, Any], plan: dict[str, Any]) -> bool:
+    if not EXAMPLE_CUE.search(passage["section"] + "\n" + passage["text"]):
+        return False
+    declared = passage.get("scope_projects", [])
+    owned = passage.get("project_origin") in {"explicit", "folder"}
+    if not (declared or owned or PROJECT_GUIDE_NOTE.search(passage["note_title"])):
+        return False
+    if set(plan["requested"]).intersection(declared):
+        return False
+    guide = (PROJECT_GUIDE_NOTE.search(passage["note_title"] + " " + passage.get("relative", ""))
+             or re.match(r"^20\s*方法/知识库/", passage.get("relative", "")))
+    foreign = set(passage.get("topic_names", [])) - set(declared)
+    foreign_query = (set(plan["requested"]).intersection(foreign)
+                     or any(term not in SOFT_TERMS and term in _search_text(project)
+                            for project in foreign for term in plan["terms"]))
+    if not guide and not foreign_query:
+        return False
+    subject = _search_text(passage["note_title"] + (" " + passage["project"] if owned else ""))
+    return not ((plan["focus"] and plan["focus"] in subject)
+                or any(term not in SOFT_TERMS and term in subject for term in plan["terms"]))
 
 
 def _canonical(text: str) -> str:
@@ -395,6 +426,7 @@ class Library:
             "id": note_id, "note_id": note_id, "title": title, "relative": relative,
             "path": str(path), "source_path": str(path), "markdown": markdown,
             "modified_at": modified_at, "date": modified_at[:10],
+            "source_date": metadata.get("date"),
             "thread_links": _links(indexed_markdown),
             "archived": archived, "navigation": navigation, "type": note_type,
             "searchable": not (archived or navigation or non_evidence),
@@ -462,6 +494,7 @@ class Library:
                 if not own_links and len(scope_links) == 1:
                     own_links = scope_links
                 passage_id = note_id + ":s_" + _encode(f"{heading_text}\n{first}:{last}")
+                reference_only = _reference_only(section_title, text)
                 note["passages"].append({
                     "id": passage_id, "note_id": note_id, "title": section_title,
                     "note_title": title, "section": heading_text, "headings": headings,
@@ -472,9 +505,9 @@ class Library:
                     "relative": relative, "path": str(path), "source_path": str(path),
                     "thread_links": own_links, "modified_at": modified_at,
                     "source_date": source_date, "date_basis": "recorded" if source_date else "file_modified",
-                    "archived": note["archived"], "searchable": note["searchable"],
+                    "archived": note["archived"], "searchable": note["searchable"] and not reference_only,
                     "maintenance": note["maintenance"],
-                    "navigation": note["navigation"] or bool(NAVIGATION.search(text)),
+                    "navigation": note["navigation"] or reference_only or bool(NAVIGATION.search(text)),
                     "kind": ("historical_request" if re.search(r"首个需求|最近需求|新增问题", text)
                              else "evidence"), "answer_status": "evidence_only",
                 })
@@ -602,6 +635,8 @@ class Library:
         requested_projects = plan["requested"]
         if plan["missing_ids"] or not query.strip() or (not requested_projects and not terms):
             return 0
+        if _example_for_another_subject(passage, plan):
+            return 0
         text, heading = plan["rows"][passage["id"]]
         combined = heading + text
         if requested_projects:
@@ -705,6 +740,37 @@ class Library:
             return items[:position] + [supplement] + items[position:]
         return items
 
+    def _complete_short_topics(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        result, completed = [], set()
+        matched: dict[str, list[str]] = {}
+        for item in items:
+            matched.setdefault(item["note_id"], []).append(item["id"])
+        for seed in items:
+            if seed["note_id"] in completed:
+                continue
+            note = self._notes.get(seed["note_id"])
+            eligible = (note and re.match(r"^(?:10\s*项目|20\s*方法|30\s*资料)/", note["relative"])
+                        and note["searchable"] and not note["maintenance"]
+                        and len(note["markdown"]) <= 12000
+                        and len(re.findall(r"^#\s+", _without_comments(note["markdown"]), re.M)) == 1
+                        and len({p["project"] for p in note["passages"]}) == 1
+                        and not SOURCE_PLACEHOLDER.search(note["markdown"]))
+            if not eligible:
+                result.append(seed)
+                continue
+            completed.add(note["id"])
+            source_date = note.get("source_date") or seed.get("source_date")
+            whole = {**seed, "id": note["id"], "note_id": note["id"], "kind": "note",
+                     "title": note["title"], "note_title": note["title"], "section": note["title"],
+                     "text": note["markdown"], "line_start": 1, "line_end": len(note["markdown"].split("\n")),
+                     "thread_links": note["thread_links"], "content_complete": True,
+                     "source_date": source_date, "date_basis": "recorded" if source_date else "file_modified",
+                     "retrieval_reason": "complete_short_topic",
+                     "supporting_source_ids": matched[note["id"]]}
+            whole.pop("other_sources", None)
+            result.append(whole)
+        return result
+
     def search(self, query: str, limit: int = 30) -> dict[str, Any]:
         query = str(query or "").strip()
         with self._lock:
@@ -748,6 +814,7 @@ class Library:
                     covered.update(term for term in plan["terms"] if term in text + heading)
                 deduped = diversified + remaining
             if plan:
+                deduped = self._complete_short_topics(deduped)
                 deduped = self._supplement_result_table(deduped, plan["requested"])
             selected = deduped if limit <= 0 else deduped[:limit]
             return copy.deepcopy({
@@ -771,6 +838,39 @@ class Library:
             note["selected_source_id"] = source_id
             note["focus"] = copy.deepcopy(self._passages.get(source_id))
             return note
+
+    def resolve_wiki_note(self, target: str, origin: str = "") -> dict[str, str]:
+        """Resolve a reading link against indexed notes, including registered history."""
+        path, _, anchor = str(target).partition("#")
+        path, origin = path.strip().replace("\\", "/"), str(origin).replace("\\", "/")
+        if any(part in {".", ".."} for part in path.split("/")) or ":" in path or path.startswith("/"):
+            raise ValueError("笔记链接必须使用知识库内的相对路径。")
+        with self._lock:
+            relative = path if path.lower().endswith(".md") else path + ".md"
+            candidates = []
+            if not path:
+                candidates = [origin] if origin else []
+            else:
+                if origin and "/" not in path:
+                    candidates.append(str(PurePosixPath(origin).parent / relative))
+                candidates.append(relative)
+                if origin and "/" in path:
+                    candidates.append(str(PurePosixPath(origin).parent / relative))
+            by_path = {note["relative"].casefold(): note["id"] for note in self._notes.values()}
+            for candidate in candidates:
+                note_id = by_path.get(candidate.casefold()) or self._note_aliases.get("n_" + _encode(candidate))
+                if note_id in self._notes:
+                    return {"note_id": note_id, "anchor": anchor.strip()}
+            if path and "/" not in path:
+                name = PurePosixPath(relative).stem.casefold()
+                matches = [note for note in self._notes.values()
+                           if PurePosixPath(note["relative"]).stem.casefold() == name
+                           or note["title"].casefold() == name]
+                if len(matches) == 1:
+                    return {"note_id": matches[0]["id"], "anchor": anchor.strip()}
+                if len(matches) > 1:
+                    raise ValueError("链接有多篇同名笔记，请使用完整路径。")
+            raise KeyError("未找到链接笔记，请检查路径或最新同步结果。")
 
     def context_sources(self, ids: Iterable[str], query: str = "") -> dict[str, Any]:
         """Return exactly the selected sources, complete and in selection order."""
@@ -797,6 +897,8 @@ class Library:
                         "source_path": note["path"], "thread_links": copy.deepcopy(note["thread_links"]),
                         "passages": passages, "content_complete": True, "kind": "note",
                         "modified_at": note["modified_at"], "archived": note["archived"],
+                        "source_date": note.get("source_date"),
+                        "date_basis": "recorded" if note.get("source_date") else "file_modified",
                         "searchable": note["searchable"], "answer_status": "evidence_only",
                     })
                 else:
@@ -895,6 +997,7 @@ class Library:
             return {
                 "projects": self.projects()[:8], "recent": recent, "note_count": len(notes),
                 "topics": topics, "knowledge_count": len(topics),
+                "note_aliases": copy.deepcopy(self._note_aliases),
                 "archive_count": len(self._notes) - len(notes),
                 "source_count": sum(not p["archived"] for p in self._passages.values()),
                 "refreshed_at": self._refreshed_at,
@@ -915,9 +1018,9 @@ class Library:
             ]
             sources = [
                 {**{key: copy.deepcopy(passage[key]) for key in (
-                    "id", "note_id", "note_title", "title", "section", "text", "excerpt",
+                    "id", "note_id", "note_title", "title", "section", "relative", "text", "excerpt",
                     "line_start", "line_end", "project", "project_id", "thread_links",
-                    "topic_names", "heading_projects", "scope_projects", "maintenance", "navigation", "archived", "searchable",
+                    "topic_names", "heading_projects", "scope_projects", "project_origin", "maintenance", "navigation", "archived", "searchable",
                     "modified_at", "source_date", "date_basis", "kind",
                 )},
                  "scorehint": (-35 if passage["maintenance"] else 0)

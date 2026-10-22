@@ -141,6 +141,8 @@ class ModelContractTests(unittest.TestCase):
         self.assertIn("--ephemeral", args[0])
         self.assertIn("read-only", args[0])
         self.assertIn("--ignore-user-config", args[0])
+        self.assertIn('model_reasoning_effort="low"', args[0])
+        self.assertFalse(any("service_tier" in item for item in args[0]))
         self.assertIn("shell_tool", args[0])
         self.assertNotIn("CODEX_APP_TOOLS_PIPE_PATH", kwargs["env"])
         self.assertNotIn("CODEX_THREAD_ID", kwargs["env"])

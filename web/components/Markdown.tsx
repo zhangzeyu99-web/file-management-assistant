@@ -9,20 +9,66 @@ export function safeLink(value: string): boolean {
     || /^obsidian:\/\/open\?/i.test(value);
 }
 
-type Props = { text: string; onWikiLink?: (name: string) => void; onCopy?: (text: string) => void };
+export type Citation = { id?: string; note_id?: string; title: string; note_title?: string; section?: string };
+const citationPattern = /^\[(?:来源\s*)?(\d+)\]$/;
+export function citationTitle(item: Citation) {
+  return item.note_title && item.note_title !== item.title ? `${item.note_title} · ${item.title}` : item.title;
+}
+export function citationHref(item: Citation) {
+  return item.id || item.note_id ? `#note=${encodeURIComponent(item.id || item.note_id || "")}` : "";
+}
+export function cleanAnswer(text: string) {
+  let fence = "";
+  return text.replace(/\r\n/g, "\n").split("\n").filter(line => {
+    const marker = line.match(/^\s*(```|~~~)/)?.[1];
+    if (marker) { if (!fence) fence = marker; else if (fence === marker) fence = ""; return true; }
+    // Older model replies duplicated the UI's reference list in a final paragraph.
+    return Boolean(fence) || !/^\s*(?:\*\*)?来源[：:]\s*(?:来源\s*\d+|\[来源\s*\d+\])/.test(line);
+  }).join("\n").trim();
+}
+export function answerForExport(text: string, citations: Citation[], origin: string) {
+  const used = new Set<number>(); let fence = "";
+  const formatted = cleanAnswer(text).split("\n").map(line => {
+    const marker = line.match(/^\s*(```|~~~)/)?.[1];
+    if (marker) { if (!fence) fence = marker; else if (fence === marker) fence = ""; return line; }
+    if (fence) return line;
+    const adjacent = new Set<number>(); let previousEnd = 0;
+    return line.replace(/`[^`]+`|\[[^\]]+\]\([^)]+\)|\[(?:来源\s*)?\d+\]/g, (token, offset: number) => {
+      const number = Number(token.match(citationPattern)?.[1]), item = citations[number - 1];
+      if (line.slice(previousEnd, offset).trim() || !item) adjacent.clear();
+      previousEnd = offset + token.length;
+      if (!item || !citationHref(item)) return token;
+      if (adjacent.has(number)) return "";
+      adjacent.add(number);
+      used.add(number); return `[${number}](${origin}/${citationHref(item)})`;
+    });
+  }).join("\n");
+  const references = [...used].sort((a, b) => a - b).map(number => `${number}. [${citationTitle(citations[number - 1])}](${origin}/${citationHref(citations[number - 1])})`);
+  return formatted + (references.length ? `\n\n参考资料\n\n${references.join("\n")}` : "");
+}
 
-export default function Markdown({ text, onWikiLink, onCopy }: Props) {
+type Props = { text: string; onWikiLink?: (name: string) => void; onCopy?: (text: string) => void; citations?: Citation[] };
+
+export default function Markdown({ text, onWikiLink, onCopy, citations }: Props) {
   function inline(value: string): ReactNode[] {
-    const pattern = /(\[\[[^\]]+\]\]|\[[^\]]+\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*|<https?:\/\/[^\s<>]+>|https?:\/\/[^\s<>]+|codex:\/\/threads?\/[a-z0-9-]+)/gi;
+    const pattern = /(\[\[[^\]]+\]\]|\[[^\]]+\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*|\[(?:来源\s*)?\d+\]|<https?:\/\/[^\s<>]+>|https?:\/\/[^\s<>]+|codex:\/\/threads?\/[a-z0-9-]+)/gi;
     const output: ReactNode[] = [];
     let previous = 0;
+    const adjacentCitations = new Set<number>();
     for (const match of value.matchAll(pattern)) {
-      if (match.index! > previous) output.push(value.slice(previous, match.index));
+      const gap = value.slice(previous, match.index);
+      if (gap) output.push(gap);
       const token = match[0];
+      const number = Number(token.match(citationPattern)?.[1]), citation = citations?.[number - 1];
+      if (gap.trim() || !citation) adjacentCitations.clear();
+      if (citation && citationHref(citation) && adjacentCitations.has(number)) { previous = match.index! + token.length; continue; }
       let node: ReactNode = token;
-      if (token.startsWith("[[")) {
+      if (citation && citationHref(citation)) {
+        node = <a className="answer-citation" href={citationHref(citation)} title={citationTitle(citation)} aria-label={`查看依据 ${number}：${citationTitle(citation)}`}>{`[${number}]`}</a>;
+        adjacentCitations.add(number);
+      } else if (token.startsWith("[[")) {
         const [target, label] = token.slice(2, -2).split("|");
-        node = onWikiLink ? <button className="inline-link" onClick={() => onWikiLink(target.split("#")[0])}>{label || target}</button> : label || target;
+        node = onWikiLink ? <button className="inline-link" onClick={() => onWikiLink(target)}>{label || target}</button> : label || target;
       } else if (token.startsWith("**")) node = <strong>{token.slice(2, -2)}</strong>;
       else if (token.startsWith("`")) node = <code>{token.slice(1, -1)}</code>;
       else {
@@ -42,7 +88,7 @@ export default function Markdown({ text, onWikiLink, onCopy }: Props) {
     return output;
   }
 
-  const lines = (text || "").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "")
+  const lines = (citations?.length ? cleanAnswer(text || "") : text || "").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "")
     .replace(/<!--\s*obsidian-workspace task:[\s\S]*?-->/g, "")
     .replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
@@ -60,7 +106,7 @@ export default function Markdown({ text, onWikiLink, onCopy }: Props) {
     }
     const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
     if (heading) {
-      blocks.push(heading[1].length <= 2 ? <h2 key={start} id={`line-${start + 1}`}>{inline(heading[2])}</h2> : <h3 key={start} id={`line-${start + 1}`}>{inline(heading[2])}</h3>);
+      blocks.push(heading[1].length <= 2 ? <h2 key={start} id={`line-${start + 1}`} data-heading={heading[2]}>{inline(heading[2])}</h2> : <h3 key={start} id={`line-${start + 1}`} data-heading={heading[2]}>{inline(heading[2])}</h3>);
       i++; continue;
     }
     if (/^\s*[-*_]{3,}\s*$/.test(line)) { blocks.push(<hr key={start} />); i++; continue; }

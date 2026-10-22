@@ -128,6 +128,9 @@ def make_handler(runtime=None, *, migration=None):
                 if path == "search":
                     return self.respond(runtime.library.search(args.get("q", [""])[0],
                         limit=max(0, min(5000, int(args.get("limit", ["50"])[0])))))
+                if path == "notes/resolve":
+                    return self.respond(runtime.library.resolve_wiki_note(
+                        args.get("target", [""])[0], args.get("from", [""])[0]))
                 if path.startswith("notes/"):
                     return self.respond(runtime.library.get_note(path[6:]))
                 if path == "upload" and self.command == "POST":

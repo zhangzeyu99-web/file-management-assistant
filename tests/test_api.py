@@ -65,6 +65,22 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(self.request("search?q=" + quote("星河验收资料"))[1]["items"])
         self.assertEqual(len(self.model.prompts), 1)
 
+    def test_wiki_source_link_opens_archived_note_without_search_or_model(self):
+        path = Path(self.runtime.cfg["obsidian_vault"]) / "90 历史" / "计算依据.md"
+        path.parent.mkdir()
+        path.write_text("# 计算依据\n\n## 原始口径\n\n保留原始字段及完整计算条件。\n", encoding="utf-8")
+        self.runtime.library.refresh()
+        status, resolved = self.request("notes/resolve?target=" + quote("90 历史/计算依据#原始口径"))
+        self.assertEqual(status, 200, resolved)
+        self.assertEqual(resolved["anchor"], "原始口径")
+        status, note = self.request("notes/" + resolved["note_id"])
+        self.assertEqual(status, 200)
+        self.assertTrue(note["archived"])
+        self.assertIn("完整计算条件", note["markdown"])
+        self.assertEqual(self.request("search?q=" + quote("计算依据"))[1]["total"], 0)
+        self.assertEqual(self.request("notes/resolve?target=" + quote("../库外"))[0], 400)
+        self.assertEqual(self.model.prompts, [])
+
     def test_update_dedup_cancel_retry_and_terminal_retry_boundary(self):
         status, first = self.request("jobs", {"kind": "update", "input": {}})
         self.assertEqual(status, 202)
