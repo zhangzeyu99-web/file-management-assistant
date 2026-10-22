@@ -4,13 +4,22 @@ import ctypes
 import json
 import os
 import re
+import socket
 import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlencode
 
+from .user_errors import ERRORS
+
 MIGRATION_CHUNK_BYTES = 4 * 1024 * 1024
 MIGRATION_CLOUD_LIMIT = 128 * 1024 * 1024
+
+
+class CloudError(RuntimeError):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
 
 
 class Blob(ctypes.Structure):
@@ -50,8 +59,11 @@ class Cloud:
 
     def request(self, path, data=None, *, raw=False, binary=False):
         if not self.available:
-            raise RuntimeError("线上连接尚未配置")
-        token = protect(self.token_path.read_bytes(), decrypt=True).decode("utf-8")
+            raise CloudError("cloud_not_configured", "线上连接尚未配置")
+        try:
+            token = protect(self.token_path.read_bytes(), decrypt=True).decode("utf-8")
+        except (OSError, UnicodeError) as error:
+            raise CloudError("cloud_auth", "无法使用当前电脑保存的线上服务凭据") from error
         req = urllib.request.Request(self.url + "/api/workspace/" + path,
             data=data if binary else json.dumps(data, ensure_ascii=False).encode("utf-8") if data is not None else None,
             headers={"OAI-Sites-Authorization": "Bearer " + token,
@@ -61,14 +73,26 @@ class Cloud:
                 payload = response.read()
                 return payload if raw else json.loads(payload)
         except urllib.error.HTTPError as e:
-            # Never echo request headers or secret-bearing response pages.
-            message = f"线上服务返回 {e.code}"
+            # Status is enough to distinguish recovery. Never echo response pages.
+            code = {401: "cloud_auth", 403: "cloud_forbidden", 404: "cloud_not_found",
+                    400: "request_invalid", 409: "cloud_request_conflict",
+                    429: "cloud_rate_limited"}.get(e.code, "cloud_unavailable")
             try:
-                body = json.loads(e.read())
-                message += "：" + str(body.get("error", ""))[:300]
-            except Exception:
+                body = json.loads(e.read(32768))
+                detail = body.get("error_detail") if isinstance(body, dict) else None
+                remote_code = detail.get("code") if isinstance(detail, dict) else body.get("error_code")
+                if remote_code in ERRORS:
+                    code = remote_code
+            except (ValueError, AttributeError, TypeError):
                 pass
-            raise RuntimeError(message) from None
+            raise CloudError(code, f"线上服务返回 {e.code}") from None
+        except (TimeoutError, socket.timeout) as error:
+            raise CloudError("cloud_timeout", "连接线上服务超时") from error
+        except urllib.error.URLError as error:
+            code = "cloud_timeout" if isinstance(error.reason, (TimeoutError, socket.timeout)) else "cloud_unavailable"
+            raise CloudError(code, "无法连接线上服务") from error
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise CloudError("cloud_response_invalid", "线上服务返回的数据无法识别") from error
 
     def upload_migration(self, bundle, job_id, owner, *, progress=None):
         """Upload bounded chunks with the same private service authentication."""

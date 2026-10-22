@@ -180,8 +180,9 @@ class BrowserMigrationTests(unittest.TestCase):
                 self.assertEqual(202, status, job)
                 failed = finish_job(job["id"])
                 self.assertEqual("failed", failed["status"], failed)
-                self.assertIn("安装 Codex CLI", failed["error"])
-                self.assertIn("登录", failed["error"])
+                self.assertEqual(failed["result"]["failure"]["code"], "model_unavailable")
+                self.assertIn("安装 Codex CLI", failed["result"]["failure"]["action"])
+                self.assertIn("登录", failed["result"]["failure"]["action"])
                 self.assertFalse((failed.get("result") or {}).get("markdown"))
             self.assertTrue(discover.called)
             self.assertEqual(before_state, checkpoint.read_bytes())
@@ -238,7 +239,8 @@ class BrowserMigrationTests(unittest.TestCase):
         self.request(f"migration/import/chunk?upload_id={bad_id}&offset=0", raw=b"bad")
         code, error = self.request("migration/import/preview", {"upload_id": bad_id})
         self.assertEqual(400, code)
-        self.assertIn("迁移包损坏或不是有效 ZIP", error["error"])
+        self.assertEqual(error["error_detail"]["code"], "migration_invalid_bundle")
+        self.assertIn("重新导出", error["error_detail"]["action"])
         self.assertFalse((self.project / ".workspace-active.json").exists())
 
     def test_existing_directory_and_active_task_are_never_overwritten_or_switched(self):

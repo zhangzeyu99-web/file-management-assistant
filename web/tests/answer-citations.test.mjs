@@ -58,7 +58,7 @@ test("repeating a search reads results and an existing answer without submitting
     currentSearch: {}, currentSearchVersion: {}, answers: {current: {合服: {id: "saved", version: "v1:answer-v2"}}},
     api: async (path, body) => { calls.push([path, body]); return path.startsWith("search?") ? {query: "合服", items: citations} : {id: "saved"}; },
     createJob: () => {throw new Error("Searching must not start AI generation");}, putJob: job => job,
-    setQuery() {}, setSearching() {}, setSearch: value => {shown = value;}, setShowAll() {}, setAnswerError() {}, setAnswerId: value => {answerId = value;}, setError() {}};
+    setQuery() {}, setSearching() {}, setSearch: value => {shown = value;}, setShowAll() {}, setAnswerError() {}, setAnswerErrorMode() {}, setAnswerId: value => {answerId = value;}, setError() {}};
   vm.createContext(context); vm.runInContext(searchCode, context);
   await context.runSearchTest("合服"); await context.runSearchTest("合服");
   assert.equal(shown.items.length, 2); assert.equal(answerId, "saved");

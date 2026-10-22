@@ -11,6 +11,7 @@ from urllib.parse import unquote, urlparse, parse_qs, quote
 from engine.migration_service import CHUNK_SIZE, MigrationService
 from engine.runtime import CloudJobsUnavailable, Runtime
 from engine.settings import ROOT, load_settings, validate_startup
+from engine.user_errors import public_payload, record_diagnostic, user_error
 
 
 def make_handler(runtime=None, *, migration=None):
@@ -21,6 +22,7 @@ def make_handler(runtime=None, *, migration=None):
             pass
 
         def respond(self, data, code=200):
+            data = public_payload(data)
             body = json.dumps(data, ensure_ascii=False).encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -47,6 +49,17 @@ def make_handler(runtime=None, *, migration=None):
                     pass
                 finally:
                     self.connection.settimeout(previous_timeout)
+
+        def respond_error(self, error, status, **extra):
+            runtime = workspace.runtime
+            context = "migration" if "/migration/" in self.path else "http"
+            diagnostic_id = record_diagnostic(getattr(runtime, "data", workspace.staging),
+                                              error, context=context)
+            detail = user_error(error,
+                code="migration_invalid_bundle" if isinstance(error, zipfile.BadZipFile) else None,
+                context=context, diagnostic_id=diagnostic_id)
+            return self.respond({"error": detail["message"], "error_code": detail["code"],
+                                 "error_detail": detail, **extra}, status)
 
         def handle_request(self):
             try:
@@ -154,11 +167,11 @@ def make_handler(runtime=None, *, migration=None):
                     return self.respond(job)
                 return self.respond({"error": "未找到接口"}, 404)
             except CloudJobsUnavailable as e:
-                return self.respond({"error": str(e), "request_id": e.request_id}, 503)
+                return self.respond_error(e, 503, request_id=e.request_id)
             except (ValueError, KeyError, FileNotFoundError, zipfile.BadZipFile) as e:
-                return self.respond({"error": str(e)}, 400)
+                return self.respond_error(e, 400)
             except Exception as e:
-                return self.respond({"error": str(e)}, 500)
+                return self.respond_error(e, 500)
 
         do_GET = handle_request
         do_POST = handle_request

@@ -9,6 +9,7 @@ from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote
+from unittest.mock import patch
 
 from server import make_handler
 from test_runtime import SharedCloud, UPLOAD_TEXT, execute_one, fixture
@@ -106,6 +107,27 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(status, 403)
         self.assertEqual(self.request("jobs")[1]["items"], [])
 
+    def test_read_error_has_recovery_steps_and_private_diagnostic_instead_of_raw_exception(self):
+        with patch.object(self.runtime.library, "overview", side_effect=RuntimeError("C:/private/hidden-note.md secret backend failure")):
+            status, result = self.request("overview")
+        self.assertEqual(status, 500)
+        self.assertEqual(result["error_detail"]["code"], "internal_error")
+        self.assertFalse(result["error_detail"]["retryable"])
+        self.assertTrue(result["error_detail"]["action"])
+        self.assertNotIn("private", json.dumps(result))
+        private_log = self.runtime.data / "diagnostics" / "errors.jsonl"
+        row = json.loads(private_log.read_text(encoding="utf-8"))
+        self.assertEqual(row["id"], result["error_detail"]["diagnostic_id"])
+        self.assertIn("hidden-note.md", row["detail"])
+
+    def test_invalid_text_upload_explains_encoding_fix_without_enqueuing(self):
+        status, result = self.request("upload", {"filename": "资料.txt", "content": base64.b64encode(b"\xffinvalid").decode()})
+        self.assertEqual(status, 400)
+        self.assertEqual(result["error_detail"]["code"], "invalid_encoding")
+        self.assertIn("UTF-8", result["error_detail"]["action"])
+        self.assertIn("添加资料", result["error_detail"]["action"])
+        self.assertEqual(self.request("jobs")[1]["items"], [])
+
     def test_context_api_keeps_both_selected_note_ids(self):
         notes = self.request("overview")[1]["recent"]
         ids = [note["id"] for note in notes]
@@ -177,7 +199,9 @@ class ApiTests(unittest.TestCase):
         self.runtime._cloud_jobs_attempt = 0
         records = self.request("jobs")[1]
         self.assertTrue(records["cloud_cache"]["stale"])
-        self.assertIn("测试云连接断开", records["cloud_cache"]["error"])
+        self.assertEqual(records["cloud_cache"]["error_detail"]["code"], "cloud_unavailable")
+        self.assertIn("检查网络", records["cloud_cache"]["error_detail"]["action"])
+        self.assertNotIn("测试云连接断开", records["cloud_cache"]["error"])
         self.assertTrue(records["items"][0]["stale"])
         self.assertEqual(records["items"][0]["status"], "queued")
         self.assertTrue(records["items"][0]["stage"].startswith("上次记录"))

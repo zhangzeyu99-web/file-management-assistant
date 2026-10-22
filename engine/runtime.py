@@ -29,6 +29,7 @@ from .navigation import sync_navigation
 from .privacy import redact_text, redact_tree, sensitive_path
 from .weekly import open_window
 from .update_scope import SCOPE, candidate_file_reason, selection_input
+from .user_errors import public_payload, record_diagnostic, user_error
 
 
 def now_iso():
@@ -74,9 +75,10 @@ class Cancelled(RuntimeError):
 class CloudJobsUnavailable(RuntimeError):
     """A shared task operation failed; it must never fall back to local creation."""
 
-    def __init__(self, message, request_id=None):
+    def __init__(self, message, request_id=None, code=None):
         super().__init__(message)
         self.request_id = request_id
+        self.code = code
 
 
 class Runtime:
@@ -222,7 +224,8 @@ class Runtime:
         except Exception as exc:
             with self._cloud_jobs_lock:
                 self._cloud_jobs_error = str(exc)
-            raise CloudJobsUnavailable("线上任务服务不可用，未另建本地任务：" + str(exc), request_id) from exc
+            raise CloudJobsUnavailable("线上任务服务不可用，未另建本地任务：" + str(exc), request_id,
+                                       getattr(exc, "code", None)) from exc
 
     def list_jobs(self):
         with self._cloud_jobs_lock:
@@ -318,6 +321,11 @@ class Runtime:
                                             "format_status": extracted["status"]}, job_id), "origin": "local"}
 
     def _remote_update(self, context, **fields):
+        if "result" in fields:
+            fields["result"] = public_payload(fields["result"])
+        if fields.get("error"):
+            failure = (fields.get("result") or {}).get("failure")
+            fields["error"] = (failure or user_error(fields["error"]))["message"]
         if context["remote"]:
             return self.cloud.request("agent/jobs/" + context["job"]["id"],
                                       {"owner": self.owner, **fields})
@@ -468,13 +476,15 @@ class Runtime:
         except Cancelled:
             pass
         except Exception as e:
+            diagnostic_id = record_diagnostic(self.data, e, context="job:" + job["kind"])
+            failure = user_error(e, diagnostic_id=diagnostic_id)
             with self.active:
                 try:
                     if timings is not None:
                         self._finish_answer_timings(timings, started)
-                    self._remote_update(self.current, status="failed", stage="未完成，可重试",
-                                        result={"timings": timings} if timings is not None else None,
-                                        error=str(e)[:1000])
+                    self._remote_update(self.current, status="failed", stage=failure["message"],
+                                        result={"failure": failure, **({"timings": timings} if timings is not None else {})},
+                                        error=failure["message"])
                 except Exception:
                     pass
         finally:

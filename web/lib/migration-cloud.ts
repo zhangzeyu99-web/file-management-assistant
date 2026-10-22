@@ -1,4 +1,5 @@
 /** Bounded file transfer for the private Site; file bytes never enter D1. */
+import { userIssue } from "./user-errors.ts";
 export const MIGRATION_CHUNK_SIZE = 4 * 1024 * 1024;
 export const MIGRATION_CLOUD_LIMIT = 128 * 1024 * 1024;
 const RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -13,9 +14,13 @@ type Services = {
   getState: (key: string) => Promise<any>;
   publishState: (key: string, value: unknown, expected: unknown, jobId: string, owner: string) => Promise<boolean>;
 };
-const json = (body: unknown, status = 200) => Response.json(body, {
-  status, headers: {"Cache-Control": "no-store"},
-});
+const json = (body: unknown, status = 200) => {
+  if (status >= 400) {
+    const issue = userIssue(body, {status,context:"迁移传输"});
+    body = {error:issue.message,error_code:issue.code,error_detail:{code:issue.code,message:issue.message,action:issue.action,retryable:issue.retryable,help:issue.help}};
+  }
+  return Response.json(body, {status, headers: {"Cache-Control": "no-store"}});
+};
 const partKey = (m: Manifest, index: number) => `${m.prefix}/${index}`;
 const partSize = (m: Manifest, index: number) => Math.min(MIGRATION_CHUNK_SIZE, m.size - index * MIGRATION_CHUNK_SIZE);
 const validLease = (job: Record<string, any> | null, owner: unknown) =>

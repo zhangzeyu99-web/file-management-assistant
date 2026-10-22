@@ -112,7 +112,8 @@ class MigrationJobTests(unittest.TestCase):
         with patch("engine.migration._read_stable", side_effect=changed):
             result = self.execute(job)
         self.assertEqual(result["status"], "failed", result)
-        self.assertIn("导出期间变化", result["error"])
+        self.assertEqual(result["result"]["failure"]["code"], "migration_source_changed")
+        self.assertIn("新建一次导出", result["result"]["failure"]["action"])
         self.assertEqual(Path(self.runtime.cfg["state_path"]).read_bytes(), before)
         self.assertFalse(list(self.runtime.migration_exports.glob("*.zip")))
         self.assertIn(b"manual edit", note.read_bytes())

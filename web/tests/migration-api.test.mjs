@@ -5,6 +5,7 @@ import vm from "node:vm";
 import {DatabaseSync} from "node:sqlite";
 import ts from "typescript";
 import {migrationCloudRoute, MIGRATION_CLOUD_LIMIT} from "../lib/migration-cloud.ts";
+import {userIssue} from "../lib/user-errors.ts";
 
 const routeSource = fs.readFileSync(new URL("../app/api/workspace/[...path]/route.ts", import.meta.url), "utf8")
   .replace(/^import .*$/gm, "").replace(/^export /gm, "") + "\nglobalThis.handleTest=handler;";
@@ -34,7 +35,7 @@ function fixture(local = false) {
   const observed = [];
   const context = {
     env: {DB, BUCKET: bucket, ...(local ? {OW_LOCAL_API: "http://127.0.0.1:8767"} : {})},
-    migrationCloudRoute, MIGRATION_CLOUD_LIMIT, searchSnapshot: () => ({}),
+    migrationCloudRoute, MIGRATION_CLOUD_LIMIT, userIssue, searchSnapshot: () => ({}),
     Response, Request, URL, Headers, crypto, atob, Uint8Array, Date,
     fetch: async (url, options) => {
       observed.push({url, options});

@@ -448,3 +448,23 @@ summary { cursor:pointer; }
 .summary-empty { padding:24px 0; }
 .summary-footer { display:flex; justify-content:space-between; align-items:center; gap:12px; flex:none; font-size:14px; }
 @media(max-width:620px) { .summary-content { padding:18px 22px; } .summary-modal { max-height:calc(100dvh - 24px); } }
+
+.recovery-notice { margin: 16px 0; padding: 18px 20px; border: 1px solid var(--line, #cdd6c5); border-left: 3px solid #aa6336; border-radius: 8px; background: var(--paper, #faf9f5); overflow-wrap: anywhere; }
+.recovery-notice p { margin: 0 0 10px; line-height: 1.7; }
+.recovery-notice .recovery-problem { color: var(--text, #293c33); }
+.recovery-actions { display: flex; gap: 10px 18px; flex-wrap: wrap; align-items: center; }
+.recovery-actions:empty { display: none; }
+.recovery-diagnostic { margin-top: 14px; font-size: 13px; color: var(--muted, #687562); }
+.recovery-diagnostic summary { cursor: pointer; }
+.recovery-diagnostic pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px 0; font-size: 12px; }
+.recovery-notice.compact { padding: 14px 16px; }
+.help-page { max-width: 800px; }
+.help-topics { display: flex; flex-wrap: wrap; gap: 10px 22px; padding: 0 0 28px; }
+.help-page section { border-top: 1px solid var(--line, #dce1d4); padding: 28px 0; scroll-margin-top: 95px; }
+.help-page h2 { margin: 0 0 14px; font-size: 21px; }
+.help-page p, .help-page li { line-height: 1.85; }
+.help-page ol, .help-page ul { padding-left: 22px; }
+.help-page li + li { margin-top: 10px; }
+.help-command { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin: 12px 0; padding: 12px 16px; border: 1px solid var(--line, #dce1d4); border-radius: 5px; }
+.help-command code { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .recovery-notice { padding: 16px; } .recovery-actions { gap: 12px; } .help-page h2 { font-size: 20px; } }

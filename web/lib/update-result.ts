@@ -1,4 +1,6 @@
+import { userIssue, type UserIssue } from "./user-errors.ts";
 type RecordValue = Record<string, unknown>;
+type PendingItem = { source: string; reason: string; action: string; issue?: UserIssue };
 
 function record(value: unknown): RecordValue {
   return value && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : {};
@@ -58,28 +60,11 @@ function nativeReadLimit(value: unknown) {
   return /原生.*限制|超过.{0,16}(?:读取|阅读)限制|内容截断|maximum.{0,12}context/i.test(errorMessage(value));
 }
 
-export function updatePendingItem(value: unknown) {
-  const item = record(value), message = errorMessage(value);
+export function updatePendingItem(value: unknown): PendingItem {
+  const item = record(value);
   const source = sourceLabel(item.title || item.source || "整理任务");
-  if (nativeReadLimit(value)) {
-    return { source, reason: "对话太长，当前无法完整读取。", action: "当前无法自动补齐；可通过“添加资料”收录所需内容。" };
-  }
-  if (/编码|utf.?8|decode|codec|unicode|gbk|无效字节/i.test(message)) {
-    return { source, reason: "这份文件暂时读不开。", action: "可导出为文本或 Markdown 后重新收录。" };
-  }
-  if (/权限|403|unauthori[sz]|permission|forbidden/i.test(message)) {
-    return { source, reason: "当前没有读取权限。", action: "补充来源授权后重试。" };
-  }
-  if (/不存在|找不到|已删除|not found|no such file|404/i.test(message)) {
-    return { source, reason: "来源已移走或无法找到。", action: "确认原文件或链接仍可打开，再重试。" };
-  }
-  if (/线上同步/.test(source)) {
-    return { source, reason: "成果已保存在本机，线上尚未更新。", action: "连接恢复后重试同步。" };
-  }
-  if (/网络|超时|timeout|timed out|connection|暂不可用|断开|failed to fetch/i.test(message)) {
-    return { source, reason: "读取暂时中断。", action: "连接恢复后重试。" };
-  }
-  return { source, reason: "本次未能完成读取。", action: "核对来源后重试。" };
+  const issue = userIssue(item.error_detail || value, { context: "整理来源" });
+  return { source, reason: issue.message, action: issue.action, issue };
 }
 
 function savedNotes(values: unknown): UpdateNote[] {
@@ -100,13 +85,13 @@ export function updateJobView(job: UpdateJob, jobs: UpdateJob[], notes?: readonl
   const active = !["completed", "partial", "failed", "cancelled"].includes(job.status);
   const result = record(job.result), view = updateResultView(result, { active });
   const latest = latestUpdateAttempt(job, jobs);
-  const errors = view.errors.length ? view.errors : job.error ? [{ source: "整理任务", error: job.error }] : [];
+  const errors = view.errors.length ? view.errors : result.failure ? [result.failure] : job.error ? [{ source: "整理任务", error: job.error }] : [];
   const outstanding = (Array.isArray(result.outstanding) ? result.outstanding : []).map(record);
   const codes = (item: RecordValue) => [...(Array.isArray(item.turns) ? item.turns : []), ...(Array.isArray(item.reasons) ? item.reasons : [])]
     .map(value => String(record(value).reason_code || ""));
   const waitForSource = new Set(["running", "queued", "interrupted", "cancelled", "failed_turn", "read_limit"]);
   const nonRetryable = (item: RecordValue) => codes(item).length > 0 && codes(item).every(code => waitForSource.has(code));
-  const pending = [...errors.map(updatePendingItem), ...outstanding.filter(item => !errors.some(error => {
+  const pending: PendingItem[] = [...errors.map(updatePendingItem), ...outstanding.filter(item => !errors.some(error => {
     const failed = record(error);
     return item.thread_id && failed.thread_id ? item.thread_id === failed.thread_id : sourceLabel(item.title) === sourceLabel(failed.source);
   })).map(item => {
@@ -139,11 +124,11 @@ export function updateJobView(job: UpdateJob, jobs: UpdateJob[], notes?: readonl
       ? `${hasSaved ? "已保存成果" : "尚未生成笔记"}，${threads.pending} 个对话轮次待补。`
       : coverage.length ? "本次可读内容已处理，来源列表尚未完整覆盖。" : "本次未取得完整结果，请查看待补原因。"
     : hasSaved ? "整理完成，成果已保存。" : "检查完成，本次没有新增知识。";
-  const onlyNativeErrors = errors.length > 0 && errors.every(nativeReadLimit);
-  const retryBlocked = (onlyNativeErrors && !outstanding.some(item => !nonRetryable(item))) ||
+  const retryableErrors = errors.some(error => userIssue(record(error).error_detail || error).retryable);
+  const retryBlocked = (errors.length > 0 && !retryableErrors && !outstanding.some(item => !nonRetryable(item))) ||
     (!errors.length && outstanding.length > 0 && outstanding.every(nonRetryable));
   return { ...view, errors, latest, superseded: latest.id !== job.id, active, pending, coverage, notes: current,
-    summary, canRetry: !active && ["partial", "failed", "cancelled"].includes(job.status) && (!retryBlocked || result.sync_pending === true),
+    summary, canRetry: !active && ["partial", "failed", "cancelled"].includes(job.status) && !retryBlocked,
     retryLabel: result.sync_pending ? "重试同步" : "重试未完成来源",
     retryHint: errors.some(nativeReadLimit) ? "已保存和仅登记项会跳过；重试不会解除原生读取限制。" : "已保存和仅登记项会跳过。" };
 }

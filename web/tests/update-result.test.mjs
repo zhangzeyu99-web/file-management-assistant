@@ -7,6 +7,8 @@ import {createRequire} from "node:module";
 import ts from "typescript";
 import * as helpers from "../lib/update-result.ts";
 import {groupJobNotes} from "../lib/knowledge.ts";
+import * as userErrors from "../lib/user-errors.ts";
+import catalog from "../lib/error-catalog.json" with {type: "json"};
 
 const checks = (count, reason, extra = {}) => Array.from({length: count}, (_, i) => ({
   kind: "file", source: `fixture-${reason}-${i}`, reason, body_read: false, ...extra,
@@ -106,12 +108,12 @@ test("pending objects are readable while original technical errors and coverage 
   const before = structuredClone(result), view = updateJobView({id: "latest", status: "partial", result}, []);
   assert.equal(view.summary, "已保存成果，另有 2 项待补。");
   assert.equal(view.pending[0].source, "知识库总线程");
-  assert.equal(view.pending[0].reason, "对话太长，当前无法完整读取。");
+  assert.equal(view.pending[0].reason, catalog.native_oversized.message);
   assert.equal(view.pending[1].source, "账目说明");
-  assert.equal(view.pending[1].reason, "这份文件暂时读不开。");
+  assert.equal(view.pending[1].reason, catalog.invalid_encoding.message);
   assert.equal(view.coverage.length, 2);
   assert.equal(view.registrationCount, 104);
-  assert.equal(view.canRetry, true);
+  assert.equal(view.canRetry, false, "length and encoding failures require the displayed recovery actions before another attempt");
   assert.deepEqual(result, before);
   assert.equal(updatePendingItem({source: "https://fixture.invalid/docx/encoded-id", error: "403 Forbidden"}).source, "在线文档");
 });
@@ -131,13 +133,21 @@ test("retry outcomes put newly saved topics first and never turn a partial recei
 const componentSource = fs.readFileSync(new URL("../components/UpdateResult.tsx", import.meta.url), "utf8");
 const componentCode = ts.transpileModule(componentSource, {compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX}}).outputText;
 const componentModule = {exports: {}}, require = createRequire(import.meta.url);
+const recoverySource = fs.readFileSync(new URL("../components/RecoveryNotice.tsx", import.meta.url), "utf8");
+const recoveryCode = ts.transpileModule(recoverySource, {compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX}}).outputText;
+const recoveryModule = {exports: {}};
+vm.runInNewContext(recoveryCode, {module: recoveryModule, exports: recoveryModule.exports,
+  require: name => name === "@/lib/user-errors" ? userErrors : name === "react" ? {
+    ...require("react"), useMemo: fn => fn(), useState: initial => [typeof initial === "function" ? initial() : initial, () => {}],
+  } : require(name)});
 vm.runInNewContext(componentCode, {module: componentModule, exports: componentModule.exports,
-  require: name => name === "@/lib/update-result" ? helpers : require(name)});
+  require: name => name === "@/lib/update-result" ? helpers : name === "./RecoveryNotice" ? recoveryModule.exports : require(name)});
 const UpdateResult = componentModule.exports.default;
 function renderedText(node, includeDetails = false) {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(item => renderedText(item, includeDetails)).join("");
   if (!node || typeof node !== "object") return "";
+  if (typeof node.type === "function") return renderedText(node.type(node.props), includeDetails);
   const children = node.props?.children;
   if (node.type === "details" && !includeDetails) return renderedText((Array.isArray(children) ? children : [children]).find(child => child?.type === "summary"));
   return renderedText(children, includeDetails);
@@ -170,6 +180,7 @@ test("named unfinished conversations show the real cause without an ineffective 
 function elements(node, type) {
   if (Array.isArray(node)) return node.flatMap(item => elements(item, type));
   if (!node || typeof node !== "object") return [];
+  if (typeof node.type === "function") return elements(node.type(node.props), type);
   return [...(node.type === type ? [node] : []), ...elements(node.props?.children, type)];
 }
 
@@ -182,23 +193,27 @@ test("old receipt defaults to the newer result, hides old failures and never ret
   assert.ok(!renderedText(tree).includes("旧技术错误"));
   const buttons = elements(tree, "button");
   assert.equal(buttons.length, 1); buttons[0].props.onClick(); assert.equal(opened, retry.id);
-  assert.ok(renderedText(tree, true).includes("旧技术错误"), "historical diagnostics remain available on demand");
+  assert.ok(!renderedText(tree, true).includes("旧技术错误"), "historical details keep safe error meaning without re-exposing raw exceptions");
+  assert.ok(renderedText(tree, true).includes(catalog.internal_error.message));
 });
 
-test("latest receipt shows named outcomes and useful actions while paths and diagnostics stay folded", () => {
+test("latest receipt shows named outcomes and a direct repair action without exposing paths or raw exceptions", () => {
   const job = {id: "latest", status: "partial", result: {notes: Array.from({length: 7}, (_, i) => ({id: `n_${i}`, title: `项目甲规则${i}`})),
     errors: [{source: "D:\\private\\source\\说明.txt", error: "UnicodeDecodeError: utf-8 codec cannot decode byte 0xff"}], source_checks: checks(104, "暂不支持的文件格式")}};
-  let opened, retried;
-  const tree = UpdateResult({job, jobs: [], onOpenJob() {}, onRetry: item => {retried = item.id;}, onOpenNote: id => {opened = id;}});
+  let opened, added;
+  const tree = UpdateResult({job, jobs: [], onOpenJob() {}, onRetry() {throw new Error("encoding cannot be fixed by replaying the same source");}, onAdd: () => {added = true;}, onOpenNote: id => {opened = id;}});
   const text = renderedText(tree);
   assert.ok(text.includes("已完成")); assert.ok(text.includes("待补")); assert.ok(text.includes("说明"));
-  assert.ok(text.includes("导出为文本或 Markdown"));
+  assert.ok(text.includes(catalog.invalid_encoding.action));
   assert.ok(!text.includes("D:\\private")); assert.ok(!text.includes("UnicodeDecodeError"));
   assert.ok(text.includes("已跳过总结 · 104 项"));
   assert.ok(!text.includes("项目甲规则5"), "only five named note entrances are expanded");
   assert.ok(renderedText(tree, true).includes("项目甲规则6"));
   const buttons = elements(tree, "button");buttons[0].props.onClick();assert.equal(opened, "n_0");
-  buttons.find(button => renderedText(button).includes("重试")).props.onClick();assert.equal(retried, job.id);
+  buttons.find(button => renderedText(button) === "添加正文").props.onClick(); assert.equal(added, true);
+  assert.ok(!buttons.some(button => renderedText(button).includes("重试")));
+  assert.ok(!renderedText(tree, true).includes("D:\\private"));
+  assert.ok(!renderedText(tree, true).includes("UnicodeDecodeError"));
 });
 
 test("update outcomes retain folded archived and unresolved records with their real note targets", () => {
@@ -253,4 +268,20 @@ test("a known unreadable long conversation is explicit and does not offer an ine
   assert.equal(view.canRetry, false);
   assert.equal(helpers.updateStatusText(job), "1 项待补");
   assert.equal(helpers.updateStatusText({id: "done", status: "completed"}), "已完成");
+});
+
+
+test("mixed failures retain retry only when a temporary failure remains, without conflating discovery coverage", () => {
+  const result = {notes: [{id: "saved", title: "已有结论"}], errors: [
+    {source: "长对话", error_detail: {code: "native_oversized"}},
+    {source: "线上同步", error_detail: {code: "cloud_timeout"}},
+  ], sources: {threads: {status: "partial", historical_gap: 5}}};
+  const before = structuredClone(result);
+  const view = updateJobView({id: "mixed", status: "partial", result}, []);
+  assert.equal(view.canRetry, true);
+  assert.equal(view.pending[0].issue.retryable, false);
+  assert.equal(view.pending[1].issue.retryable, true);
+  assert.equal(view.coverage.length, 1);
+  assert.equal(view.errors.length, 2);
+  assert.deepEqual(result, before);
 });

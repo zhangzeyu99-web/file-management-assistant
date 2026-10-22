@@ -6,6 +6,9 @@ import Markdown, { answerForExport, citationHref, citationTitle, safeLink } from
 import MigrationPanel from "@/components/MigrationPanel";
 import SummarizeDialog from "@/components/SummarizeDialog";
 import UpdateResult from "@/components/UpdateResult";
+import RecoveryNotice from "@/components/RecoveryNotice";
+import HelpPanel from "@/components/HelpPanel";
+import { readJsonResponse, userIssue, type UserIssue } from "@/lib/user-errors";
 import { groupJobNotes, locateNoteAnchorWhenReady } from "@/lib/knowledge";
 import { submitSummarySelection, updateResultView, updateStatusText } from "@/lib/update-result";
 
@@ -23,7 +26,7 @@ type Overview = { projects: Project[]; recent: Source[]; topics?: Topic[]; note_
 type Note = Source & { markdown: string; path?: string; focus?: Source };
 type JobResult = { markdown?: string; answer?: string; text?: string; notes?: (Source | string)[]; message?: string; [key: string]: unknown };
 type Job = { id: string; kind: string; status: string; stage: string; created_at?: number | string; updated_at?: number | string; error?: string; input?: { query?: string; title?: string; request?: string; filename?: string; retry_of?: string }; result?: JobResult | null };
-type JobsCache = { configured?: boolean; stale?: boolean; error?: string | null; refreshed_at?: string | number | null };
+type JobsCache = { configured?: boolean; stale?: boolean; error?: string | null; error_detail?:unknown; refreshed_at?: string | number | null };
 type Health = { mode?: string; online?: boolean; setup_required?: boolean; synced_at?: string | number; index_version?: string; jobs_cache?: JobsCache; heartbeat?: { at?: number; device?: string } };
 type SearchResult = { query: string; items: Source[]; total: number; has_more?: boolean };
 type Route = { kind: string; id?: string; query?: string; anchor?: string };
@@ -56,12 +59,7 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const data: unknown = await response.json();
-  if (!response.ok) {
-    const message = data && typeof data === "object" && "error" in data ? String(data.error) : "";
-    throw new Error(message || `请求未完成（${response.status}）`);
-  }
-  return data as T;
+  return readJsonResponse<T>(response);
 }
 
 function when(value?: string | number): string {
@@ -139,24 +137,25 @@ export default function Workspace() {
   const [expandedJobNotes, setExpandedJobNotes] = useState<Record<string, boolean>>({});
   const [jobsCache, setJobsCache] = useState<JobsCache | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<UserIssue | null>(null);
   const [toast, setToast] = useState("");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [answerId, setAnswerId] = useState("");
-  const [answerError, setAnswerError] = useState("");
+  const [answerError, setAnswerError] = useState<UserIssue | null>(null);
   const [answerPending, setAnswerPending] = useState(false);
+  const [answerErrorMode, setAnswerErrorMode] = useState("search");
   const [note, setNote] = useState<Note | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState("");
+  const [detailError, setDetailError] = useState<UserIssue | null>(null);
   const [selected, setSelected] = useState<Source[]>([]);
   const [request, setRequest] = useState("");
   const [target, setTarget] = useState("portable");
   const [contextId, setContextId] = useState("");
-  const [contextError, setContextError] = useState("");
+  const [contextError, setContextError] = useState<UserIssue | null>(null);
   const [projectAnswerId, setProjectAnswerId] = useState("");
   const [basketOpen, setBasketOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -168,7 +167,7 @@ export default function Workspace() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadText, setUploadText] = useState("");
-  const [uploadError, setUploadError] = useState("");
+  const [uploadError, setUploadError] = useState<UserIssue | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [ready, setReady] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -234,9 +233,9 @@ export default function Workspace() {
       }
     } catch { /* A cache failure does not prevent reading. */ }
     setRoute(readRoute()); setReady(true);
-    const onHash = () => { setRoute(readRoute()); setMenuOpen(false); setDetailError(""); window.scrollTo({ top: 0 }); };
+    const onHash = () => { setRoute(readRoute()); setMenuOpen(false); setDetailError(null); window.scrollTo({ top: 0 }); };
     window.addEventListener("hashchange", onHash);
-    refreshJobs().then(nextHealth => nextHealth.setup_required ? undefined : refreshLibrary()).catch(cause => setError(cause.message || "知识库连接失败。")).finally(() => setLoading(false));
+    refreshJobs().then(nextHealth => nextHealth.setup_required ? undefined : refreshLibrary()).catch(cause => setError(userIssue(cause, {context:"读取知识库"}))).finally(() => setLoading(false));
     const interval = setInterval(() => {
       if (!document.hidden) refreshJobs().catch(cause => {
         setHealth(previous => previous ? { ...previous, online: false } : null);
@@ -292,7 +291,7 @@ export default function Workspace() {
     if (!value.trim()) return;
     const version = indexVersion.current;
     const seq = ++searchSequence.current; currentSearch.current = value; currentSearchVersion.current = version;
-    setQuery(value); setSearching(true); setSearch(null); setShowAll(false); setAnswerError(""); setAnswerId(""); setError("");
+    setAnswerErrorMode("search"); setQuery(value); setSearching(true); setSearch(null); setShowAll(false); setAnswerError(null); setAnswerId(""); setError(null);
     try {
       const found = await api<SearchResult>(`search?q=${encodeURIComponent(value)}&limit=0`);
       if (seq !== searchSequence.current) return;
@@ -305,13 +304,13 @@ export default function Workspace() {
         return;
       }
     } catch (cause) {
-      if (seq === searchSequence.current) { setSearching(false); setAnswerError(cause instanceof Error ? cause.message : "请求未完成，可重试。"); }
+      if (seq === searchSequence.current) { setSearching(false); setAnswerError(userIssue(cause, {context:"查找资料"})); }
     }
   }, [putJob]);
   async function requestAnswer(force = false) {
     if (!search?.items.length || answerPending) return;
     const value = search.query, version = `${indexVersion.current}:answer-v2`;
-    setAnswerPending(true); setAnswerError("");
+    setAnswerErrorMode("answer"); setAnswerPending(true); setAnswerError(null);
     try {
       const existing = !force && answers.current[value];
       if (existing && existing.version === version) {
@@ -326,7 +325,7 @@ export default function Workspace() {
       answers.current[value] = { id: job.id, version };
       if (currentSearch.current === value) setAnswerId(job.id);
     } catch (cause) {
-      if (currentSearch.current === value) setAnswerError(cause instanceof Error ? cause.message : "AI 整理未提交，可重试。");
+      if (currentSearch.current === value) setAnswerError(userIssue(cause, {context:"提交 AI 整理"}));
     } finally { setAnswerPending(false); }
   }
   const watchedAnswer = jobs.find(job => job.id === answerId);
@@ -351,7 +350,7 @@ export default function Workspace() {
     if (route.kind === "search" && route.query && (currentSearch.current !== route.query || currentSearchVersion.current !== indexVersion.current)) void runSearch(route.query);
     if (!["note", "project", "job", "context"].includes(route.kind)) return;
     if (route.kind === "context" && !contextId) return;
-    let active = true; setDetailLoading(true); setDetailError("");
+    let active = true; setDetailLoading(true); setDetailError(null);
     if (route.kind === "note") setNote(null);
     if (route.kind === "project") { setProject(null); setProjectAnswerId(""); }
     const type = route.kind === "note" ? "notes" : route.kind === "project" ? "projects" : "jobs";
@@ -368,7 +367,7 @@ export default function Workspace() {
         }
       }
       else putJob(data as Job);
-    }).catch(cause => { if (active) setDetailError(cause.message); }).finally(() => { if (active) setDetailLoading(false); });
+    }).catch(cause => { if (active) setDetailError(userIssue(cause, {context:"读取资料"})); }).finally(() => { if (active) setDetailLoading(false); });
     return () => { active = false; };
   }, [route, ready, loading, contextId, runSearch, putJob]);
   useEffect(() => {
@@ -384,7 +383,7 @@ export default function Workspace() {
       if (route.kind === "note" && route.id === linked.note_id && route.anchor === linked.anchor) {
         if (linked.anchor) scrollToHeading(linked.anchor); else window.scrollTo({ top: 0 });
       } else go("note", linked.note_id + (linked.anchor ? "#" + linked.anchor : ""));
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "未能打开链接笔记。"); }
+    } catch (cause) { setError(userIssue(cause, {context:"打开笔记"})); }
   }
 
   async function copy(text: string) {
@@ -403,7 +402,7 @@ export default function Workspace() {
   async function update() {
     if (runningUpdate) { go("job", runningUpdate.id); return; }
     summaryRequest.current = { key: "", id: "" };
-    setError(""); setSummaryOpen(true);
+    setError(null); setSummaryOpen(true);
   }
   async function startSummary(selection: { threads: string[]; files: string[] }) {
     const job = await submitSummarySelection(selection, summaryRequest.current, createJob);
@@ -411,7 +410,7 @@ export default function Workspace() {
   }
   async function makeContext() {
     if (!selected.length || !request.trim()) return;
-    setContextError(""); setSubmitting(true);
+    setContextError(null); setSubmitting(true);
     try {
       const input = { ids: selected.map(item => item.id), request: request.trim(), query: request.trim(), target };
       const key = JSON.stringify(input);
@@ -419,12 +418,12 @@ export default function Workspace() {
       const job = await createJob("context", input, contextRequest.current.id);
       contextRequest.current = null;
       setContextId(job.id); setBasketOpen(false); go("context");
-    } catch (cause) { setContextError(cause instanceof Error ? cause.message : "接续请求未提交。"); }
+    } catch (cause) { setContextError(userIssue(cause, {context:"准备接续"})); }
     finally { setSubmitting(false); }
   }
   async function summarizeProject() {
     if (!project?.items?.length) return;
-    setError(""); setSubmitting(true);
+    setError(null); setSubmitting(true);
     try {
       const latestProject = await api<Project>(`projects/${encodeURIComponent(project.id)}`);
       setProject(latestProject);
@@ -438,11 +437,11 @@ export default function Workspace() {
       });
       answers.current[`project:${project.id}`] = { id: job.id, version };
       setProjectAnswerId(job.id);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "项目进展整理未提交。"); }
+    } catch (cause) { setError(userIssue(cause, {context:"整理项目进展"})); }
     finally { setSubmitting(false); }
   }
   async function upload(event: FormEvent) {
-    event.preventDefault(); setUploadError(""); setSubmitting(true);
+    event.preventDefault(); setUploadError(null); setSubmitting(true);
     try {
       let job: Job;
       if (uploadMode === "file") {
@@ -462,17 +461,17 @@ export default function Workspace() {
       }
       uploadRequestId.current = "";
       setUploadOpen(false); setUploadFile(null); setUploadText(""); setUploadTitle(""); go("job", job.id);
-    } catch (cause) { setUploadError(cause instanceof Error ? cause.message : "资料未提交。"); }
+    } catch (cause) { setUploadError(userIssue(cause, {context:"收录资料"})); }
     finally { setSubmitting(false); }
   }
   async function jobAction(job: Job, action: string) {
     try { const next = await api<Job>(`jobs/${encodeURIComponent(job.id)}/${action}`, {}); await refreshJobs(); if (next.id) { if (next.kind) putJob(next); go("job", next.id); } }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "操作未完成。"); }
+    catch (cause) { setError(userIssue(cause, {context:"读取任务状态"})); }
   }
   async function migrationActivated(noteCount?: number) {
     searchSequence.current++;
     setSelected([]); setQuery(""); setRequest(""); setContextId(""); setAnswerId(""); setProjectAnswerId("");
-    setSearch(null); setNote(null); setProject(null); setJobs([]); setError("");
+    setSearch(null); setNote(null); setProject(null); setJobs([]); setError(null);
     answers.current = {}; answerRequests.current = {}; handledJobs.current.clear();
     try { localStorage.removeItem(STORAGE); } catch { /* Backend activation is already saved. */ }
     await refreshJobs();
@@ -501,7 +500,7 @@ export default function Workspace() {
       category: item, group, items: topics.filter(topic => topic.category === item && topic.group === group),
     })),
   );
-  const viewTitle = ({ home: "工作首页", projects: "知识目录", project: project?.title || "项目", updates: "更新记录", job: KINDS[currentJob?.kind || ""] || "任务记录", search: "找回资料", note: "阅读资料", context: "准备接续", migration: "备份与迁移" } as Record<string, string>)[route.kind] || "工作首页";
+  const viewTitle = ({ home: "工作首页", projects: "知识目录", project: project?.title || "项目", updates: "更新记录", job: KINDS[currentJob?.kind || ""] || "任务记录", search: "找回资料", note: "阅读资料", context: "准备接续", migration: "备份与迁移", help:"故障处理" } as Record<string, string>)[route.kind] || "工作首页";
   const searchBox = <SearchBox query={query} setQuery={setQuery} searching={searching} inputRef={inputRef} onSubmit={submitSearch} />;
 
   function threadLinks(links: ThreadLink[] = []) {
@@ -537,15 +536,15 @@ export default function Workspace() {
     const hasScope = local.length || Object.keys(thread).length || Object.keys(feishu).length || warnings.length;
     return <>
       {evidence.length > 0 && <details className="answer-sources"><summary>参考资料 · {evidence.length} 条</summary><ol>{evidence.map((item, index) => <li key={item.id || index}><a className="note-link" href={citationHref(item)}><span className="citation-label">{index + 1}</span><span>{citationTitle(item)}</span><ArrowRight size={15} /></a></li>)}</ol></details>}
-      {errors.length > 0 && <details className="scope-details"><summary>处理失败 · {errors.length} 项</summary><section className="scope-group"><ul className="issue-list">{errors.map((item, index) => <li key={index}>{issueText(item)}</li>)}</ul></section></details>}
+      {errors.length > 0 && <details className="scope-details"><summary>处理失败 · {errors.length} 项</summary><section className="scope-group"><ul className="issue-list">{errors.map((item, index) => <li key={index}><RecoveryNotice error={item} context="处理来源" compact /></li>)}</ul></section></details>}
       {Boolean(hasScope) && <details className="scope-details"><summary>来源检查与覆盖范围</summary>
         {Object.keys(skipped).length > 0 && <p className="scope-counts muted">按增量范围跳过：{[["files", "文件"], ["threads", "线程"], ["feishu", "飞书文档"]].filter(([key]) => typeof skipped[key] === "number").map(([key, label]) => `${label} ${skipped[key]}`).join(" · ") || "按已有检查点保留"}</p>}
-        {local.length > 0 && <section className="scope-group"><h3>本地资料</h3><ul>{local.map((item, index) => <li key={String(item.path || index)}><div><strong>{String(item.name || "本地目录")}</strong><span className={`scope-status ${item.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(item.status)}</span></div>{typeof item.enumerated === "number" && <p>本次枚举 {item.enumerated} 个文件{item.coverage === "continued" ? " · 从上次扫描位置继续" : ""}</p>}{item.path ? <small>{String(item.path)}</small> : null}{item.error ? <p className="scope-warning">{issueText(item.error)}</p> : null}</li>)}</ul></section>}
-        {Object.keys(thread).length > 0 && <section className="scope-group"><h3>Codex 对话 <span className={`scope-status ${thread.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(thread.status)}</span></h3><p>{typeof thread.listed === "number" ? `已取得 ${thread.listed} 条线程元数据。` : "本次未确认完整的线程列表。"}</p>{typeof thread.historical_gap === "number" && thread.historical_gap > 0 && <p className="scope-warning">基线前 {thread.historical_gap} 条历史对话未纳入本轮新增，历史覆盖缺口仍保留。</p>}{typeof thread.metadata_gap === "number" && thread.metadata_gap > 0 && <p className="scope-warning">{thread.metadata_gap} 条线程元数据不完整，待核实。</p>}{typeof thread.pending === "number" && thread.pending > 0 && <p className="scope-warning">{thread.pending} 个轮次仍在执行或读取不完整，留待下次。</p>}{thread.error ? <p className="scope-warning">{issueText(thread.error)}</p> : null}</section>}
+        {local.length > 0 && <section className="scope-group"><h3>本地资料</h3><ul>{local.map((item, index) => <li key={String(item.path || index)}><div><strong>{String(item.name || "本地目录")}</strong><span className={`scope-status ${item.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(item.status)}</span></div>{typeof item.enumerated === "number" && <p>本次枚举 {item.enumerated} 个文件{item.coverage === "continued" ? " · 从上次扫描位置继续" : ""}</p>}{item.error ? <RecoveryNotice error={item.error_detail || item.error} context="读取来源" compact /> : null}</li>)}</ul></section>}
+        {Object.keys(thread).length > 0 && <section className="scope-group"><h3>Codex 对话 <span className={`scope-status ${thread.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(thread.status)}</span></h3><p>{typeof thread.listed === "number" ? `已取得 ${thread.listed} 条线程元数据。` : "本次未确认完整的线程列表。"}</p>{typeof thread.historical_gap === "number" && thread.historical_gap > 0 && <p className="scope-warning">基线前 {thread.historical_gap} 条历史对话未纳入本轮新增，历史覆盖缺口仍保留。</p>}{typeof thread.metadata_gap === "number" && thread.metadata_gap > 0 && <p className="scope-warning">{thread.metadata_gap} 条线程元数据不完整，待核实。</p>}{typeof thread.pending === "number" && thread.pending > 0 && <p className="scope-warning">{thread.pending} 个轮次仍在执行或读取不完整，留待下次。</p>}{thread.error ? <RecoveryNotice error={thread.error_detail || thread.error} context="读取对话" compact /> : null}</section>}
         {Object.keys(feishu).length > 0 && <section className="scope-group"><h3>飞书文档元数据 <span className={`scope-status ${feishu.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(feishu.status)}</span></h3>{groups.length > 0 && <ul>{groups.map(([key, value]) => {
           const item = asRecord(value);
-          return <li key={key}><div><strong>{({ owned: "本人拥有的文档", edited: "近期编辑的文档", video_owner: "视频归档所有者的文档" } as Record<string, string>)[key] || key}</strong><span className={`scope-status ${item.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(item.status)}</span></div>{typeof item.pages === "number" && <p>已读取 {item.pages} 页元数据{item.complete === true ? " · 本组检查完成" : ""}</p>}{item.error ? <p className="scope-warning">{issueText(item.error)}</p> : null}</li>;
-        })}</ul>}{feishu.error ? <p className="scope-warning">{issueText(feishu.error)}</p> : null}</section>}
+          return <li key={key}><div><strong>{({ owned: "本人拥有的文档", edited: "近期编辑的文档", video_owner: "视频归档所有者的文档" } as Record<string, string>)[key] || key}</strong><span className={`scope-status ${item.status === "checked" ? "" : "incomplete"}`}>{sourceStatus(item.status)}</span></div>{typeof item.pages === "number" && <p>已读取 {item.pages} 页元数据{item.complete === true ? " · 本组检查完成" : ""}</p>}{item.error ? <RecoveryNotice error={item.error_detail || item.error} context="读取来源" compact /> : null}</li>;
+        })}</ul>}{feishu.error ? <RecoveryNotice error={feishu.error_detail || feishu.error} context="读取文档入口" compact /> : null}</section>}
         {warnings.length > 0 && <details className="scope-group"><summary>来源说明与提醒 · {warnings.length} 条</summary><ul className="issue-list">{warnings.map((item, index) => <li key={index}>{issueText(item)}</li>)}</ul></details>}
       </details>}
     </>;
@@ -556,10 +555,11 @@ export default function Workspace() {
     const text = resultText(job);
     const citations = job.kind === "answer" && Array.isArray(job.result?.sources) ? job.result.sources as Source[] : undefined;
     const exportText = citations?.length ? answerForExport(text, citations, typeof window === "undefined" ? "" : window.location.origin) : text;
-    const canRetry = ["failed", "partial", "cancelled"].includes(job.status);
+    const failure = job.result?.failure || job.error;
+    const canRetry = ["failed", "partial", "cancelled"].includes(job.status) && (!failure || userIssue(failure).retryable);
     const { current: notes, historical, unavailable } = groupJobNotes(
       Array.isArray(job.result?.notes) ? job.result.notes : [], hasTopics ? topics : undefined, overview.note_aliases);
-    if (job.kind === "update") return <section className="job-panel"><div className="section-heading"><h2>总结结果</h2></div><UpdateResult job={job} jobs={jobs} notes={notes.filter((item): item is Source => typeof item !== "string")} historical={historical} unavailable={unavailable} onOpenJob={id => go("job", id)} onRetry={() => void jobAction(job, "retry")} onOpenNote={id => go("note", id)} /><div className="job-footer"><span>{when(job.updated_at || job.created_at)}</span>{active && <button className="text-button" onClick={() => void jobAction(job, "cancel")}>取消后续处理</button>}</div></section>;
+    if (job.kind === "update") return <section className="job-panel"><div className="section-heading"><h2>总结结果</h2></div>{active && !online && <RecoveryNotice error={{code:"local_offline"}} compact />}<UpdateResult job={job} jobs={jobs} notes={notes.filter((item): item is Source => typeof item !== "string")} historical={historical} unavailable={unavailable} onOpenJob={id => go("job", id)} onRetry={() => void jobAction(job, "retry")} onOpenNote={id => go("note", id)} onAdd={() => { setUploadMode("text"); setUploadOpen(true); }} /><div className="job-footer"><span>{when(job.updated_at || job.created_at)}</span>{active && <button className="text-button" onClick={() => void jobAction(job, "cancel")}>取消后续处理</button>}</div></section>;
     const sourceCheckCount = Array.isArray(job.result?.source_checks) ? job.result.source_checks.length : 0;
     const notesExpanded = Boolean(expandedJobNotes[job.id]);
     const counts = asRecord(job.result?.counts);
@@ -567,9 +567,9 @@ export default function Workspace() {
       .filter(([key]) => typeof counts[key] === "number")
       .map(([key, label]) => `${label} ${counts[key]}`).join(" · ");
     return <section className={`job-panel ${job.status}`}><div className="section-heading"><h2>{title || KINDS[job.kind]}</h2><span className={`status-tag ${job.status}`}>{active ? <Loader2 size={13} className="spin" /> : job.status === "completed" ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}{STATUS[job.status] || job.status}</span></div>
-      {(active || job.status !== "completed") && <p className="job-stage" role="status">{job.kind === "answer" && active && online ? "AI 正在整理，可先阅读下方资料。" : job.stage}{active && !online ? " · 等待本机连接" : ""}</p>}
-      {job.error && <div className="inline-error" role="alert">{job.error}</div>}
-      {canRetry && <div className="result-actions"><button className="primary-button" onClick={() => void jobAction(job, "retry")}><RefreshCw size={16} />重试未完成部分</button></div>}
+      {active && !online && <RecoveryNotice error={{code:"local_offline"}} compact />}{(active || job.status !== "completed") && <p className="job-stage" role="status">{job.kind === "answer" && active && online ? "AI 正在整理，可先阅读下方资料。" : job.stage}{active && !online ? " · 等待本机连接" : ""}</p>}
+      {failure && <RecoveryNotice error={failure} context="执行任务" onRetry={() => void jobAction(job, "retry")} retryLabel="重试本任务" onAdd={() => { setUploadMode("text"); setUploadOpen(true); }} />}
+      {canRetry && !failure && <div className="result-actions"><button className="primary-button" onClick={() => void jobAction(job, "retry")}><RefreshCw size={16} />重试未完成部分</button></div>}
       {text && <><div className="result-actions"><button className="primary-button" onClick={() => void copy(exportText)}><Copy size={16} />复制内容</button><button className="secondary-button" onClick={() => download(exportText, job.kind === "answer" ? "资料回答.md" : "接续内容.md")}><ArrowDownToLine size={16} />下载 Markdown</button></div><Markdown text={text} citations={citations} onCopy={copy} onWikiLink={openWikiLink} /></>}
       {!text && active && job.kind !== "answer" && <p className="muted">结果会在这里出现，可以先阅读来源。</p>}
       {job.result?.message && !text && <p>{String(job.result.message)}</p>}
@@ -596,13 +596,15 @@ export default function Workspace() {
     {menuOpen && <button className="sidebar-scrim" aria-label="关闭导航" onClick={() => setMenuOpen(false)} />}
     <div className="main-shell"><header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="展开导航" aria-expanded={menuOpen} onClick={() => setMenuOpen(value => !value)}><Menu size={22} /></button><a href="#home">知识工作台</a><span>/</span><span>{viewTitle}</span></div>{!health?.setup_required && <div className="topbar-actions"><button className={`basket-toggle ${selected.length ? "has-items" : ""}`} aria-label={`已选资料 ${selected.length}`} onClick={() => setBasketOpen(true)}><Layers3 size={18} /><span>已选资料</span><b>{selected.length}</b></button><button className="top-add" onClick={() => setUploadOpen(true)}><Plus size={17} /><span>添加资料</span></button></div>}</header>
       <main className="main-content" id="main" tabIndex={-1}>
-        {error && <div className="global-error" role="alert"><span>{error}</span><button onClick={() => { setError(""); void refreshLibrary().catch(cause => setError(cause.message)); }}>重试</button></div>}
-        {jobsCache?.stale && <div className="cache-notice" role="status"><Clock3 size={17} /><span>当前为上次任务记录，云端连接恢复后刷新。</span></div>}
+        {error && <RecoveryNotice error={error} context="读取知识库" onRetry={() => window.location.reload()} retryLabel="重新检查页面" onAdd={() => { setUploadMode("text"); setUploadOpen(true); }} />}
+        {jobsCache?.stale && <RecoveryNotice error={jobsCache.error_detail || {code:"cloud_cache_stale"}} context="读取更新记录" onRetry={() => { void refreshJobs().catch(cause => setError(userIssue(cause,{context:"读取更新记录"}))); }} retryLabel="刷新任务记录" compact />}
         {loading && route.kind !== "migration" ? <div className="page-loading"><Loader2 className="spin" size={25} /><p>正在读取你的知识库…</p></div> : <>
           {route.kind === "migration" && <MigrationPanel mode={health?.mode} online={health?.online} setupRequired={health?.setup_required} exportJobId={route.id} onActivated={migrationActivated} onJobsChanged={refreshJobs} />}
+          {route.kind === "help" && <HelpPanel topic={route.id} />}
           {route.kind === "home" && <>
             <section className="home-intro"><h1>查找已有资料</h1>{searchBox}<div className="search-hints"><span>试着问</span>{["热血合服", "本地化", "Obsidian"].map(value => <button key={value} onClick={() => go("search", value)}>{value}<ArrowRight size={12} /></button>)}<kbd>Ctrl K</kbd></div></section>
-            <section className={`update-strip ${updateNeedsAttention && !runningUpdate ? "needs-attention" : ""}`}><div><span className="update-label">{runningUpdate ? runningUpdate.stage : latestUpdate ? `上次总结：${updateStatusText(latestUpdate, jobs)}` : "尚无更新记录"}</span><p>{latestUpdate ? when(latestUpdate.updated_at || latestUpdate.created_at) : "仅收录新资料与续聊"}{!online ? " · 本机离线，新任务将等待" : ""}</p></div><div className="update-actions">{latestUpdate && !runningUpdate && <button className="text-button" onClick={() => go("job", latestUpdate.id)}>查看记录<ChevronRight size={15} /></button>}<button className="secondary-button" disabled={submitting} onClick={() => runningUpdate ? go("job", runningUpdate.id) : void update()}>{runningUpdate ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}{runningUpdate ? "查看进度" : "自动总结"}</button></div></section>
+            <section className={`update-strip ${updateNeedsAttention && !runningUpdate ? "needs-attention" : ""}`}><div><span className="update-label">{runningUpdate ? runningUpdate.stage : latestUpdate ? `上次总结：${updateStatusText(latestUpdate, jobs)}` : "尚无更新记录"}</span><p>{latestUpdate ? when(latestUpdate.updated_at || latestUpdate.created_at) : "仅收录新资料与续聊"}{!online ? " · 等待保存资料的电脑连接" : ""}</p></div><div className="update-actions">{latestUpdate && !runningUpdate && <button className="text-button" onClick={() => go("job", latestUpdate.id)}>查看记录<ChevronRight size={15} /></button>}<button className="secondary-button" disabled={submitting} onClick={() => runningUpdate ? go("job", runningUpdate.id) : void update()}>{runningUpdate ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}{runningUpdate ? "查看进度" : "自动总结"}</button></div></section>
+            {!online && health && !health.setup_required && <RecoveryNotice error={{code:"local_offline"}} compact />}
             <section className="home-projects"><div className="section-heading"><h2>最近更新的项目</h2><a className="text-link" href="#projects">知识目录 <ArrowRight size={16} /></a></div>{homeProjects.length ? projectCards(homeProjects.slice(0, 4)) : <div className="empty-state"><FolderOpen size={24} /><p>收录资料后，项目和原对话会出现在这里。</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>添加第一份资料</button></div>}</section>
             <section className="recent-section"><div className="section-heading"><h2>最近笔记</h2><span className="muted">{knowledgeCount} 篇知识</span></div>{recentNotes.slice(0, 5).map(item => <button key={item.id} className="recent-row" onClick={() => go("note", item.id)}><FileText size={18} /><span>{item.title}</span><time>{when(item.modified_at)}</time><ChevronRight size={17} /></button>)}</section>
           </>}
@@ -616,12 +618,12 @@ export default function Workspace() {
             })}</div>{!topicGroups.length && <div className="empty-state"><p>这个分类还没有知识笔记。</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>添加资料</button></div>}
           </> : projects.length ? projectCards(projects) : <div className="empty-state"><p>还没有可阅读的知识笔记。</p><button className="secondary-button" onClick={() => setUploadOpen(true)}>添加资料</button></div>}</>}
           {route.kind === "search" && <><div className="page-heading"><span className="eyebrow">找回以前的做法</span><h1>问问已有的资料</h1></div>{searchBox}{searching ? <div className="waiting-state"><Loader2 size={19} className="spin" />正在查找相关证据…</div> : <>
-            {answerError && <div className="inline-error" role="alert">{answerError}</div>}
+            {answerError && <RecoveryNotice error={answerError} context="查找与回答" onRetry={() => answerErrorMode === "answer" ? void requestAnswer() : void runSearch(query)} retryLabel={answerErrorMode === "answer" ? "检查原请求并继续" : "重新查找"} />}
             {search && search.items.length > 0 && <><div className="search-answer-action">{!answerId && <p>先看资料，或让 AI 归纳成答案。</p>}<button className="secondary-button" disabled={answerPending || answerActive} onClick={() => void requestAnswer(Boolean(answerId && answerJob && TERMINAL.has(answerJob.status)))}>{answerPending || answerActive ? <Loader2 size={16} className="spin" /> : <Layers3 size={16} />}{answerPending ? "正在提交" : answerActive ? "正在整理" : answerId ? "重新整理答案" : "AI 整理答案"}</button></div>{answerId && jobPanel(answerJob, "依据资料回答")}<div className="section-heading evidence-heading"><h2>相关资料 <span>{search.total}</span></h2></div>{sources(search.items)}{search.total > search.items.length && <p className="muted">已显示 {search.items.length} / {search.total} 条；可补充关键词缩小范围。</p>}</>}
             {search && !search.items.length && <div className="empty-state empty-search"><Search size={27} /><h2>还没有找到相关资料</h2><p>换一个项目名或关键句，也可以把这份资料补进来。</p><div className="button-row"><button className="secondary-button" onClick={() => inputRef.current?.focus()}>修改问题</button><button className="primary-button" onClick={() => setUploadOpen(true)}><Plus size={16} />添加资料</button></div></div>}
           </>}</>}
           {["project", "note", "job"].includes(route.kind) && detailLoading && <div className="waiting-state"><Loader2 size={20} className="spin" />正在读取…</div>}
-          {detailError && <div className="inline-error" role="alert">{detailError}</div>}
+          {detailError && <RecoveryNotice error={detailError} context="读取资料" onRetry={() => setRoute({...route})} retryLabel="重新打开" />}
           {route.kind === "project" && project && <><button className="back-link" onClick={() => go("projects")}><ArrowLeft size={16} />知识目录</button><div className="page-heading"><span className="eyebrow">项目资料 · {project.source_count || project.items?.length || 0} 段记录</span><h1>{project.title}</h1></div><div className="project-tools"><button className="primary-button" onClick={() => { if (!request) setRequest(`继续${project.title}，明确已完成、未完成和下一步。`); setBasketOpen(true); }}><Layers3 size={16} />准备接续</button><div className="project-progress-action"><button className="secondary-button" disabled={submitting || !project.items?.length || Boolean(projectAnswerJob && !TERMINAL.has(projectAnswerJob.status))} onClick={() => void summarizeProject()}>{submitting ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}{projectAnswerId ? "重新整理进展" : "整理当前进展"}</button><p>{projectAnswerId && answers.current[`project:${project.id}`]?.version !== indexVersion.current ? "资料已更新，可重新整理。" : selected.filter(item => project.items?.some(source => source.id === item.id)).length ? "依据已选的本项目资料" : `依据下方前 ${Math.min(6, project.items?.length || 0)} 条记录`}</p></div></div>{Boolean(project.thread_links?.length) && <details className="project-origins"><summary>原对话 · {project.thread_links?.length} 个</summary>{threadLinks(project.thread_links)}</details>}
             {projectAnswerId && jobPanel(projectAnswerJob, "项目进展 · 依据记录整理")}
             <div className="section-heading"><h2>资料与原记录</h2><button className="text-button" onClick={() => go("search", project.query || project.title)}>问这个项目 <Search size={15} /></button></div>{sources(project.items || [], 8)}</>}
@@ -630,12 +632,12 @@ export default function Workspace() {
           {route.kind === "job" && currentJob && <><button className="back-link" onClick={() => go("updates")}><ArrowLeft size={16} />全部记录</button>{jobPanel(currentJob)}</>}
           {route.kind === "context" && <><div className="page-heading heading-with-action"><div><span className="eyebrow">让下一次对话接得上</span><h1>接续内容</h1><p>{request || "从已选资料中准备背景、决定和下一步。"}</p></div><button className="secondary-button" onClick={() => setBasketOpen(true)}><Layers3 size={16} />调整资料 · {selected.length}</button></div>{contextJob ? jobPanel(contextJob, "给下一次工作的上下文") : <div className="empty-state"><Layers3 size={25} /><p>先加入需要的资料，再写一句这次想做什么。</p><button className="primary-button" onClick={() => setBasketOpen(true)}>准备接续</button></div>}</>}
         </>}
-        <footer className="page-footer"><span>个人知识工作台</span><span>{health?.mode === "cloud" ? `线上副本 · ${when(overview.synced_at || health.synced_at)}` : "本机知识库"} · 来源可追溯</span></footer>
+        <footer className="page-footer"><span>个人知识工作台 · <a href="#help">故障处理</a></span><span>{health?.mode === "cloud" ? `线上副本 · ${when(overview.synced_at || health.synced_at)}` : "本机知识库"} · 来源可追溯</span></footer>
       </main>
     </div>
-    {summaryOpen && <SummarizeDialog online={online} request={api} onClose={closeSummary} onStart={startSummary} />}
-    {basketOpen && <div className="drawer-layer"><button className="drawer-scrim" aria-label="关闭已选资料" onClick={() => setBasketOpen(false)} /><aside className="selection-drawer" role="dialog" aria-modal="true" aria-labelledby="selection-title"><div className="drawer-heading"><div><span className="eyebrow">给下一次工作准备背景</span><h2 id="selection-title">已选资料 <span>{selected.length}</span></h2></div><button className="icon-button" aria-label="关闭已选资料" onClick={() => setBasketOpen(false)}><X size={22} /></button></div><div className="drawer-content">{selected.length ? <ul className="selection-list">{selected.map(item => <li key={item.id}><FileText size={17} /><div><button onClick={() => { setBasketOpen(false); go("note", item.id); }}>{item.title}</button><small>{item.project || item.section || item.relative}</small></div><button className="icon-button" aria-label={`移除${item.title}`} onClick={() => setSelected(previous => previous.filter(source => source.id !== item.id))}><X size={17} /></button></li>)}</ul> : <div className="empty-state compact-empty"><Layers3 size={25} /><p>阅读或搜索时，点击“加入接续”。</p><button className="text-button" onClick={() => { setBasketOpen(false); go("home"); }}>去找资料 <ArrowRight size={15} /></button></div>}<label className="field-label" htmlFor="continuation-request">这次想做什么？</label><textarea id="continuation-request" rows={4} placeholder="例如：继续做下批合服方案，先确认已有规则和还缺哪些数据。" value={request} onChange={event => setRequest(event.target.value)} /><fieldset className="target-choice"><legend>交给谁继续</legend><label><input type="radio" name="context-target" checked={target === "portable"} onChange={() => setTarget("portable")} /><span>其他 AI 或设备<small>附足够正文，不依赖本机路径</small></span></label><label><input type="radio" name="context-target" checked={target === "local"} onChange={() => setTarget("local")} /><span>本机 Codex<small>保留来源和本机接续入口</small></span></label></fieldset></div><div className="drawer-footer">{contextError && <div className="inline-error" role="alert">{contextError}</div>}<button className="primary-button" disabled={!selected.length || !request.trim() || submitting} onClick={() => void makeContext()}>{submitting ? <Loader2 size={16} className="spin" /> : <ArrowRight size={17} />}用这 {selected.length} 条资料准备接续</button><button className="text-button" onClick={() => setBasketOpen(false)}>继续挑选资料</button></div></aside></div>}
-    {uploadOpen && <div className="modal-layer"><button className="modal-scrim" aria-label="关闭添加资料" onClick={() => !submitting && setUploadOpen(false)} /><section className="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-title"><div className="drawer-heading"><div><span className="eyebrow">留下以后用得上的内容</span><h2 id="upload-title">添加资料</h2></div><button className="icon-button" aria-label="关闭添加资料" onClick={() => setUploadOpen(false)}><X size={22} /></button></div><form onSubmit={upload}><div className="segmented"><button type="button" className={uploadMode === "file" ? "active" : ""} onClick={() => { setUploadMode("file"); uploadRequestId.current = ""; }}><Upload size={16} />选择文件</button><button type="button" className={uploadMode === "text" ? "active" : ""} onClick={() => { setUploadMode("text"); uploadRequestId.current = ""; }}><FileText size={16} />粘贴正文</button></div>{uploadMode === "file" ? <><label className="file-drop"><FilePlus2 size={28} /><strong>{uploadFile?.name || "选择一份资料"}</strong><span>{uploadFile ? `${(uploadFile.size / 1024).toFixed(1)} KB · 点击重新选择` : "TXT、Markdown、DOCX、文字层 PDF"}</span><small>单个文件最多 12 MB</small><input aria-label="选择要收录的文件" type="file" accept=".txt,.md,.docx,.pdf" onChange={event => { setUploadFile(event.target.files?.[0] || null); setUploadError(""); uploadRequestId.current = ""; }} /></label><p className="muted upload-hint">文件会读取实际内容。扫描 PDF 暂不支持文字识别。</p></> : <><label className="field-label" htmlFor="upload-name">标题 <small>可选</small></label><input id="upload-name" value={uploadTitle} onChange={event => { setUploadTitle(event.target.value); uploadRequestId.current = ""; }} placeholder="这份资料叫什么" /><label className="field-label" htmlFor="upload-body">资料正文</label><textarea id="upload-body" rows={8} value={uploadText} onChange={event => { setUploadText(event.target.value); uploadRequestId.current = ""; }} placeholder="粘贴笔记、整理好的对话或要保留的内容…" /></>}{uploadError && <div className="inline-error" role="alert">{uploadError}</div>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setUploadOpen(false)}>取消</button><button className="primary-button" type="submit" disabled={submitting || (uploadMode === "file" ? !uploadFile : !uploadText.trim())}>{submitting ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}{submitting ? "正在提交" : "收录资料"}</button></div></form></section></div>}
+    {summaryOpen && <SummarizeDialog online={online} request={api} onClose={closeSummary} onStart={startSummary} onAdd={() => {setUploadMode("text");setUploadOpen(true);}} />}
+    {basketOpen && <div className="drawer-layer"><button className="drawer-scrim" aria-label="关闭已选资料" onClick={() => setBasketOpen(false)} /><aside className="selection-drawer" role="dialog" aria-modal="true" aria-labelledby="selection-title"><div className="drawer-heading"><div><span className="eyebrow">给下一次工作准备背景</span><h2 id="selection-title">已选资料 <span>{selected.length}</span></h2></div><button className="icon-button" aria-label="关闭已选资料" onClick={() => setBasketOpen(false)}><X size={22} /></button></div><div className="drawer-content">{selected.length ? <ul className="selection-list">{selected.map(item => <li key={item.id}><FileText size={17} /><div><button onClick={() => { setBasketOpen(false); go("note", item.id); }}>{item.title}</button><small>{item.project || item.section || item.relative}</small></div><button className="icon-button" aria-label={`移除${item.title}`} onClick={() => setSelected(previous => previous.filter(source => source.id !== item.id))}><X size={17} /></button></li>)}</ul> : <div className="empty-state compact-empty"><Layers3 size={25} /><p>阅读或搜索时，点击“加入接续”。</p><button className="text-button" onClick={() => { setBasketOpen(false); go("home"); }}>去找资料 <ArrowRight size={15} /></button></div>}<label className="field-label" htmlFor="continuation-request">这次想做什么？</label><textarea id="continuation-request" rows={4} placeholder="例如：继续做下批合服方案，先确认已有规则和还缺哪些数据。" value={request} onChange={event => setRequest(event.target.value)} /><fieldset className="target-choice"><legend>交给谁继续</legend><label><input type="radio" name="context-target" checked={target === "portable"} onChange={() => setTarget("portable")} /><span>其他 AI 或设备<small>附足够正文，不依赖本机路径</small></span></label><label><input type="radio" name="context-target" checked={target === "local"} onChange={() => setTarget("local")} /><span>本机 Codex<small>保留来源和本机接续入口</small></span></label></fieldset></div><div className="drawer-footer">{contextError && <RecoveryNotice error={contextError} context="准备接续" onRetry={() => void makeContext()} retryLabel="检查原请求并继续" />}<button className="primary-button" disabled={!selected.length || !request.trim() || submitting} onClick={() => void makeContext()}>{submitting ? <Loader2 size={16} className="spin" /> : <ArrowRight size={17} />}用这 {selected.length} 条资料准备接续</button><button className="text-button" onClick={() => setBasketOpen(false)}>继续挑选资料</button></div></aside></div>}
+    {uploadOpen && <div className="modal-layer"><button className="modal-scrim" aria-label="关闭添加资料" onClick={() => !submitting && setUploadOpen(false)} /><section className="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-title"><div className="drawer-heading"><div><span className="eyebrow">留下以后用得上的内容</span><h2 id="upload-title">添加资料</h2></div><button className="icon-button" aria-label="关闭添加资料" onClick={() => setUploadOpen(false)}><X size={22} /></button></div><form onSubmit={upload}><div className="segmented"><button type="button" className={uploadMode === "file" ? "active" : ""} onClick={() => { setUploadMode("file"); uploadRequestId.current = ""; }}><Upload size={16} />选择文件</button><button type="button" className={uploadMode === "text" ? "active" : ""} onClick={() => { setUploadMode("text"); uploadRequestId.current = ""; }}><FileText size={16} />粘贴正文</button></div>{uploadMode === "file" ? <><label className="file-drop"><FilePlus2 size={28} /><strong>{uploadFile?.name || "选择一份资料"}</strong><span>{uploadFile ? `${(uploadFile.size / 1024).toFixed(1)} KB · 点击重新选择` : "TXT、Markdown、DOCX、文字层 PDF"}</span><small>单个文件最多 12 MB</small><input aria-label="选择要收录的文件" type="file" accept=".txt,.md,.docx,.pdf" onChange={event => { setUploadFile(event.target.files?.[0] || null); setUploadError(null); uploadRequestId.current = ""; }} /></label><p className="muted upload-hint">文件会读取实际内容。扫描 PDF 暂不支持文字识别。</p></> : <><label className="field-label" htmlFor="upload-name">标题 <small>可选</small></label><input id="upload-name" value={uploadTitle} onChange={event => { setUploadTitle(event.target.value); uploadRequestId.current = ""; }} placeholder="这份资料叫什么" /><label className="field-label" htmlFor="upload-body">资料正文</label><textarea id="upload-body" rows={8} value={uploadText} onChange={event => { setUploadText(event.target.value); uploadRequestId.current = ""; }} placeholder="粘贴笔记、整理好的对话或要保留的内容…" /></>}{uploadError && <RecoveryNotice error={uploadError} context="收录资料" />}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setUploadOpen(false)}>取消</button><button className="primary-button" type="submit" disabled={submitting || (uploadMode === "file" ? !uploadFile : !uploadText.trim())}>{submitting ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}{submitting ? "正在提交" : "收录资料"}</button></div></form></section></div>}
     {toast && <div className="toast" role="status">{toast}</div>}
   </div>;
 }

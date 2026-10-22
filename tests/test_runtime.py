@@ -370,7 +370,7 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual("partial", result["status"], result)
                 self.assertEqual(0, result["result"]["counts"]["files"])
                 self.assertEqual([], result["result"]["notes"])
-                self.assertIn("标题缺少具体主题", result["result"]["errors"][0]["error"])
+                self.assertEqual(result["result"]["errors"][0]["error_detail"]["code"], "model_quality_failed")
                 self.assertEqual(checkpoint, Path(self.runtime.cfg["state_path"]).read_bytes())
                 self.assertEqual(before, self.runtime.library.overview()["note_count"])
                 self.assertEqual([], list(Path(self.runtime.cfg["output_root"]).rglob("*.md")))
@@ -577,7 +577,11 @@ class RuntimeTests(unittest.TestCase):
                 with patch.object(self.model, "generate", return_value=text):
                     failed = execute_one(self.runtime, job)
                 self.assertEqual(failed["status"], "failed", failed)
-                self.assertIn(reason, failed["error"])
+                failure = failed["result"]["failure"]
+                self.assertEqual(failure["code"], "model_empty" if reason == "为空" else "model_invalid_text")
+                self.assertTrue(failure["retryable"])
+                diagnostics = (self.runtime.data / "diagnostics" / "errors.jsonl").read_text(encoding="utf-8")
+                self.assertIn(reason, diagnostics)
                 self.assertEqual(self.runtime.library.overview()["note_count"], before)
                 self.assertEqual(Path(self.runtime.cfg["state_path"]).read_bytes(), checkpoint)
                 retry = self.runtime.create("ingest", {**job["input"], "retry_of": job["id"]})
@@ -790,7 +794,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertNotIn("unknown", self.state()["threads"])
         self.assertEqual(result["status"], "partial", result)
         self.assertEqual(result["result"]["sources"]["threads"]["status"], "not_checked")
-        self.assertIn("未扩大到历史对话", result["result"]["sources"]["threads"]["error"])
+        self.assertEqual(result["result"]["sources"]["threads"]["error_detail"]["code"], "checkpoint_missing")
 
     def test_multiple_small_scan_pages_complete_different_roots_without_replays(self):
         small, large = self.root / "small", self.root / "large"

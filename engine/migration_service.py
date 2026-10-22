@@ -15,6 +15,7 @@ from pathlib import Path
 from .migration import (CONFIG_LIST_PATHS, CONFIG_PATHS, MigrationError, PathMappings,
                         import_bundle, inspect_bundle)
 from .settings import ROOT, load_settings, validate_startup
+from .user_errors import record_diagnostic, user_error
 
 CHUNK_SIZE = 4 * 1024 * 1024
 IMPORT_LIMIT = 2 * 1024**3
@@ -331,8 +332,11 @@ class MigrationService:
                 # Cleanup cannot turn an activated library into a failed import.
                 pass
         except Exception as error:
+            diagnostic_id = record_diagnostic(self.staging, error, context="migration-import")
+            failure = user_error(error, diagnostic_id=diagnostic_id)
             with self.lock:
-                self.operations[operation_id].update(status="failed", stage="导入未完成", error=str(error))
+                self.operations[operation_id].update(status="failed", stage="导入未完成",
+                    error=failure["message"], error_detail=failure, error_code=failure["code"])
                 if row.get("imported"):
                     self.operations[operation_id]["result"] = {"activated": False,
                         "config_path": row["imported"]["config"], "vault": row["imported"]["vault"],

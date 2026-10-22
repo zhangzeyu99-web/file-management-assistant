@@ -2,10 +2,17 @@ import { env } from "cloudflare:workers";
 import { searchSnapshot } from "../../../../lib/search";
 import { resolveWikiNote } from "../../../../lib/knowledge";
 import { migrationCloudRoute, MIGRATION_CLOUD_LIMIT } from "../../../../lib/migration-cloud";
+import { userIssue } from "../../../../lib/user-errors";
 
 export const dynamic = "force-dynamic";
 type Job = Record<string, any>;
-const json = (body: unknown, status = 200) => Response.json(body, {status, headers: {"Cache-Control": "no-store"}});
+const json = (body: unknown, status = 200) => {
+  if (status >= 400) {
+    const issue = userIssue(body, {status,context:"网站请求"});
+    body = {error:issue.message,error_code:issue.code,error_detail:{code:issue.code,message:issue.message,action:issue.action,retryable:issue.retryable,help:issue.help}};
+  }
+  return Response.json(body, {status, headers: {"Cache-Control": "no-store"}});
+};
 const bindings = () => env as unknown as {DB: D1Database; BUCKET: R2Bucket; OW_LOCAL_API?: string};
 const terminal = new Set(["completed", "partial", "failed", "cancelled"]);
 function unpack(row: Job) {
