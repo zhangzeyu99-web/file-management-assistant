@@ -18,6 +18,8 @@ from engine import settings
 
 PROJECT = Path(__file__).resolve().parents[1]
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell")
+_WINDOWS_POWERSHELL = Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+WINDOWS_POWERSHELL = str(_WINDOWS_POWERSHELL) if os.name == "nt" and _WINDOWS_POWERSHELL.is_file() else None
 
 
 class SettingsTest(unittest.TestCase):
@@ -214,9 +216,13 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual((19031, 19032), (result["port"], result["web_port"]))
         self.assertFalse((path.parent / "data/logs").exists())
 
-    @unittest.skipUnless(os.name == "nt" and POWERSHELL and shutil.which("py") and shutil.which("node"),
-                         "Windows launcher integration")
+    @unittest.skipUnless(WINDOWS_POWERSHELL and shutil.which("py") and shutil.which("node"),
+                         "Windows PowerShell 5.1 launcher integration")
     def test_launcher_ports_reach_isolated_api_and_web_processes(self):
+        version = subprocess.run([WINDOWS_POWERSHELL, "-NoProfile", "-Command", "$PSVersionTable.PSVersion.Major"],
+                                 capture_output=True, text=True, encoding="utf-8", timeout=15)
+        self.assertEqual(version.returncode, 0, version.stderr)
+        self.assertEqual(version.stdout.strip(), "5", "The .cmd launcher uses Windows PowerShell 5.1, not pwsh")
         ports = []
         for _ in range(2):
             with socket.socket() as probe:
@@ -254,7 +260,7 @@ http.createServer(async(req,res)=>{try {const r=await fetch(target+req.url);cons
         config = self.ready_config(self.root / "actual configuration/config.json")
         record = {}
         try:
-            launch_command = [POWERSHELL, "-NoProfile", "-File", str(self.project / "start.ps1"),
+            launch_command = [WINDOWS_POWERSHELL, "-NoProfile", "-File", str(self.project / "start.ps1"),
                               "-Config", str(config), "-ApiPort", str(ports[0]), "-WebPort", str(ports[1])]
             dev_vars = web / ".dev.vars"
             dev_vars.write_text('OW_LOCAL_API="http://127.0.0.1:1"\n', encoding="utf-8")
@@ -282,7 +288,7 @@ http.createServer(async(req,res)=>{try {const r=await fetch(target+req.url);cons
                 self.assertEqual(str(config), health["fixture_config"])
             record = json.loads((config.parent / "data/logs/last-start.json").read_text(encoding="utf-8-sig"))
             self.assertEqual((ports[0], ports[1]), (record["api_port"], record["web_port"]))
-            stop_command = [POWERSHELL, "-NoProfile", "-File", str(self.project / "stop.ps1"),
+            stop_command = [WINDOWS_POWERSHELL, "-NoProfile", "-File", str(self.project / "stop.ps1"),
                             "-Config", str(config), "-ApiPort", str(ports[0])]
             (self.project / "active.flag").touch()
             active = subprocess.run(stop_command, capture_output=True, text=True, encoding="utf-8", timeout=30)

@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Config = "",
     [int]$ApiPort
 )
@@ -148,7 +148,7 @@ for target in (Path(sys.argv[2]) / "executor.lock", Path(sys.argv[3]).with_suffi
         with writer_lock(target):
             pass
 '@
-& $pythonCommand -3 -X utf8 -c $recoverCode $projectRoot $settings.data_root $settings.state_path
+$recoverCode | & $pythonCommand -3 -X utf8 - $projectRoot $settings.data_root $settings.state_path
 if ($LASTEXITCODE -ne 0) {
     throw "执行器已停止或未监听，但运行锁仍活动或无法确认；未删除该锁，请检查其他写入者。"
 }
