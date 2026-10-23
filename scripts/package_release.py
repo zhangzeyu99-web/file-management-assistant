@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ROOT_FILES = {
     "README.md", "USER_GUIDE.md", "PROJECT.md", "CONTRIBUTING.md", "ACCEPTANCE.md", "AGENTS.md", "CHANGELOG.md", "LICENSE", "VERSION",
     "requirements.txt", "config.example.json", "configure-service.py", "server.py",
-    "launch.ps1", "start.ps1", "stop.ps1", "打开工作台.cmd", ".gitattributes", ".gitignore",
+    "launch.ps1", "start.ps1", "stop.ps1", "打开工作台.cmd", "重启工作台.cmd", ".gitattributes", ".gitignore",
 }
 SOURCE_DIRS = {"engine", "bridge", "scripts", "tests", "docs", ".github", "web"}
 OMIT_DIRS = {".git", "node_modules", "__pycache__", ".venv", "output", ".migration-staging", ".next", ".vinext",

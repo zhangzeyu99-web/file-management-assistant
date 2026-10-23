@@ -57,6 +57,17 @@ class UserErrorTests(unittest.TestCase):
         self.assertEqual(user_error(PermissionError("C:/private/file"))["code"], "file_permission")
         self.assertEqual(user_error(OSError(errno.ENOSPC, "full"))["code"], "disk_full")
 
+    def test_save_denial_and_restored_activation_denial_keep_original_work(self):
+        saved = user_error("知识库目标目录无法写入；保存失败，未登记来源。")
+        self.assertEqual(saved["code"], "knowledge_write_denied")
+        self.assertTrue(saved["retryable"])
+        self.assertIn("重试原任务", saved["action"])
+        self.assertNotIn("将资料复制", saved["action"])
+        activated = user_error(PermissionError("private"), code="migration_activation_denied")
+        self.assertTrue(activated["retryable"])
+        self.assertIn("保留已恢复的目录", activated["action"])
+        self.assertIn("重试启用工作台", activated["action"])
+
     def test_public_result_keeps_completed_and_pending_facts_but_no_raw_exception(self):
         original = {"status": "partial", "result": {"notes": [{"id": "saved", "title": "完成主题"}],
             "errors": [{"source": "某段对话", "thread_id": "native-id", "error_code": "native_oversized",

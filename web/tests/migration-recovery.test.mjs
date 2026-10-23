@@ -177,12 +177,14 @@ test("failed import keeps typed diagnostics but cannot recommit its stale direct
 test("restored data retries activation with its original upload rather than offering a second import", async () => {
   const storage = new Map([[OPERATION_KEY, JSON.stringify({operation_id: "failed-activation", upload_id: "upload-fixture", destination: "C:/NewLibrary", preview: preview()})]]);
   const f = fixture({storage, fetchImpl: (path, options, body) => {
-    if (path === "migration/operations/failed-activation") return json({status: "failed", error_detail: detail("file_permission"), result: {activated: false}});
+    if (path === "migration/operations/failed-activation") return json({status: "failed", error_detail: detail("migration_activation_denied"), result: {activated: false}});
     if (path === "migration/import/commit") { assert.equal(body.upload_id, "upload-fixture"); return json({operation_id: "activation-retry"}); }
     throw new Error(`Unexpected route ${path}`);
   }});
   try {
     await f.ready(); assert.equal(f.input(), undefined);
+    assert.match(f.text(), /已恢复位置/);
+    assert.equal(f.notices().at(-1).props.onRetry, undefined);
     f.button("重试启用工作台").props.onClick(); await settle();
     assert.equal(f.requests.filter(row => row.path === "migration/import/commit").length, 1);
     assert.equal(f.requests.filter(row => row.path === "migration/import/start").length, 0);

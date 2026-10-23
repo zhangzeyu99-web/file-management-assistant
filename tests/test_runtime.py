@@ -329,6 +329,56 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(again["id"], job["id"])
         self.assertEqual(len(self.model.prompts), 1)
 
+    def test_note_write_permission_failure_retries_original_ingest_without_reupload_or_remodelling(self):
+        before = self.runtime.library.overview()["note_count"]
+        checkpoint = Path(self.runtime.cfg["state_path"]).read_bytes()
+        job = self.runtime.upload("角色校验.txt", base64.b64encode(UPLOAD_TEXT.encode()).decode())
+        original_upload = Path(job["input"]["upload_path"])
+        with patch("engine.runtime.write_note", side_effect=PermissionError("synthetic target write denied")):
+            failed = execute_one(self.runtime, job)
+        self.assertEqual(failed["status"], "failed")
+        detail = failed["result"]["failure"]
+        self.assertEqual(detail["code"], "knowledge_write_denied")
+        self.assertTrue(detail["retryable"])
+        self.assertIn("重试原任务", detail["action"])
+        self.assertNotIn("将资料复制", detail["action"])
+        self.assertEqual(self.runtime.library.overview()["note_count"], before)
+        self.assertEqual(Path(self.runtime.cfg["state_path"]).read_bytes(), checkpoint)
+        self.assertEqual(original_upload.read_bytes(), UPLOAD_TEXT.encode())
+        prompts = len(self.model.prompts)
+        retry = self.runtime.retry_job(job["id"])
+        done = execute_one(self.runtime, retry)
+        self.assertEqual(done["status"], "completed", done)
+        self.assertEqual(retry["input"]["retry_of"], job["id"])
+        self.assertEqual(retry["input"]["upload_path"], str(original_upload))
+        self.assertEqual(self.runtime._journal(retry)[1]["id"], job["id"])
+        self.assertEqual(len(self.model.prompts), prompts)
+        self.assertEqual(self.runtime.library.overview()["note_count"], before + 1)
+
+    def test_note_write_permission_failure_does_not_ack_thread_and_retry_preserves_lineage(self):
+        state = self.state()
+        state["baseline_at"] = 100
+        self.save_state(state)
+        self.native.rows = [{"id": "write-blocked", "kind": "codex", "updatedAt": 200,
+                             "title": "角色映射表保留规则"}]
+        self.native.pages["write-blocked"] = page([turn("write-new", 160, 180, "映射表保留七天，验收后才执行合服。")])
+        job = self.runtime.create("update", {"selection": {"threads": ["write-blocked"], "files": []}})
+        with patch("engine.runtime.write_note", side_effect=PermissionError("synthetic target write denied")):
+            failed = execute_one(self.runtime, job)
+        self.assertEqual(failed["status"], "partial", failed)
+        self.assertEqual(failed["result"]["errors"][0]["error_detail"]["code"], "knowledge_write_denied")
+        self.assertEqual(failed["result"]["notes"], [])
+        self.assertNotIn("write-new", self.state()["threads"].get("write-blocked", {}).get("turns", {}))
+        prompts = len(self.model.prompts)
+        retry = self.runtime.retry_job(job["id"])
+        done = execute_one(self.runtime, retry)
+        self.assertEqual(done["status"], "completed", done)
+        self.assertEqual(retry["input"]["retry_of"], job["id"])
+        self.assertEqual(self.runtime._journal(retry)[1]["id"], job["id"])
+        self.assertEqual(len(self.model.prompts), prompts)
+        self.assertIn("write-new", self.state()["threads"]["write-blocked"]["turns"])
+        self.assertEqual(len(done["result"]["notes"]), 1)
+
     def test_hidden_legacy_output_can_be_acknowledged_without_generating_another_note(self):
         vault = Path(self.runtime.cfg["obsidian_vault"])
         text = "<!-- obsidian-workspace task:legacy-output -->\n\n# 知识库检查（5月13日）\n\n按地区核对名单。\n"

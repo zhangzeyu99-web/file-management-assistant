@@ -2,7 +2,7 @@
   "native_context_missing": {
     "code": "native_context_missing",
     "message": "尚未连接 Codex 对话。",
-    "action": "打开 Codex 桌面并从当前会话重新启动工作台；也可在“添加资料”粘贴要总结的对话。",
+    "action": "在 Codex 打开原对话，复制所需正文到“添加资料”粘贴收录。自动读取需要有效桌面会话连接；普通双击启动或重启不会重新建立这种连接。",
     "retryable": false,
     "help": "native-connection"
   },
@@ -51,7 +51,7 @@
   "model_unavailable": {
     "code": "model_unavailable",
     "message": "本机尚未准备好 AI 整理程序。",
-    "action": "安装 Codex CLI，在终端运行 codex login 完成登录，再重新打开“打开工作台.cmd”。阅读和检索仍可使用。",
+    "action": "安装 Codex CLI，在终端运行 codex login 完成登录，再双击“重启工作台.cmd”。阅读和检索仍可使用。",
     "retryable": false,
     "help": "model-login"
   },
@@ -114,7 +114,7 @@
   "cloud_auth": {
     "code": "cloud_auth",
     "message": "线上连接凭据已失效或不属于当前电脑。",
-    "action": "在当前电脑重新配置该站点的服务令牌，再重新打开工作台；导入迁移包不会转移登录凭据。",
+    "action": "在当前电脑重新配置该站点的服务令牌，再双击“重启工作台.cmd”；导入迁移包不会转移登录凭据。",
     "retryable": false,
     "help": "cloud-connection"
   },
@@ -202,6 +202,13 @@
     "retryable": false,
     "help": "source-file"
   },
+  "knowledge_write_denied": {
+    "code": "knowledge_write_denied",
+    "message": "当前知识库目录无法写入，本次保存未完成。",
+    "action": "确认知识库所在磁盘已连接且目录可写，关闭占用笔记的程序，并检查 Windows 文件夹防护是否拦截工作台。恢复写入权限后重试原任务，无需重新添加资料。",
+    "retryable": true,
+    "help": "knowledge-data"
+  },
   "disk_full": {
     "code": "disk_full",
     "message": "磁盘剩余空间不足，当前操作未完成。",
@@ -284,6 +291,20 @@
     "message": "当前还有任务在执行，暂时不能切换知识库。",
     "action": "到“更新记录”等待任务结束，或取消该任务；之后回到迁移页重新导入。",
     "retryable": false,
+    "help": "migration"
+  },
+  "migration_activation_denied": {
+    "code": "migration_activation_denied",
+    "message": "资料已恢复，但启用工作台时没有写入权限。",
+    "action": "保留已恢复的目录。检查该目录、工作台项目目录和运行记录目录的写入权限，关闭占用文件的程序或解除 Windows 文件夹防护拦截，再点击“重试启用工作台”；无需重新导入或更改位置。",
+    "retryable": true,
+    "help": "migration"
+  },
+  "migration_activation_failed": {
+    "code": "migration_activation_failed",
+    "message": "资料已恢复，但工作台尚未启用。",
+    "action": "保留已恢复的目录，确认本机启动依赖齐全、项目与运行记录目录可用，再点击“重试启用工作台”。仍失败时复制诊断信息反馈；无需重新导入或更改位置。",
+    "retryable": true,
     "help": "migration"
   },
   "migration_upload_incomplete": {

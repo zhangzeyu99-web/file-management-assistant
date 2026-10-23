@@ -241,7 +241,7 @@ Path("api.pid").write_text(str(os.getpid()))
 class Handler(BaseHTTPRequestHandler):
  def do_GET(self):
   self.send_response(200);self.send_header("Content-Type","application/json");self.end_headers()
-  self.wfile.write(json.dumps({"mode":"local","worker_running":True,"runtime_id":"synthetic-runtime-"+str(os.getpid()),"active_job":"synthetic-job" if Path("active.flag").exists() else None,"fixture_port":a.port,"fixture_config":a.config}).encode())
+  self.wfile.write(json.dumps({"mode":"local","worker_running":True,"runtime_id":"synthetic-runtime-"+str(os.getpid()),"active_job":"synthetic-job" if Path("active.flag").exists() else None,"migration_switching":Path("migration.flag").exists(),"fixture_port":a.port,"fixture_config":a.config}).encode())
  def log_message(self,*args):pass
 HTTPServer(("127.0.0.1",a.port),Handler).serve_forever()
 ''', encoding="utf-8")
@@ -289,6 +289,15 @@ http.createServer(async(req,res)=>{try {const r=await fetch(target+req.url);cons
             self.assertNotEqual(0, active.returncode)
             self.assertIn("synthetic-job", active.stderr)
             (self.project / "active.flag").unlink()
+            (self.project / "migration.flag").touch()
+            migrating = subprocess.run(stop_command, capture_output=True, text=True, encoding="utf-8", timeout=30)
+            self.assertNotEqual(0, migrating.returncode)
+            self.assertIn("迁移", migrating.stderr)
+            with urllib.request.urlopen(f"http://127.0.0.1:{ports[0]}/api/workspace/health", timeout=3) as response:
+                migration_health = json.load(response)
+            self.assertTrue(migration_health["migration_switching"])
+            self.assertIsNone(migration_health["active_job"])
+            (self.project / "migration.flag").unlink()
             wrong = self.write_config(self.root / "wrong config.json")
             mismatch = subprocess.run(stop_command[:-3] + [str(wrong), "-ApiPort", str(ports[0])],
                                       capture_output=True, text=True, encoding="utf-8", timeout=30)

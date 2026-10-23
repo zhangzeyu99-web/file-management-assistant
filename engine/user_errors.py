@@ -18,14 +18,14 @@ from .privacy import redact_text
 
 # code: (problem, next action, retryable after that action, help topic)
 ERRORS = {
-    "native_context_missing": ("尚未连接 Codex 对话。", "打开 Codex 桌面并从当前会话重新启动工作台；也可在“添加资料”粘贴要总结的对话。", False, "native-connection"),
+    "native_context_missing": ("尚未连接 Codex 对话。", "在 Codex 打开原对话，复制所需正文到“添加资料”粘贴收录。自动读取需要有效桌面会话连接；普通双击启动或重启不会重新建立这种连接。", False, "native-connection"),
     "native_unavailable": ("本机缺少读取 Codex 对话所需的组件。", "更新并重新打开 Codex 桌面，再从当前会话启动工作台；急需收录时用“添加资料”粘贴文字。", False, "native-connection"),
     "native_incompatible": ("当前 Codex 版本不支持读取对话。", "更新 Codex 桌面后重新启动工作台；更新前可用“添加资料”粘贴文字。", False, "native-connection"),
     "native_disconnected": ("与 Codex 桌面的连接已断开。", "保持 Codex 桌面打开，从当前会话重新启动工作台，再重试未完成项。", True, "native-connection"),
     "native_timeout": ("读取 Codex 对话超时。", "确认 Codex 桌面仍在运行后重试本项；再次超时可在“添加资料”粘贴所需文字。", True, "native-connection"),
     "native_oversized": ("这段对话太长，Codex 无法完整返回内容。", "打开原对话，复制所需文字，在“添加资料 → 粘贴正文”分段收录。", False, "native-connection"),
     "native_read_failed": ("未能读取这段 Codex 对话。", "在 Codex 桌面确认能打开该对话，再重新启动工作台并重试；无法打开时，可在“添加资料”粘贴已有文字。", True, "native-connection"),
-    "model_unavailable": ("本机尚未准备好 AI 整理程序。", "安装 Codex CLI，在终端运行 codex login 完成登录，再重新打开“打开工作台.cmd”。阅读和检索仍可使用。", False, "model-login"),
+    "model_unavailable": ("本机尚未准备好 AI 整理程序。", "安装 Codex CLI，在终端运行 codex login 完成登录，再双击“重启工作台.cmd”。阅读和检索仍可使用。", False, "model-login"),
     "model_failed": ("AI 服务没有完成本次整理。", "在终端运行 codex login status 检查登录；未登录时运行 codex login。确认网络可用后重试本项。", True, "model-login"),
     "model_timeout": ("AI 整理超时，没有返回完整结果。", "重试本项；若同一资料再次超时，将内容拆成较短的几段后通过“添加资料”收录。", True, "model-login"),
     "model_incomplete": ("AI 返回的内容不完整，本次未保存为笔记。", "重试本项；再次失败时缩小资料范围，或通过“添加资料”分段收录。", True, "model-login"),
@@ -34,7 +34,7 @@ ERRORS = {
     "model_quality_failed": ("AI 整理结果缺少具体主题或有效正文，本次未保存。", "重试本项；再次失败时只选择同一主题的资料，或通过“添加资料”补充明确标题和正文。", True, "model-login"),
     "model_tool_use": ("AI 返回了不符合整理要求的结果，本次未保存。", "重试本项；再次出现时保存诊断信息并反馈给项目维护者。", True, "model-login"),
     "cloud_not_configured": ("这台电脑尚未连接线上知识库。", "本机阅读可继续使用；需要同步时，按连接说明填写自己的站点并配置该站点的服务令牌。", False, "cloud-connection"),
-    "cloud_auth": ("线上连接凭据已失效或不属于当前电脑。", "在当前电脑重新配置该站点的服务令牌，再重新打开工作台；导入迁移包不会转移登录凭据。", False, "cloud-connection"),
+    "cloud_auth": ("线上连接凭据已失效或不属于当前电脑。", "在当前电脑重新配置该站点的服务令牌，再双击“重启工作台.cmd”；导入迁移包不会转移登录凭据。", False, "cloud-connection"),
     "cloud_forbidden": ("当前账号或服务令牌没有访问这个站点的权限。", "确认登录的是站点所有者账号，并使用同一站点的服务令牌重新连接。", False, "cloud-connection"),
     "cloud_not_found": ("线上地址或接口不存在。", "核对连接的知识库网址；若网址正确，安装并发布同一版本的工作台后再连接。", False, "cloud-connection"),
     "cloud_rate_limited": ("线上请求过于频繁，服务暂时限流。", "稍等一分钟后重试；不要连续点击提交。", True, "cloud-connection"),
@@ -47,6 +47,7 @@ ERRORS = {
     "source_directory_unavailable": ("一个资料文件夹无法读取，本次未检查该位置。", "确认文件夹或外接磁盘仍可访问；急需收录时，在“添加资料”直接选择当前文件。", False, "source-file"),
     "source_unreadable": ("系统无法读取部分资料，本次未处理这些内容。", "确认文件仍存在且可打开；将所需资料复制到可读写的个人文件夹，再通过“添加资料”选择。", False, "source-file"),
     "file_permission": ("没有读取或写入这个位置的权限。", "关闭占用文件的程序；将资料复制到可读写的个人文件夹，再通过“添加资料”选择。迁移时请换一个可写的空目录。", False, "source-file"),
+    "knowledge_write_denied": ("当前知识库目录无法写入，本次保存未完成。", "确认知识库所在磁盘已连接且目录可写，关闭占用笔记的程序，并检查 Windows 文件夹防护是否拦截工作台。恢复写入权限后重试原任务，无需重新添加资料。", True, "knowledge-data"),
     "disk_full": ("磁盘剩余空间不足，当前操作未完成。", "释放目标磁盘空间，或将迁移位置改到空间充足的空目录，再重试。", False, "migration"),
     "invalid_encoding": ("文件的文字编码无法读取。", "用记事本打开文件，另存为 UTF-8 后在“添加资料”重新选择；也可直接粘贴正文。", False, "source-file"),
     "unsupported_format": ("这种文件格式不能直接提取正文。", "将需要保留的内容导出为 TXT、Markdown、DOCX 或带文字层的 PDF，再通过“添加资料”收录。", False, "source-file"),
@@ -59,6 +60,8 @@ ERRORS = {
     "migration_target_occupied": ("导入位置已有内容，或与当前知识库目录重叠。", "选择另一个独立的空目录，点击“检查新位置”，通过预检后再导入。", False, "migration"),
     "migration_target_invalid": ("这个导入位置无法使用。", "填写一个可写空文件夹的完整路径，例如 D:\\个人知识库；点击“检查新位置”后再导入。", False, "migration"),
     "migration_busy": ("当前还有任务在执行，暂时不能切换知识库。", "到“更新记录”等待任务结束，或取消该任务；之后回到迁移页重新导入。", False, "migration"),
+    "migration_activation_denied": ("资料已恢复，但启用工作台时没有写入权限。", "保留已恢复的目录。检查该目录、工作台项目目录和运行记录目录的写入权限，关闭占用文件的程序或解除 Windows 文件夹防护拦截，再点击“重试启用工作台”；无需重新导入或更改位置。", True, "migration"),
+    "migration_activation_failed": ("资料已恢复，但工作台尚未启用。", "保留已恢复的目录，确认本机启动依赖齐全、项目与运行记录目录可用，再点击“重试启用工作台”。仍失败时复制诊断信息反馈；无需重新导入或更改位置。", True, "migration"),
     "migration_upload_incomplete": ("迁移包尚未完整上传。", "保持页面打开并等待上传完成；上传已中断时重新选择同一个 ZIP。", True, "migration"),
     "migration_upload_missing": ("上传记录已失效，可能是本机服务重启所致。", "重新选择迁移包，等待上传完成后再次预检。", False, "migration"),
     "migration_precheck_required": ("导入位置或迁移包已改变，需要重新预检。", "点击“检查新位置”，确认预检显示的目录和内容，再点击导入。", False, "migration"),
@@ -106,6 +109,7 @@ def _code(error, hint=None, context=""):
         return "file_missing"
     # Historical records have no typed code. Match specific failures before broad categories.
     rules = (
+        (("知识库目标目录无法写入", "当前知识库目录无法写入"), "knowledge_write_denied"),
         (("超过原生读取限制", "超出原生读取限制", "native_oversized"), "native_oversized"),
         (("真实调用线程上下文", "当前来源未连接", "native_context_missing"), "native_context_missing"),
         (("未找到已安装的 Codex 原生", "原生工具需要的 Node", "无法启动 Codex 原生", "工具服务不存在"), "native_unavailable"),

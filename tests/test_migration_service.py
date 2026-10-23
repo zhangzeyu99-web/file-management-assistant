@@ -278,6 +278,9 @@ class BrowserMigrationTests(unittest.TestCase):
         failed = self.terminal(operation["operation_id"])
         self.assertEqual("failed", failed["status"])
         self.assertFalse(failed["result"]["activated"])
+        self.assertEqual(failed["error_detail"]["code"], "migration_activation_failed")
+        self.assertTrue(failed["error_detail"]["retryable"])
+        self.assertIn("保留已恢复的目录", failed["error_detail"]["action"])
         self.assertEqual(original, pointer.read_bytes())
         self.service.runtime_factory = Runtime
         _, retry = self.request("migration/import/commit", payload)
@@ -315,9 +318,24 @@ class BrowserMigrationTests(unittest.TestCase):
                                         {"upload_id": upload_id, "destination": preview["destination"]})
             result = self.terminal(operation["operation_id"])
         self.assertEqual("failed", result["status"])
+        self.assertEqual(result["error_detail"]["code"], "migration_activation_denied")
+        self.assertTrue(result["error_detail"]["retryable"])
+        self.assertFalse(result["result"]["activated"])
+        self.assertIn("重试启用工作台", result["error_detail"]["action"])
+        self.assertNotIn("选择另一个", result["error_detail"]["action"])
         old.handoff_for_migration.assert_not_called()
         self.assertIs(old, self.service.runtime)
         self.assertEqual('{"config":"previous"}', pointer.read_text(encoding="utf-8"))
+        restored_note = Path(result["result"]["vault"]) / self.fixture.note.name
+        restored_before = restored_note.read_bytes()
+        with patch("engine.migration_service.import_bundle", side_effect=AssertionError("activation retry must not reimport")):
+            _, retry = self.request("migration/import/commit",
+                                    {"upload_id": upload_id, "destination": preview["destination"]})
+            done = self.terminal(retry["operation_id"])
+        self.assertEqual(done["status"], "completed", done)
+        self.assertTrue(done["result"]["activated"])
+        self.assertEqual(restored_note.read_bytes(), restored_before)
+        old.handoff_for_migration.assert_called_once()
 
     def test_download_stream_uses_validated_job_and_ignores_arbitrary_path_parameter(self):
         artifact = self.root / "verified-export.zip"

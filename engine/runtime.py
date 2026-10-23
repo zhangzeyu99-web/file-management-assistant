@@ -21,7 +21,7 @@ from .content_policy import ARCHIVE_PROMPT, parse_summary, source_only_reason, v
 from .incremental import (CheckpointStore, atomic_json, load_state, normalize_turn,
                           path_key, plan_local, select_plan, select_turns, stamp, turn_version, writer_lock)
 from .ingest import (extract_path, extract_text, extract_upload, semantic_title, source_link,
-                     write_note, _filename, _note_matches)
+                     write_note, _filename, _note_matches, IngestError)
 from .jobs import JobStore
 from .library import Library, PROJECT_ALIASES
 from .migration import executor_session, export_active_bundle, MigrationError, _safe_file
@@ -667,8 +667,12 @@ class Runtime:
                     Path(cache).unlink(missing_ok=True)
                 raise
         folder = note_folder(self.cfg, readable_title, title, category)
-        written = write_note(self.cfg["output_root"], title, markdown, item_id, refs,
-                             folder=folder, identity_root=self.cfg["obsidian_vault"])
+        try:
+            written = write_note(self.cfg["output_root"], title, markdown, item_id, refs,
+                                 folder=folder, identity_root=self.cfg["obsidian_vault"])
+        except PermissionError as error:
+            raise IngestError("知识库目标目录无法写入；保存失败，未登记来源。",
+                              "knowledge_write_denied") from error
         rel = Path(written["note"]).resolve().relative_to(Path(self.cfg["obsidian_vault"]).resolve()).as_posix()
         note_id = "n_" + base64.urlsafe_b64encode(rel.encode()).decode().rstrip("=")
         return written, {"id": note_id, "title": written["title"], "path": written["note"],

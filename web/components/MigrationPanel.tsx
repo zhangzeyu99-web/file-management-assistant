@@ -431,7 +431,7 @@ export default function MigrationPanel({ mode, online, setupRequired, exportJobI
           {transferring && <div className="migration-progress" role="status"><div><Loader2 size={17} className="spin" /><strong>{phase === "uploading" ? `正在传到本机 · ${file ? Math.floor(uploaded / file.size * 100) : 0}%` : "正在检查迁移包"}</strong><button className="icon-button" aria-label="取消上传" onClick={cancelUpload}><X size={17} /></button></div><progress max={file?.size || 1} value={uploaded} aria-label="迁移包上传进度" /><p>{sizeLabel(uploaded)} / {sizeLabel(file?.size || 0)}</p></div>}
           {phase === "cancelled" && <p className="migration-hint" role="status">已取消，迁移包没有导入。</p>}
           {uploadId && canRepairLocation && !importFailed && !importing && phase !== "done" && <>
-            <label className="field-label" htmlFor="migration-destination">存放位置</label>
+            <label className="field-label" htmlFor="migration-destination">{activationPending ? "已恢复位置" : "存放位置"}</label>
             <input id="migration-destination" value={destination} disabled={transferring || commitUncertain || activationPending} onChange={event => { setDestination(event.target.value); setImportError(null); }} autoComplete="off" spellCheck={false} />
             {!preview && <button className="secondary-button" disabled={transferring || !destination.trim()} onClick={() => void refreshPreview()}>检查存放位置</button>}
           </>}
@@ -444,7 +444,7 @@ export default function MigrationPanel({ mode, online, setupRequired, exportJobI
           {importing && <div className="migration-progress" role="status"><div><Loader2 size={20} className="spin" /><strong>{operation?.stage || (phase === "committing" ? "正在提交导入" : "正在恢复资料")}</strong></div><p>请保持本机工作台运行，完成后自动打开知识库。</p></div>}
           {phase === "done" && <div className="migration-success" role="status"><div><CheckCircle2 size={21} /><strong>{operation?.result?.activated ? "资料已恢复，正在打开知识库" : "资料已恢复"}</strong></div>{!operation?.result?.activated && <button className="secondary-button" onClick={() => setRefreshKey(value => value + 1)}>检查切换状态</button>}</div>}
           {importFailed && <p className="migration-hint">修正下方问题后，重新选择同一迁移包，再检查存放位置。</p>}
-          {Boolean(importError) && <RecoveryNotice error={importError} context="migration-import" onRetry={operationId ? () => setRefreshKey(value => value + 1) : undefined} retryLabel="重新检查导入进度" />}
+          {Boolean(importError) && <RecoveryNotice error={importError} context="migration-import" onRetry={operationId && !activationPending ? () => setRefreshKey(value => value + 1) : undefined} retryLabel="重新检查导入进度" />}
           {Boolean(importError) && importIssue?.retryable && !preview && !importing && file && !operationId && !commitUncertain && <button className="secondary-button" onClick={() => void uploadFile(file)}>重新上传迁移包</button>}
         </>}
       </section>

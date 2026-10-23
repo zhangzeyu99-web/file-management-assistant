@@ -23,6 +23,9 @@ function Assert-Idle {
     if ($health.mode -ne "local" -or -not $health.PSObject.Properties["active_job"]) {
         throw "端口 $ApiPort 不是可核实的本机工作台；未停止进程。"
     }
+    if ($health.migration_switching -eq $true) {
+        throw "知识库正在迁移或切换；请等待迁移结果后再停止或重启。未停止任何进程。"
+    }
     if ($health.active_job) {
         throw "任务 $($health.active_job) 正在执行；请等任务结束后再停止或迁移。"
     }

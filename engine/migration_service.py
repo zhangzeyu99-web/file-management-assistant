@@ -333,7 +333,10 @@ class MigrationService:
                 pass
         except Exception as error:
             diagnostic_id = record_diagnostic(self.staging, error, context="migration-import")
-            failure = user_error(error, diagnostic_id=diagnostic_id)
+            restored = bool(row.get("imported"))
+            code = ("migration_activation_denied" if isinstance(error, PermissionError) else
+                    "migration_activation_failed") if restored else None
+            failure = user_error(error, code=code, diagnostic_id=diagnostic_id)
             with self.lock:
                 self.operations[operation_id].update(status="failed", stage="导入未完成",
                     error=failure["message"], error_detail=failure, error_code=failure["code"])
